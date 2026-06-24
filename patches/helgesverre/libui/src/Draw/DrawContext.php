@@ -164,6 +164,34 @@ final class DrawContext
         );
     }
 
+    /**
+     * Draw a thin line from (x0,y0) to (x1,y1).
+     *
+     * A lighter-weight shorthand for strokeLine() — specify thickness as a
+     * float instead of building a StrokeParams object.
+     *
+     *     $ctx->line(0, 0, 100, 50, Brush::rgb(0x3B82F6), thickness: 2.0);
+     */
+    public function line(float $x0, float $y0, float $x1, float $y1, Brush|Color $paint, float $thickness = 1.0): void
+    {
+        $this->strokeLine($x0, $y0, $x1, $y1, self::brush($paint), StrokeParams::solid($thickness));
+    }
+
+    /**
+     * Draw a filled dot (small square) centred at (x, y).
+     *
+     * The dot is a filled rectangle of $size × $size pixels, centred on the
+     * given coordinates — ideal for brush-style paint cursors, point markers,
+     * or particle traces.
+     *
+     *     $ctx->dot($x, $y, 6, Brush::rgb(0xFACC15));  // 6×6 square centred at cursor
+     */
+    public function dot(float $x, float $y, float $size, Brush|Color $paint): void
+    {
+        $half = $size / 2;
+        $this->fillRect($x - $half, $y - $half, $size, $size, self::brush($paint));
+    }
+
     public function fillArc(float $cx, float $cy, float $radius, float $startAngle, float $sweep, Brush|Color $paint): void
     {
         $this->fillPath(
