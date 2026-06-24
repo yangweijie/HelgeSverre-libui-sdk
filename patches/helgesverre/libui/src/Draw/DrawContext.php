@@ -193,6 +193,36 @@ final class DrawContext
         Ffi::get()->uiDrawRestore($this->ctx);
     }
 
+    /**
+     * Execute a callback inside a save/restore scope.
+     *
+     * Calls save() before invoking the callback and restore() in a finally
+     * block, guaranteeing the graphics state is always popped — even when the
+     * callback throws an exception.
+     *
+     *     $ctx->withSave(function (DrawContext $ctx) use ($x, $y): void {
+     *         $ctx->transform(
+     *             (new Matrix())
+     *                 ->translate($cx, $cy)
+     *                 ->rotate($angle)
+     *                 ->translate(-$cx, -$cy),
+     *         );
+     *         $ctx->fillRect(0, 0, 100, 50, Brush::rgb(0xFF0000));
+     *     });
+     *
+     * @param  callable(DrawContext):void  $fn  The drawing operations to run
+     *     inside the saved scope. Receives this same DrawContext instance.
+     */
+    public function withSave(callable $fn): void
+    {
+        $this->save();
+        try {
+            $fn($this);
+        } finally {
+            $this->restore();
+        }
+    }
+
     /** Intersect the current clip region with the given path. */
     public function clip(Path $path): void
     {
