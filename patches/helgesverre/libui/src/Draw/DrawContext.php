@@ -113,6 +113,20 @@ final class DrawContext
         );
     }
 
+    public function fillRoundedRect(float $x, float $y, float $width, float $height, float $radius, Brush|Color $paint): void
+    {
+        $this->fillPath(self::brush($paint), static fn (Path $p) => $p->roundedRect($x, $y, $width, $height, $radius));
+    }
+
+    public function strokeRoundedRect(float $x, float $y, float $width, float $height, float $radius, Brush|Color $paint, ?StrokeParams $stroke = null): void
+    {
+        $this->strokePath(
+            self::brush($paint),
+            $stroke ?? StrokeParams::solid(1.0),
+            static fn (Path $p) => $p->roundedRect($x, $y, $width, $height, $radius),
+        );
+    }
+
     /** Push the current clip/transform state onto libui's stack. */
     public function save(): void
     {
