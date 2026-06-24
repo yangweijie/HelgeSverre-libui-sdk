@@ -1,0 +1,29 @@
+{
+    "name": "yangweijie/ui2",
+    "description": "tool with helgesverre/libui anthor libui gui toolkit.",
+    "type": "library",
+    "require": {
+        "helgesverre/libui": "dev-main"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^13.2"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Yangweijie\\Ui2\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "yangweijie",
+            "email": "917647288@qq.com"
+        }
+    ],
+    "scripts": {
+      "post-autoload-dump": [
+        "@php patch.php"
+      ]
+    },
+    "minimum-stability": "dev"
+}
