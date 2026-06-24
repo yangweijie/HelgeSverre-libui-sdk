@@ -127,6 +127,33 @@ final class DrawContext
         );
     }
 
+    /**
+     * Fill a closed polygon from a list of [x,y] vertices.
+     *
+     * @param  array<array{float,float}>  $points
+     */
+    public function fillPolygon(array $points, Brush|Color $paint): void
+    {
+        $this->fillPath(self::brush($paint), static fn (Path $p) => $p->polygon($points));
+    }
+
+    /**
+     * Stroke a closed polygon from a list of [x,y] vertices.
+     *
+     * @param  array<array{float,float}>  $points
+     */
+    public function strokePolygon(
+        array $points,
+        Brush|Color $paint,
+        ?StrokeParams $stroke = null,
+    ): void {
+        $this->strokePath(
+            self::brush($paint),
+            $stroke ?? StrokeParams::solid(1.0),
+            static fn (Path $p) => $p->polygon($points),
+        );
+    }
+
     /** A single stroked line segment. */
     public function strokeLine(float $x0, float $y0, float $x1, float $y1, Brush|Color $paint, ?StrokeParams $stroke = null): void
     {

@@ -13,7 +13,7 @@ use Libui\Generated\Enum\DrawFillMode;
  * Call end() once the path is complete, draw it, then free() it. Paths are
  * cheap and meant to be short-lived inside a single draw handler.
  *
- * PATCHED: added wedge() convenience method.
+ * PATCHED: added wedge() and polygon() convenience methods.
  */
 final class Path
 {
@@ -195,6 +195,32 @@ final class Path
         $this->newFigureWithArc($cx, $cy, $radius, $startAngle, $sweep, $negative);
         $this->lineTo($cx, $cy);
         $this->closeFigure();
+        return $this;
+    }
+
+    /**
+     * A closed polygon from a list of [x,y] vertices.
+     *
+     *     $path->polygon([[50, 20], [100, 80], [0, 80]]);
+     *
+     * Requires at least 2 points; fewer is a no-op.
+     *
+     * @param  array<array{float,float}>  $points  Vertex list.
+     * @return $this
+     */
+    public function polygon(array $points): self
+    {
+        $count = \count($points);
+        if ($count < 2) {
+            return $this;
+        }
+
+        $this->newFigure($points[0][0], $points[0][1]);
+        for ($i = 1; $i < $count; ++$i) {
+            $this->lineTo($points[$i][0], $points[$i][1]);
+        }
+        $this->closeFigure();
+
         return $this;
     }
 
