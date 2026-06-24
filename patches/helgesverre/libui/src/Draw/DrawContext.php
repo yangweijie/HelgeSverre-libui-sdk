@@ -127,6 +127,23 @@ final class DrawContext
         );
     }
 
+    public function fillArc(float $cx, float $cy, float $radius, float $startAngle, float $sweep, Brush|Color $paint): void
+    {
+        $this->fillPath(
+            self::brush($paint),
+            static fn (Path $p) => $p->wedge($cx, $cy, $radius, $startAngle, $sweep),
+        );
+    }
+
+    public function strokeArc(float $cx, float $cy, float $radius, float $startAngle, float $sweep, Brush|Color $paint, ?StrokeParams $stroke = null): void
+    {
+        $this->strokePath(
+            self::brush($paint),
+            $stroke ?? StrokeParams::solid(1.0),
+            static fn (Path $p) => $p->wedge($cx, $cy, $radius, $startAngle, $sweep),
+        );
+    }
+
     /** Push the current clip/transform state onto libui's stack. */
     public function save(): void
     {
