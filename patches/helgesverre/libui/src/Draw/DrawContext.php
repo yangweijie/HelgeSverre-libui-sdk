@@ -127,6 +127,16 @@ final class DrawContext
         );
     }
 
+    /** A single stroked line segment. */
+    public function strokeLine(float $x0, float $y0, float $x1, float $y1, Brush|Color $paint, ?StrokeParams $stroke = null): void
+    {
+        $this->strokePath(
+            self::brush($paint),
+            $stroke ?? StrokeParams::solid(1.0),
+            static fn (Path $p) => $p->line($x0, $y0, $x1, $y1),
+        );
+    }
+
     public function fillArc(float $cx, float $cy, float $radius, float $startAngle, float $sweep, Brush|Color $paint): void
     {
         $this->fillPath(
