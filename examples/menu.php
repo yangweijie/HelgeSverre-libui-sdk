@@ -3,21 +3,25 @@
 declare(strict_types=1);
 
 /**
- * Menu demo — demonstrates the patched MenuItem::onClick() API.
+ * Menu demo — demonstrates both the declarative fluent builder and the
+ * imperative Menu API with the patched MenuItem::onClick().
  *
  * Run: php examples/menu.php
  *
- * Key points this example illustrates:
+ * Key points:
  *
- * - Every menu item uses onCLICK() (the patched wrapper), never the raw
- *   onCLICKED() from the generated code. onClick() hides libui's raw
- *   uiWindow* parameter and accepts an optional per-call error handler.
- * - Menus MUST be created before any Window exists (libui rule enforced
- *   at runtime by Libui\Menu via MenuOrderException).
- * - Check items use appendCheckItem() and can be toggled.
- * - Platform-special items (Quit, About) are created via dedicated
- *   methods and wired with onClick() if a custom handler is needed.
+ * - DECLARATIVE STYLE: Menu::create('File')->item('Open', fn)...->quitItem()
+ *   returns the Menu for chaining; see the File and Edit menus below.
+ * - IMPERATIVE STYLE: new Menu('File') followed by appendItem()/appendCheckItem()
+ *   returns the MenuItem for later manipulation; see Help menu.
+ * - Every click handler uses onCLICK() (the patched wrapper), never the raw
+ *   onCLICKED(). onClick() hides libui's raw uiWindow* parameter and accepts
+ *   an optional per-call error handler.
+ * - Check items are togglable via checked()/setChecked().
+ * - Menus MUST be created before any Window exists (enforced at runtime by
+ *   MenuOrderException, which now tells you which Window locked the menu).
  *
+ * @see patches/helgesverre/libui/src/Menu.php
  * @see patches/helgesverre/libui/src/MenuItem.php
  */
 
@@ -36,49 +40,42 @@ Ffi::init();
 // Menus — MUST come before the first Window constructor.
 // ---------------------------------------------------------------------------
 
-// --- File menu ---
-$fileMenu = new Menu('File');
+// --- File menu (declarative / fluent style) ---
+Menu::create('File')
+    ->item('Open', function (MenuItem $item) use (&$window): void {
+        $window->dialogs()->msgBox('Open', 'You clicked Open (demo only)');
+    })
+    ->separator()
+    ->quitItem();   // platform Quit — no click handler, default behaviour
 
-// appendItem() accepts an optional onClick callback directly, which uses
-// the patched MenuItem::onClick() internally — no raw onClicked() needed.
-$fileMenu->appendItem('Open', function (MenuItem $item) use (&$window): void {
-    $window->dialogs()->msgBox('Open', 'You clicked Open (demo only)');
+// --- Edit menu (fluent, mix of item and checkItem) ---
+// When you need the MenuItem reference later, capture it from the callback or
+// switch to the imperative append*() methods.
+Menu::create('Edit')
+    ->item('Cut', function (MenuItem $item) use (&$window): void {
+        $window->dialogs()->msgBox('Cut', 'Cut clicked (demo only)');
+    })
+    ->checkItem('Copy', function (MenuItem $item) use (&$window): void {
+        $checked = $item->checked() ? 'checked' : 'unchecked';
+        $window->dialogs()->msgBox('Copy', "Copy is now {$checked}");
+    })
+    ->item('Paste', function (MenuItem $item) use (&$window): void {
+        $window->dialogs()->msgBox('Paste', 'Paste clicked (demo only)');
+    });
+
+// --- Help menu (imperative style — keep MenuItem for later use) ---
+$helpAbout = new Menu('Help');
+
+// appendAboutItem() returns the MenuItem, so we can keep a reference.
+$aboutItem = $helpAbout->appendAboutItem();
+$aboutItem->onClick(function (MenuItem $item) use (&$window): void {
+    $window->dialogs()->msgBox('About', 'Menu Demo — fluent builder + patched onClick()');
 });
 
-$fileMenu->appendSeparator();
-
-// Platform Quit item — no custom handler, so libui's default quit behaviour
-// (calling uiQuit()) is preserved.  The Window::run() loop below handles
-// the rest.
-$fileMenu->appendQuitItem();
-
-// --- Edit menu ---
-$editMenu = new Menu('Edit');
-
-// Clipped items manually for demonstration — attach onClick() after creation.
-$cutItem  = $editMenu->appendItem('Cut');
-$copyItem = $editMenu->appendCheckItem('Copy');   // checkable
-$pasteItem = $editMenu->appendItem('Paste');
-
-$cutItem->onClick(function (MenuItem $item) use (&$window): void {
-    $window->dialogs()->msgBox('Cut', 'Cut clicked (demo only)');
-});
-
-$copyItem->onClick(function (MenuItem $item) use (&$window): void {
-    $checked = $item->checked() ? 'checked' : 'unchecked';
-    $window->dialogs()->msgBox('Copy', "Copy is now {$checked}");
-});
-
-$pasteItem->onClick(function (MenuItem $item) use (&$window): void {
-    $window->dialogs()->msgBox('Paste', 'Paste clicked (demo only)');
-});
-
-// --- Help menu ---
-$helpMenu = new Menu('Help');
-
-// appendAboutItem() returns a MenuItem — wire onClick() manually.
-$helpMenu->appendAboutItem()->onClick(function (MenuItem $item) use (&$window): void {
-    $window->dialogs()->msgBox('About', 'Menu Demo v1.0 — using patched MenuItem::onClick()');
+// You can also keep a reference to any appendItem result:
+$helpItem = $helpAbout->appendItem('Help Contents');
+$helpItem->onClick(function (MenuItem $item) use (&$window): void {
+    $window->dialogs()->msgBox('Help', 'Help Contents (not yet implemented)');
 });
 
 // ---------------------------------------------------------------------------
