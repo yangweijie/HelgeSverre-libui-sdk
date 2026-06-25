@@ -75,6 +75,27 @@ Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` 
 - macOS bridge requires `@rpath` pointing to PebView.dylib location in `vendor/kingbes/pebview/lib/macos/arm64/`
 - Bridge source: `bridge/webview_bridge.m` (ObjC WKWebView wrapper), compiled with -rpath flag
 - PebView.dylib is built from kingbes/pebview source via `pebview/macos.sh`
+- Bridge macOS with `-fobjc-arc`: no manual `[obj release]` calls allowed
+- Borderless child NSWindow needs `makeKeyAndOrderFront:`, `setAcceptsMouseMovedEvents:YES`, `setIgnoresMouseEvents:NO`
+
+## WebView Eval Queue Mechanism
+- `webview_eval()` silently fails after `webview_set_html()` — `eval_impl()` checks `webkit_web_view_get_uri()`, returns `{}` if null (before content loads)
+- Fix: `setHtml()` sets `pageLoading = true`, queues evals, flushes 300ms later via `Libui\Ffi::timer()`
+- `eval()` queues JS when `pageLoading` is true, executes directly otherwise
+- Verified: test-debug-bridge.php passes all 6 steps (bind, eval, callback, round-trip)
+
+## WebView Bind Lifecycle
+- `webview_bind()` calls `eval("window.__webview__.onBind(name)")` synchronously — BEFORE the new page's init script runs after `set_html()`
+- `window.__webview__` is undefined at that point → `if` guard silently skips → JS function never created
+- PebView C++ bindings map survives `set_html()` but JS-side `window[name]` does not
+- Re-binding same name returns `WEBVIEW_ERROR_DUPLICATE`
+
+## TreeView Communication Pattern
+- `bind()` creates JS function via queued eval → but eval is queued because `pageLoading` is true
+- HTML template defines `__onNodeClick`/`__onNodeToggle` as functions calling `__treeNodeClick`/`__treeNodeToggle` if they exist
+- Bridge functions defined as no-ops in HTML to prevent crashes before `bind()` flushes
+- Timing issue: user click before flush hits no-op → callback silently swallowed
+- `getSelectedPath()` fundamentally broken: `eval()` returns `$this` (WebView), not JS result. Must use bind-based return pattern.
 
 ## Circular Progress Bar Drawing
 - `DrawContext::strokePath()` takes `Brush $brush`, NOT `Color`
@@ -89,3 +110,7 @@ Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` 
 ## Upstream Namespace
 - All upstream widget classes are directly in `Libui\` namespace (e.g. `Libui\Button`, `Libui\Entry`)
 - There is NO `Libui\Widget\` sub-namespace — using it causes "Class not found" errors
+
+## PHP 8.5 Limitations
+- Cannot use `?callable` as property type — use `mixed` instead
+- `fn () => echo …` is a syntax error — use `print` or `function () {}` body

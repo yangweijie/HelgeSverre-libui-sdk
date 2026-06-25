@@ -13,6 +13,7 @@ clang -shared -fobjc-arc \
     bridge/webview_bridge.m \
     vendor/kingbes/pebview/lib/macos/arm64/PebView.dylib \
     -framework Cocoa \
+    -Wl,-rpath,$(pwd)/vendor/kingbes/pebview/lib/macos/arm64 \
     -o bridge/webview_bridge.dylib
 ```
 

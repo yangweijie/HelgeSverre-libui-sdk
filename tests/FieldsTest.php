@@ -17,6 +17,8 @@ use Yangweijie\Ui2\Fields\RadioGroup;
 use Yangweijie\Ui2\Fields\SearchField;
 use Yangweijie\Ui2\Fields\SeparatorLine;
 use Yangweijie\Ui2\Fields\TextAreaField;
+use Yangweijie\Ui2\Fields\FilePickerField;
+use Yangweijie\Ui2\Fields\SliderField;
 use Yangweijie\Ui2\Fields\TextField;
 
 
@@ -277,6 +279,59 @@ test('SeparatorLine can be constructed', function (): void {
 test('SeparatorLine returns null value (no HasValue)', function (): void {
     $line = new SeparatorLine();
     expect($line->value())->toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// SliderField
+// ---------------------------------------------------------------------------
+
+test('SliderField can be constructed', function (): void {
+    $field = new SliderField('Volume:', 0, 100);
+    expect($field->root())->toBeInstanceOf(Control::class);
+    expect($field->value())->toBe(0);
+});
+
+test('SliderField setValue updates value', function (): void {
+    $field = new SliderField('Volume:', 0, 100);
+    $field->setValue(50);
+    expect($field->value())->toBe(50);
+});
+
+test('SliderField emits change event', function (): void {
+    $field = new SliderField('Volume:', 0, 100);
+    $spy = new CallbackSpy();
+    $field->on('change', $spy);
+    expect($field->value())->toBe(0);
+});
+
+// ---------------------------------------------------------------------------
+// FilePickerField
+// ---------------------------------------------------------------------------
+
+test('FilePickerField can be constructed', function (): void {
+    $window = new \Libui\Window('Test', 100, 100);
+    $field = new FilePickerField($window);
+    expect($field->root())->toBeInstanceOf(Control::class);
+});
+
+test('FilePickerField value returns empty string by default', function (): void {
+    $window = new \Libui\Window('Test', 100, 100);
+    $field = new FilePickerField($window);
+    expect($field->value())->toBe('');
+});
+
+test('FilePickerField setValue sets value', function (): void {
+    $window = new \Libui\Window('Test', 100, 100);
+    $field = new FilePickerField($window);
+    $field->setValue('/tmp/test.txt');
+    expect($field->value())->toBe('/tmp/test.txt');
+});
+
+test('FilePickerField setValue returns static for chaining', function (): void {
+    $window = new \Libui\Window('Test', 100, 100);
+    $field = new FilePickerField($window);
+    $result = $field->setValue('/tmp/test.txt');
+    expect($result)->toBe($field);
 });
 
 // ---------------------------------------------------------------------------

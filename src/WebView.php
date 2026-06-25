@@ -66,6 +66,12 @@ class WebView
     /** @var bool Whether the webview has been destroyed */
     private bool $destroyed = false;
 
+    /** @var list<string> JS snippets queued during setHtml() page load */
+    private array $pendingEval = [];
+
+    /** @var bool Whether a setHtml() page load is in progress */
+    private bool $pageLoading = false;
+
     /** @var string Path to the bridge library */
     private string $bridgeLib;
 
@@ -170,7 +176,17 @@ class WebView
     public function setHtml(string $html): static
     {
         $this->assertNotDestroyed();
+        $this->pendingEval = [];
+        $this->pageLoading = true;
         $this->pv->webview_set_html($this->handle, $html);
+
+        // webview_set_html() loads asynchronously — eval() silently fails
+        // until the page has a URI. Schedule a flush after 300ms.
+        $self = $this;
+        \Libui\Ffi::timer(300, function () use ($self): void {
+            $self->flushPendingEval();
+        });
+
         return $this;
     }
 
@@ -191,13 +207,44 @@ class WebView
     /**
      * Evaluate arbitrary JavaScript in the webview.
      *
+     * After setHtml(), the page loads asynchronously — eval() silently
+     * returns {} until the page has a URI. Queued evals are flushed
+     * via dispatch() after a short delay.
+     *
      * @return $this
      */
     public function eval(string $js): static
     {
         $this->assertNotDestroyed();
+
+        if ($this->pageLoading) {
+            $this->pendingEval[] = $js;
+            return $this;
+        }
+
         $this->pv->webview_eval($this->handle, $js);
         return $this;
+    }
+
+    /**
+     * Flush pending eval calls that were queued during setHtml().
+     *
+     * webview_set_html() loads asynchronously — eval() calls made before
+     * the page has a loaded URI are silently ignored.  This flush runs
+     * ~300ms after setHtml() (via a libui timer that fires in the event
+     * loop), by which time the page should be ready.
+     */
+    public function flushPendingEval(): void
+    {
+        if (empty($this->pendingEval)) {
+            $this->pageLoading = false;
+            return;
+        }
+
+        $js = \implode(";\n", $this->pendingEval);
+        $this->pendingEval = [];
+        $this->pv->webview_eval($this->handle, $js);
+        $this->pageLoading = false;
     }
 
     // ────── JS ↔ PHP Bridge ──────
@@ -240,6 +287,12 @@ class WebView
         $this->callbacks[] = $cb;
         $this->pv->webview_bind($this->handle, $name, $cb, null);
 
+        // PebView's webview_bind() calls eval("window.__webview__.onBind(...)") immediately.
+        // After set_html(), the new page hasn't loaded yet so window.__webview__ is
+        // undefined and the onBind guard silently skips. Defer to let the init script run.
+        $escaped = \json_encode($name);
+        $this->eval("setTimeout(function() { if (window.__webview__ && !window[{$escaped}]) { window.__webview__.onBind({$escaped}); } }, 200);");
+
         return $this;
     }
 
@@ -252,6 +305,8 @@ class WebView
     {
         $this->assertNotDestroyed();
         $this->pv->webview_unbind($this->handle, $name);
+        $escaped = \json_encode($name);
+        $this->eval("setTimeout(function() { if (window.__webview__ && window[{$escaped}]) { window.__webview__.onUnbind({$escaped}); } }, 200);");
         return $this;
     }
 

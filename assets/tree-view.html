@@ -173,6 +173,7 @@ body {
   }
 
   function render(data) {
+    selectedPath = "";
     var container = document.getElementById("tree");
     container.innerHTML = "";
     nodeMap = {};
@@ -189,7 +190,7 @@ body {
   window.__expandNode = function(path) {
     var nodeEl = document.querySelector('[data-path="' + cssEscape(path) + '"]');
     if (!nodeEl) return;
-    var toggle = nodeEl.querySelector(":scope > .tree-toggle");
+    var toggle = nodeEl.querySelector(".tree-row > .tree-toggle");
     var children = nodeEl.querySelector(":scope > .tree-children");
     if (toggle && children && !children.classList.contains("open")) {
       children.classList.add("open");
@@ -201,7 +202,7 @@ body {
       partial = partial ? partial + "." + parts[i] : parts[i];
       var parentEl = document.querySelector('[data-path="' + cssEscape(partial) + '"]');
       if (parentEl) {
-        var pt = parentEl.querySelector(":scope > .tree-toggle");
+        var pt = parentEl.querySelector(".tree-row > .tree-toggle");
         var pc = parentEl.querySelector(":scope > .tree-children");
         if (pt && pc && !pc.classList.contains("open")) {
           pc.classList.add("open");
@@ -214,7 +215,7 @@ body {
   window.__collapseNode = function(path) {
     var nodeEl = document.querySelector('[data-path="' + cssEscape(path) + '"]');
     if (!nodeEl) return;
-    var toggle = nodeEl.querySelector(":scope > .tree-toggle");
+    var toggle = nodeEl.querySelector(".tree-row > .tree-toggle");
     var children = nodeEl.querySelector(":scope > .tree-children");
     if (toggle && children && children.classList.contains("open")) {
       children.classList.remove("open");
@@ -226,8 +227,16 @@ body {
     return selectedPath;
   };
 
-  window.__onNodeClick = null;
-  window.__onNodeToggle = null;
+  window.__onNodeClick = window.__onNodeClick || function(path, node) {
+    if (typeof window.__treeNodeClick === "function") {
+      window.__treeNodeClick(path, node);
+    }
+  };
+  window.__onNodeToggle = window.__onNodeToggle || function(path, expanded, node) {
+    if (typeof window.__treeNodeToggle === "function") {
+      window.__treeNodeToggle(path, expanded, node);
+    }
+  };
 
   if (window.__treeData) {
     render(window.__treeData);

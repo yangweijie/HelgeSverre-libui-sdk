@@ -104,14 +104,16 @@ void *wvb_create(int debug, uintptr_t parent_handle,
                      styleMask:NSWindowStyleMaskBorderless
                        backing:NSBackingStoreBuffered
                          defer:NO];
+        [childWin setAcceptsMouseMovedEvents:YES];
+        [childWin setIgnoresMouseEvents:NO];
         [parentWindow addChildWindow:childWin ordered:NSWindowAbove];
+        [childWin makeKeyAndOrderFront:nil];
 
         // Create the webview — it will set the WKWebView as contentView
         void *wv = webview_create(debug, (__bridge void *)childWin);
         if (!wv) {
             [parentWindow removeChildWindow:childWin];
             [childWin close];
-            [childWin release];
             return NULL;
         }
 
@@ -186,6 +188,5 @@ void wvb_destroy(void *wv) {
 
         // Close and free the child window
         [childWin close];
-        [childWin release];
     }
 }

@@ -28,19 +28,27 @@ class TreeView extends WebView
     /** @var array|null Cached node data for re-injection */
     private ?array $treeData = null;
 
+    /** @var callable|null Stored node-click handler */
+    private mixed $nodeClickHandler = null;
+
+    /** @var callable|null Stored node-toggle handler */
+    private mixed $nodeToggleHandler = null;
+
     /**
-     * Create an embedded tree view widget.
-     *
-     * @param Window $window    Parent libui Window (must be shown first).
-     * @param int    $x         X offset.
-     * @param int    $y         Y offset.
-     * @param int    $w         Width.
-     * @param int    $h         Height.
-     * @param array  $treeData  Initial tree data structure.
-     * @param bool   $debug     Enable Web Inspector (default: false).
-     *
-     * @see setData() for the expected array format.
+     * Last selected node path, updated automatically by the node-click glue.
+     * Populated even if no user-defined nodeClick handler is registered.
      */
+    private ?string $selectedPath = null;
+
+    /**
+     * PebView init script that creates window.__webview__ bridge.
+     * Re-injected after every setHtml() because set_html() creates a fresh
+     * page context that destroys the previous bridge.
+     */
+    private const INIT_SCRIPT_POST = 'function(message) {
+  return window.webkit.messageHandlers.__webview__.postMessage(message);
+}';
+
     public function __construct(
         Window $window,
         int    $x = 0,
@@ -56,6 +64,109 @@ class TreeView extends WebView
         parent::__construct($window, $x, $y, $w, $h, $debug);
 
         $this->loadHtml();
+    }
+
+    /**
+     * Override setHtml to re-inject the PebView init script.
+     *
+     * webview_set_html() creates a fresh page context, destroying
+     * window.__webview__. We prepend the init script into the HTML
+     * so the bridge exists before bind() calls eval().
+     */
+    public function setHtml(string $html): static
+    {
+        $initJs = $this->createInitScript();
+        $html = \str_replace('<head>', "<head><script>{$initJs}</script>", $html);
+        parent::setHtml($html);
+        $this->rebindHandlers();
+        return $this;
+    }
+
+    /**
+     * Re-register stored event handlers (called after setHtml).
+     */
+    private function rebindHandlers(): void
+    {
+        if ($this->nodeClickHandler !== null) {
+            $this->bindNodeClick();
+        }
+        if ($this->nodeToggleHandler !== null) {
+            $this->bindNodeToggle();
+        }
+    }
+
+    /**
+     * Build the PebView init script that creates window.__webview__.
+     */
+    private function createInitScript(): string
+    {
+        $postFn = self::INIT_SCRIPT_POST;
+
+        $js = <<<'JS'
+(function() {
+  'use strict';
+  function generateId() {
+    var crypto = window.crypto || window.msCrypto;
+    var bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.prototype.slice.call(bytes).map(function(n) {
+      return n.toString(16).padStart(2, '0');
+    }).join('');
+  }
+  var Webview = (function() {
+    var _promises = {};
+    function Webview_() {}
+    Webview_.prototype.post = function(message) {
+      return PLACEHOLDER_POST(message);
+    };
+    Webview_.prototype.call = function(method) {
+      var _id = generateId();
+      var _params = Array.prototype.slice.call(arguments, 1);
+      var promise = new Promise(function(resolve, reject) {
+        _promises[_id] = { resolve, reject };
+      });
+      this.post(JSON.stringify({
+        id: _id,
+        method: method,
+        params: _params
+      }));
+      return promise;
+    };
+    Webview_.prototype.onReply = function(id, status, result) {
+      var promise = _promises[id];
+      if (!promise) return;
+      delete _promises[id];
+      if (result !== undefined) {
+        try { result = JSON.parse(result); } catch(e) {
+          promise.reject(new Error("Failed to parse binding result as JSON"));
+          return;
+        }
+      }
+      if (status === 0) { promise.resolve(result); }
+      else { promise.reject(result); }
+    };
+    Webview_.prototype.onBind = function(name) {
+      if (Object.hasOwn(window, name)) {
+        throw new Error('Property "' + name + '" already exists');
+      }
+      window[name] = (function() {
+        var params = [name].concat(Array.prototype.slice.call(arguments));
+        return Webview_.prototype.call.apply(this, params);
+      }).bind(this);
+    };
+    Webview_.prototype.onUnbind = function(name) {
+      if (!Object.hasOwn(window, name)) {
+        throw new Error('Property "' + name + '" does not exist');
+      }
+      delete window[name];
+    };
+    return Webview_;
+  })();
+  window.__webview__ = new Webview();
+})();
+JS;
+
+        return \str_replace('PLACEHOLDER_POST', $postFn, $js);
     }
 
     /**
@@ -104,18 +215,17 @@ class TreeView extends WebView
     }
 
     /**
-     * Get the currently selected node path via JS eval.
+     * Get the currently selected node path.
      *
-     * @return string|null The selected path, or null on error.
+     * The path is tracked automatically in PHP via the node-click glue
+     * whenever a tree node is clicked in the WebView, so no synchronous
+     * eval round-trip is needed (webview_eval is fire-and-forget).
+     *
+     * @return string|null The selected path, or null if nothing selected.
      */
     public function getSelectedPath(): ?string
     {
-        // This is a best-effort read; for reactive updates use onNodeClick().
-        try {
-            return $this->eval('window.__getSelectedPath();');
-        } catch (\Throwable) {
-            return null;
-        }
+        return $this->selectedPath;
     }
 
     /**
@@ -127,21 +237,8 @@ class TreeView extends WebView
      */
     public function onNodeClick(callable $handler): static
     {
-        $this->bind('__treeNodeClick', function (string $id, string $req) use ($handler): void {
-            $data = \json_decode($req, true);
-            if (\is_array($data) && isset($data['path'])) {
-                $handler($data['path'], $data['node'] ?? []);
-            }
-            $this->return($id, 0, '{}');
-        });
-
-        $this->eval(<<<'JS'
-window.__onNodeClick = function(path, node) {
-    window.__treeNodeClick(JSON.stringify({path: path, node: node}));
-};
-JS
-        );
-
+        $this->nodeClickHandler = $handler;
+        $this->bindNodeClick();
         return $this;
     }
 
@@ -154,22 +251,70 @@ JS
      */
     public function onNodeToggle(callable $handler): static
     {
+        $this->nodeToggleHandler = $handler;
+        $this->bindNodeToggle();
+        return $this;
+    }
+
+    /**
+     * Bind the node-click JS bridge.
+     *
+     * Automatically tracks the selected path in {@see $selectedPath}
+     * regardless of whether a user-defined nodeClick handler exists,
+     * so that {@see getSelectedPath()} always returns current state.
+     */
+    private function bindNodeClick(): void
+    {
+        $handler = $this->nodeClickHandler;
+
+        $this->bind('__treeNodeClick', function (string $id, string $req) use ($handler): void {
+            $args = \json_decode($req, true);
+            if (\is_array($args) && isset($args[0])) {
+                $path = $args[0];
+                $node = $args[1] ?? [];
+                $this->selectedPath = $path;
+                if ($handler !== null) {
+                    $handler($path, $node);
+                }
+            }
+            $this->return($id, 0, '{}');
+        });
+
+        $this->eval(<<<'JS'
+window.__onNodeClick = function(path, node) {
+    window.__treeNodeClick(path, node);
+};
+JS
+        );
+    }
+
+    /**
+     * Bind the node-toggle JS bridge.
+     */
+    private function bindNodeToggle(): void
+    {
+        $handler = $this->nodeToggleHandler;
+        if ($handler === null) {
+            return;
+        }
+
         $this->bind('__treeNodeToggle', function (string $id, string $req) use ($handler): void {
-            $data = \json_decode($req, true);
-            if (\is_array($data)) {
-                $handler($data['path'] ?? '', $data['expanded'] ?? false, $data['node'] ?? []);
+            $args = \json_decode($req, true);
+            if (\is_array($args) && isset($args[0])) {
+                $path = $args[0] ?? '';
+                $expanded = $args[1] ?? false;
+                $node = $args[2] ?? [];
+                $handler($path, $expanded, $node);
             }
             $this->return($id, 0, '{}');
         });
 
         $this->eval(<<<'JS'
 window.__onNodeToggle = function(path, expanded, node) {
-    window.__treeNodeToggle(JSON.stringify({path: path, expanded: expanded, node: node}));
+    window.__treeNodeToggle(path, expanded, node);
 };
 JS
         );
-
-        return $this;
     }
 
     /**
@@ -186,7 +331,6 @@ JS
         $html = \file_get_contents($this->assetPath);
 
         if (!empty($this->treeData)) {
-            // Inject tree data into the HTML as JSON
             $dataJson = \json_encode($this->treeData);
             $html = \str_replace(
                 'window.__treeData = window.__treeData || [];',
