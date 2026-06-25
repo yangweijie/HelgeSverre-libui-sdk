@@ -2,75 +2,52 @@
 
 declare(strict_types=1);
 
-namespace Yangweijie\Ui2\Tests;
-
 use Libui\Dialogs;
 use Libui\Window;
-use PHPUnit\Framework\TestCase;
 
 /**
- * Behavioural tests for the upstream Libui\Dialogs helper.
+ * Test the private Dialogs::nullIfEmpty() method via reflection.
  *
- * The core private method Dialogs::nullIfEmpty() converts empty C strings
- * (which libui returns when the user cancels a file dialog) to null. These
- * tests verify that conversion via reflection — the only way to reach the
- * private method without instantiating a real FFI dialog.
+ * Constructs a Dialogs instance with a Window created without running
+ * the FFI constructor, so this test never touches native libui.
+ * The nullIfEmpty method only reads its $value parameter, not $this->parent.
  */
-final class DialogsTest extends TestCase
+
+test('nullIfEmpty returns null for empty string', function (): void {
+    $dialogs = createTestDialogs();
+    $result = invokeNullIfEmpty($dialogs, '');
+    expect($result)->toBeNull();
+});
+
+test('nullIfEmpty returns input for non-empty value', function (): void {
+    $dialogs = createTestDialogs();
+    $result = invokeNullIfEmpty($dialogs, '/home/user/file.txt');
+    expect($result)->toBe('/home/user/file.txt');
+});
+
+test('nullIfEmpty returns input for single character', function (): void {
+    $dialogs = createTestDialogs();
+    $result = invokeNullIfEmpty($dialogs, '/');
+    expect($result)->toBe('/');
+});
+
+test('nullIfEmpty preserves whitespace string', function (): void {
+    // libui uses strict === '' so whitespace is preserved (documenting current behaviour).
+    $dialogs = createTestDialogs();
+    $result = invokeNullIfEmpty($dialogs, '   ');
+    expect($result)->toBe('   ');
+});
+
+function createTestDialogs(): Dialogs
 {
-    private Dialogs $dialogs;
+    // Create a Window without calling the FFI constructor.
+    $window = (new ReflectionClass(Window::class))->newInstanceWithoutConstructor();
 
-    protected function setUp(): void
-    {
-        // Dialogs needs a Window, but we never call methods that touch FFI
-        // during these tests. Create a minimal mock.
-        $window = $this->createStub(Window::class);
-        $this->dialogs = new Dialogs($window);
-    }
+    return new Dialogs($window);
+}
 
-    /**
-     * nullIfEmpty('') must return null — this is the critical path that
-     * converts a cancelled C dialog (empty string) into a PHP null.
-     */
-    public function testNullIfEmptyReturnsNullForEmptyString(): void
-    {
-        $result = $this->invokeNullIfEmpty('');
-        self::assertNull($result, 'An empty string must become null');
-    }
-
-    /**
-     * nullIfEmpty() must return the input unchanged when it is non-empty.
-     * This covers the "user picked a file" path.
-     */
-    public function testNullIfEmptyReturnsStringForNonEmptyValue(): void
-    {
-        $result = $this->invokeNullIfEmpty('/home/user/file.txt');
-        self::assertSame('/home/user/file.txt', $result);
-    }
-
-    public function testNullIfEmptyReturnsStringForSingleCharacter(): void
-    {
-        $result = $this->invokeNullIfEmpty('/');
-        self::assertSame('/', $result);
-    }
-
-    public function testNullIfEmptyReturnsNullForWhitespaceString(): void
-    {
-        // libui never returns whitespace-only paths, but the implementation
-        // uses === '' so whitespace is preserved. Documenting current behaviour.
-        $result = $this->invokeNullIfEmpty('   ');
-        self::assertSame('   ', $result, 'nullIfEmpty uses strict === "" — whitespace is NOT empty');
-    }
-
-    /**
-     * Invoke the private Dialogs::nullIfEmpty() via reflection.
-     */
-    private function invokeNullIfEmpty(string $value): ?string
-    {
-        $method = new \ReflectionMethod(Dialogs::class, 'nullIfEmpty');
-        $method->setAccessible(true);
-
-        /** @var string|null $result */
-        return $method->invoke($this->dialogs, $value);
-    }
+function invokeNullIfEmpty(Dialogs $dialogs, string $value): ?string
+{
+    $method = new ReflectionMethod(Dialogs::class, 'nullIfEmpty');
+    return $method->invoke($dialogs, $value);
 }
