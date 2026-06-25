@@ -74,44 +74,6 @@ class Window extends Generated\Window
     }
 
     /**
-     * Centre the window on the primary display.
-     *
-     * libui exposes no screen-size API, so the dimensions must come from
-     * somewhere. On macOS they are detected automatically (a pure-C CoreGraphics
-     * probe — no extra toolchain); on every other platform, or to target a
-     * specific display, pass them explicitly:
-     *
-     *     $window->centered();            // macOS: auto-detected
-     *     $window->centered(1920, 1080);  // anywhere: explicit
-     *
-     * Positioning is a hint that some Unix window managers ignore (see
-     * {@see setPosition()}). Call before {@see show()} to place the window on open.
-     *
-     * @param int|null $screenWidth  Target display width in points, or null to auto-detect.
-     * @param int|null $screenHeight Target display height in points, or null to auto-detect.
-     * @throws \RuntimeException If no dimensions are given and the screen size can't be detected.
-     */
-    public function centered(?int $screenWidth = null, ?int $screenHeight = null): static
-    {
-        if ($screenWidth === null || $screenHeight === null) {
-            $screen = self::detectScreenSize();
-            if ($screen === null) {
-                throw new \RuntimeException(
-                    'Window::centered() cannot detect the screen size on this platform. Pass explicit dimensions, e.g. $window->centered(1920, 1080).',
-                );
-            }
-            [$screenWidth, $screenHeight] = $screen;
-        }
-
-        [$winWidth, $winHeight] = $this->getContentSize();
-
-        return $this->setPosition(
-            (int) \max(0, ($screenWidth - $winWidth) / 2),
-            (int) \max(0, ($screenHeight - $winHeight) / 2),
-        );
-    }
-
-    /**
      * The window's current content size, falling back to the constructed size
      * when libui reports a non-positive value (it may on Unix before layout).
      *
@@ -148,10 +110,12 @@ class Window extends Generated\Window
     /**
      * Best-effort primary-display size in pixels, cached for the process.
      *
-     * macOS only, via the pure-C CoreGraphics functions (the framework ships
-     * with the OS, so this stays true to libui's "no extra toolchain" promise).
-     * Returns null on any other platform or if the probe fails, leaving the
-     * caller to supply dimensions explicitly.
+     * macOS: CoreGraphics FFI (pure C, ships with OS — no extra toolchain).
+     * Linux: xrandr → xdotool → xdpyinfo (first match wins).
+     * Windows: PowerShell System.Windows.Forms → wmic.
+     *
+     * Returns null if no method succeeds, leaving the caller to supply
+     * dimensions explicitly.
      *
      * @return array{int, int}|null [width, height], or null if unavailable.
      */
@@ -166,10 +130,17 @@ class Window extends Generated\Window
         }
         $probed = true;
 
-        if (\PHP_OS_FAMILY !== 'Darwin') {
-            return null;
-        }
+        return $size = match (\PHP_OS_FAMILY) {
+            'Darwin' => self::screenSizeDarwin(),
+            'Linux'  => self::screenSizeLinux(),
+            'Windows' => self::screenSizeWindows(),
+            default  => null,
+        };
+    }
 
+    /** macOS: CoreGraphics FFI — primary display bounds. */
+    private static function screenSizeDarwin(): ?array
+    {
         try {
             $cg = \FFI::cdef(
                 'typedef uint32_t CGDirectDisplayID;'
@@ -182,12 +153,213 @@ class Window extends Generated\Window
             );
             // @phpstan-ignore-next-line dynamic CoreGraphics FFI calls on a local \FFI handle
             $bounds = $cg->CGDisplayBounds($cg->CGMainDisplayID());
-            $size = [(int) $bounds->size->width, (int) $bounds->size->height];
+
+            return [(int) $bounds->size->width, (int) $bounds->size->height];
         } catch (\Throwable) {
-            $size = null;
+            return null;
+        }
+    }
+
+    /** Linux: xrandr → xdotool → xdpyinfo. */
+    private static function screenSizeLinux(): ?array
+    {
+        // 1. xrandr query — most reliable for X11
+        $out = \shell_exec('xrandr --query 2>/dev/null');
+        if (\is_string($out) && $out !== '') {
+            // Match primary display first, then any connected display with '*'
+            if (\preg_match('/primary\s+\d+x\d+\s+\+?\d+\+?\d+\s+.*?(\d+)x(\d+)/', $out, $m)
+                || \preg_match('/(\d+)x(\d+).*\*/', $out, $m)) {
+                return [(int) $m[1], (int) $m[2]];
+            }
         }
 
-        return $size;
+        // 2. xdotool (common on modern desktops)
+        $out = \shell_exec('xdotool getdisplaygeometry 2>/dev/null');
+        if (\is_string($out) && $out !== '' && \preg_match('/(\d+)\s+(\d+)/', $out, $m)) {
+            return [(int) $m[1], (int) $m[2]];
+        }
+
+        // 3. xdpyinfo fallback
+        $out = \shell_exec('xdpyinfo 2>/dev/null | grep dimensions');
+        if (\is_string($out) && $out !== '' && \preg_match('/(\d+)x(\d+)/', $out, $m)) {
+            return [(int) $m[1], (int) $m[2]];
+        }
+
+        return null;
+    }
+
+    /** Windows: PowerShell System.Windows.Forms → wmic. */
+    private static function screenSizeWindows(): ?array
+    {
+        // 1. PowerShell with WinForms (most reliable)
+        $script = 'Add-Type -AssemblyName System.Windows.Forms;'
+            . '[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Size.Width;'
+            . '[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Size.Height';
+        $out = \shell_exec("powershell -Command \"{$script}\" 2>NUL");
+        if (\is_string($out) && $out !== '') {
+            $parts = \array_map('\intval', \array_filter(\explode("\n", $out)));
+            if (\count($parts) >= 2 && $parts[0] > 0 && $parts[1] > 0) {
+                return [$parts[0], $parts[1]];
+            }
+        }
+
+        // 2. wmic fallback
+        $out = \shell_exec('wmic path Win32_VideoController'
+            . ' get CurrentHorizontalResolution,CurrentVerticalResolution 2>NUL');
+        if (\is_string($out) && $out !== '' && \preg_match('/(\d+)\s+(\d+)/', $out, $m)) {
+            return [(int) $m[1], (int) $m[2]];
+        }
+
+        return null;
+    }
+
+    // ────── Position presets ──────
+
+    public const CENTER       = 'center';
+    public const TOP_LEFT     = 'topLeft';
+    public const TOP_CENTER   = 'topCenter';
+    public const TOP_RIGHT    = 'topRight';
+    public const CENTER_LEFT  = 'centerLeft';
+    public const CENTER_RIGHT = 'centerRight';
+    public const BOTTOM_LEFT    = 'bottomLeft';
+    public const BOTTOM_CENTER  = 'bottomCenter';
+    public const BOTTOM_RIGHT   = 'bottomRight';
+
+    /** @var array<string, \Closure(int,int,int,int):array{int,int}> */
+    private static array $positionCalculators;
+
+    /**
+     * Position the window at a named screen region.
+     *
+     * Available presets (use the class constants):
+     *   CENTER, TOP_LEFT, TOP_CENTER, TOP_RIGHT,
+     *   CENTER_LEFT, CENTER_RIGHT,
+     *   BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT
+     *
+     * Screen dimensions are auto-detected on all platforms when omitted;
+     * pass them explicitly to target a specific display.
+     *
+     * @see centered()  Convenience wrapper for CENTER.
+     *
+     * @throws \RuntimeException
+     * @throws \InvalidArgumentException
+     */
+    public function positionOnScreen(
+        string $position,
+        ?int   $screenWidth = null,
+        ?int   $screenHeight = null,
+    ): static {
+        if ($screenWidth === null || $screenHeight === null) {
+            $screen = self::detectScreenSize();
+            if ($screen === null) {
+                throw new \RuntimeException(
+                    'Window::positionOnScreen() cannot detect the screen size on this platform.'
+                    . ' Pass explicit dimensions, e.g. $window->positionOnScreen(Window::CENTER, 1920, 1080).',
+                );
+            }
+            [$screenWidth, $screenHeight] = $screen;
+        }
+
+        [$winWidth, $winHeight] = $this->getContentSize();
+
+        $calc = self::positionCalc($position);
+        [$x, $y] = $calc($screenWidth, $screenHeight, $winWidth, $winHeight);
+
+        return $this->setPosition(
+            (int) \max(0, $x),
+            (int) \max(0, $y),
+        );
+    }
+
+    /** Centres on screen. Alias for positionOnScreen(CENTER). */
+    public function centered(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::CENTER, $screenWidth, $screenHeight);
+    }
+
+    /** Top-left corner. */
+    public function topLeft(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::TOP_LEFT, $screenWidth, $screenHeight);
+    }
+
+    /** Top-center (centred horizontally, flush top). */
+    public function topCenter(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::TOP_CENTER, $screenWidth, $screenHeight);
+    }
+
+    /** Top-right corner. */
+    public function topRight(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::TOP_RIGHT, $screenWidth, $screenHeight);
+    }
+
+    /** Vertically centred on the left edge. */
+    public function centerLeft(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::CENTER_LEFT, $screenWidth, $screenHeight);
+    }
+
+    /** Vertically centred on the right edge. */
+    public function centerRight(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::CENTER_RIGHT, $screenWidth, $screenHeight);
+    }
+
+    /** Bottom-left corner. */
+    public function bottomLeft(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::BOTTOM_LEFT, $screenWidth, $screenHeight);
+    }
+
+    /** Bottom-centre (centred horizontally, flush bottom). */
+    public function bottomCenter(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::BOTTOM_CENTER, $screenWidth, $screenHeight);
+    }
+
+    /** Bottom-right corner. */
+    public function bottomRight(?int $screenWidth = null, ?int $screenHeight = null): static
+    {
+        return $this->positionOnScreen(self::BOTTOM_RIGHT, $screenWidth, $screenHeight);
+    }
+
+    /**
+     * Lazy-initialised map of position name → (sw,sh,ww,wh) → [x,y].
+     *
+     * @return \Closure(int,int,int,int):array{int,int}
+     */
+    private static function positionCalc(string $name): \Closure
+    {
+        self::$positionCalculators ??= [
+            self::CENTER       => fn(int $sw, int $sh, int $ww, int $wh): array
+                                 => [(int)(($sw - $ww) / 2), (int)(($sh - $wh) / 2)],
+            self::TOP_LEFT     => fn(): array => [0, 0],
+            self::TOP_CENTER   => fn(int $sw, int $_, int $ww): array
+                                 => [(int)(($sw - $ww) / 2), 0],
+            self::TOP_RIGHT    => fn(int $sw, int $_, int $ww): array
+                                 => [\max(0, $sw - $ww), 0],
+            self::CENTER_LEFT  => fn(int $_, int $sh, int $__, int $wh): array
+                                 => [0, (int)(($sh - $wh) / 2)],
+            self::CENTER_RIGHT => fn(int $sw, int $sh, int $ww, int $wh): array
+                                 => [\max(0, $sw - $ww), (int)(($sh - $wh) / 2)],
+            self::BOTTOM_LEFT  => fn(int $_, int $sh, int $__, int $wh): array
+                                 => [0, \max(0, $sh - $wh)],
+            self::BOTTOM_CENTER=> fn(int $sw, int $sh, int $ww, int $wh): array
+                                 => [(int)(($sw - $ww) / 2), \max(0, $sh - $wh)],
+            self::BOTTOM_RIGHT => fn(int $sw, int $sh, int $ww, int $wh): array
+                                 => [\max(0, $sw - $ww), \max(0, $sh - $wh)],
+        ];
+
+        if (!isset(self::$positionCalculators[$name])) {
+            throw new \InvalidArgumentException(
+                "Unknown position preset: {$name}. "
+                . 'Use one of: ' . \implode(', ', \array_keys(self::$positionCalculators)),
+            );
+        }
+
+        return self::$positionCalculators[$name];
     }
 
     /**

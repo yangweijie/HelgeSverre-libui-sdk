@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2a504e710355520e0fdcdf81476e8adb",
+    "content-hash": "8ea8fdc34a37c6580ca606aaf42deec8",
     "packages": [
         {
             "name": "helgesverre/libui",
@@ -55,6 +55,38 @@
                 "source": "https://github.com/HelgeSverre/libui/tree/main"
             },
             "time": "2026-06-23T13:19:15+00:00"
+        },
+        {
+            "name": "kingbes/pebview",
+            "version": "v0.1.1",
+            "dist": {
+                "type": "zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/kingbes/pebview/v0.1.1/kingbes-pebview-v0.1.1.zip",
+                "reference": "15c656189615e396671f4573043dbfdd99cba72a",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": ">=8.2"
+            },
+            "type": "ext",
+            "autoload": {
+                "files": [
+                    "src/Help.php"
+                ],
+                "psr-4": {
+                    "Kingbes\\PebView\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "一个跨平台webview 组件 ,它允许在自身原生 GUI 窗口中显示 HTML 内容。它让您可以在桌面应用程序中使用WEB技术，同时隐藏 GUI 依赖浏览器的事实。",
+            "support": {
+                "issues": "https://github.com/KingBes/pebview/issues",
+                "source": "https://github.com/KingBes/pebview/tree/v0.1.1"
+            },
+            "time": "2026-05-25T06:39:02+00:00"
         }
     ],
     "packages-dev": [

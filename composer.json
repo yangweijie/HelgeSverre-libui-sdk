@@ -3,7 +3,8 @@
     "description": "tool with helgesverre/libui anthor libui gui toolkit.",
     "type": "library",
     "require": {
-        "helgesverre/libui": "dev-main"
+        "helgesverre/libui": "dev-main",
+        "kingbes/pebview": "^0.1.1"
     },
     "require-dev": {
         "pestphp/pest": "^4.0"

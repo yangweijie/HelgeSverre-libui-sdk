@@ -2,3 +2,8 @@
 /.phpunit.cache/
 /.serena/
 /.omo/
+
+# Compiled bridge binaries (compile from source in bridge/)
+/bridge/*.dylib
+/bridge/*.so
+/bridge/*.dll

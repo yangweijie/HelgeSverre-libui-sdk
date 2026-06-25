@@ -32,6 +32,8 @@ use Libui\Group;
 use Libui\Label;
 use Libui\Tab;
 use Libui\Window;
+use Yangweijie\Ui2\Dialogs\DialogConfirm;
+use Yangweijie\Ui2\Dialogs\DialogPrompt;
 use Yangweijie\Ui2\Dialogs\MessageBox;
 use Yangweijie\Ui2\Fields\CheckboxField;
 use Yangweijie\Ui2\Fields\ComboBoxField;
@@ -47,8 +49,11 @@ use Yangweijie\Ui2\Fields\SliderField;
 use Yangweijie\Ui2\Fields\TextAreaField;
 use Yangweijie\Ui2\Fields\TextField;
 use Yangweijie\Ui2\Pickers\ColorPickerDialog;
+use Yangweijie\Ui2\Pickers\DatePickerDialog;
 use Yangweijie\Ui2\Pickers\FontPickerDialog;
+use Yangweijie\Ui2\Pickers\TimePickerDialog;
 use Yangweijie\Ui2\Widgets\StatusIndicator;
+use Yangweijie\Ui2\Widgets\TableView;
 use Yangweijie\Ui2\Widgets\ToggleSwitch;
 
 Ffi::init();
@@ -143,9 +148,6 @@ $buttonsBox = Build::hbox(
         $outputLabel->setText('Progress: indeterminate');
     }),
 );
-// File picker is separate as it needs the Window
-$filePicker = null; // Window-dependant, set below
-
 $fieldsBox = Build::vbox($fieldsGroup, $buttonsBox);
 
 // =========================================================================
@@ -193,11 +195,11 @@ $toggleControls = Build::vbox(
 );
 
 // =========================================================================
-// TAB 3 — Dialogs (MessageBox)
+// TAB 3 — Dialogs (MessageBox, DialogConfirm, DialogPrompt)
 // =========================================================================
 
 $dialogControls = Build::vbox(
-    new Label('Click a button to show a native dialog:'),
+    new Label('MessageBox — native info/warning/error dialogs:'),
     Build::hbox(
         (new Button('Info'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
             MessageBox::info($mainWindow, 'Info', 'This is an information dialog.');
@@ -213,15 +215,35 @@ $dialogControls = Build::vbox(
         }),
         Build::stretchy(new Label('')),
     ),
+    (new SeparatorLine())->root(),
+    new Label('DialogConfirm — return true/false:'),
+    Build::hbox(
+        (new Button('Confirm Delete'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
+            $confirmed = DialogConfirm::ask($mainWindow, 'Delete', 'Delete this item?');
+            $outputLabel->setText($confirmed ? 'User confirmed deletion' : 'User cancelled deletion');
+        }),
+        Build::stretchy(new Label('')),
+    ),
+    (new SeparatorLine())->root(),
+    new Label('DialogPrompt — return ?string:'),
+    Build::hbox(
+        (new Button('Enter Name'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
+            $name = DialogPrompt::ask($mainWindow, 'Name', 'Enter your name:', 'Guest');
+            $outputLabel->setText($name !== null ? "Hello, {$name}!" : 'Prompt cancelled');
+        }),
+        Build::stretchy(new Label('')),
+    ),
     Build::stretchy(new Label('')),
 );
 
 // =========================================================================
-// TAB 4 — Pickers (ColorPickerDialog, FontPickerDialog)
+// TAB 4 — Pickers (ColorPickerDialog, FontPickerDialog, DatePickerDialog, TimePickerDialog)
 // =========================================================================
 
 $colorSwatch = new Label('(click Pick Color)');
 $fontPreview = new Label('(click Pick Font)');
+$datePreview = new Label('(click Pick Date)');
+$timePreview = new Label('(click Pick Time)');
 
 $pickerControls = Build::vbox(
     Group::titled('Color Picker', Build::vbox(
@@ -246,7 +268,7 @@ $pickerControls = Build::vbox(
             (new Button('Pick Font'))->onClicked(function () use (&$mainWindow, $fontPreview, $outputLabel): void {
                 $font = FontPickerDialog::pick($mainWindow);
                 if ($font !== null) {
-                        $fontPreview->setText($font->family() . ', ' . $font->size() . 'pt');
+                    $fontPreview->setText($font->family() . ', ' . $font->size() . 'pt');
                     $outputLabel->setText('Font selected');
                 } else {
                     $fontPreview->setText('cancelled');
@@ -256,7 +278,86 @@ $pickerControls = Build::vbox(
             Build::stretchy(new Label('')),
         ),
     )),
+    Group::titled('Date Picker', Build::vbox(
+        new Label('Pick a date:'),
+        Build::hbox(
+            (new Button('Pick Date'))->onClicked(function () use (&$mainWindow, $datePreview, $outputLabel): void {
+                $date = DatePickerDialog::pick($mainWindow);
+                if ($date !== null) {
+                    $datePreview->setText($date->format('Y-m-d'));
+                    $outputLabel->setText('Date selected');
+                } else {
+                    $outputLabel->setText('Date picker cancelled');
+                }
+            }),
+            $datePreview,
+            Build::stretchy(new Label('')),
+        ),
+    )),
+    Group::titled('Time Picker', Build::vbox(
+        new Label('Pick a time:'),
+        Build::hbox(
+            (new Button('Pick Time'))->onClicked(function () use (&$mainWindow, $timePreview, $outputLabel): void {
+                $time = TimePickerDialog::pick($mainWindow);
+                if ($time !== null) {
+                    $timePreview->setText($time->format('H:i'));
+                    $outputLabel->setText('Time selected');
+                } else {
+                    $outputLabel->setText('Time picker cancelled');
+                }
+            }),
+            $timePreview,
+            Build::stretchy(new Label('')),
+        ),
+    )),
     Build::stretchy(new Label('')),
+);
+
+// =========================================================================
+// TAB 5 — TableView (editable cells + sortable headers)
+// =========================================================================
+
+$table = new TableView(
+    columns: ['Name', 'Age', 'Score'],
+    rows: [
+        ['Alice', 30, 95],
+        ['Bob', 25, 87],
+        ['Charlie', 35, 92],
+    ],
+    editable: [1, 2], // Age and Score are editable in-place
+);
+// Toggle sort on header click: click once = asc, click again = desc
+$table->onHeaderClicked(function ($t, int $col) use ($table, $outputLabel): void {
+    static $direction = [];
+    $dir = ($direction[$col] ?? 'desc') === 'asc' ? 'desc' : 'asc';
+    $direction[$col] = $dir;
+    $table->sortByColumn($col, $dir);
+    $outputLabel->setText('Sorted by ' . $col . ' ' . $dir);
+});
+$table->onRowClicked(function ($t, int $row) use ($outputLabel, $table): void {
+    $rows = $table->selectedRows();
+    $outputLabel->setText('Row ' . $row . ' clicked, ' . count($rows) . ' selected');
+});
+
+$tableControls = Build::vbox(
+    Group::titled('Data Table (Age/Score editable — click headers to sort)',
+        Build::vbox(
+            $table->root(),
+            Build::hbox(
+                (new Button('Add Row'))->onClicked(function () use ($table, $outputLabel): void {
+                    $table->addRow(['New', 0, 0]);
+                    $outputLabel->setText('Row added (count: ' . $table->rowCount() . ')');
+                }),
+                (new Button('Remove Last'))->onClicked(function () use ($table, $outputLabel): void {
+                    if ($table->rowCount() > 0) {
+                        $table->removeRow($table->rowCount() - 1);
+                        $outputLabel->setText('Last row removed');
+                    }
+                }),
+                Build::stretchy(new Label('')),
+            ),
+        ),
+    ),
 );
 
 // =========================================================================
@@ -268,6 +369,7 @@ $tab->appendMargined('Fields', $fieldsBox);
 $tab->appendMargined('Custom', $toggleControls);
 $tab->appendMargined('Dialogs', $dialogControls);
 $tab->appendMargined('Pickers', $pickerControls);
+$tab->appendMargined('Table', $tableControls);
 
 // Build the main layout: tab takes all vertical space, status bar sits at the bottom
 $mainWindow = new Window('All Components — ui2 Demo', 560, 520, true);

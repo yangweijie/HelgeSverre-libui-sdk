@@ -69,9 +69,10 @@ final class ColorPickerDialog
             $window->hide();
         });
 
-        $window->onClosing(function () use (&$finished): bool {
+        $window->onClosing(function () use ($window, &$finished): bool {
             $finished = true;
-            return true;
+            $window->hide();
+            return false;
         });
 
         $window->show();
