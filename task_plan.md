@@ -4,123 +4,53 @@
 Build a set of reusable Composite-based GUI components in `src/Fields/`, plus patches, dialogs, and custom widgets. Complete implementation of the 5-phase gap analysis derived from `software—arch.md`.
 
 ## Current Phase
-Complete (all phases done)
+Phase 16 — Demo Running (in progress)
 
 ## Phases
 
-### Phase 0: AGENTS.md Rewrite
-- [x] Rewrite AGENTS.md with project structure, patch table, upstream essentials
+... (Phase 0-12 unchanged)...
+
+### Phase 13: WebView Port (PebView Bridge)
+- [x] composer.json: Add kingbes/pebview dependency
+- [x] bridge/: Copy/macOS/Linux/Windows platform bridge C sources + compiled dylib
+- [x] bridge/README.md: Build instructions
+- [x] src/WebView.php: WebView class wrapping bridge + PebView FFI (navigate/setHtml/eval/bind/return/autoResize/cleanupOnClose/reposition/destroy)
+- [x] examples/webview.php: Demo with sidebar, JS-PHP bridge, resize handling
+- [x] Fix bridge dylib rpath: rebuild PebView.dylib from source, recompile bridge with -rpath flag
+- [x] .gitignore: Ignore compiled bridge binaries
 - **Status:** complete
 
-### Phase 1: Group 1 — Form Fields (TextField, PasswordField, NumberField, SearchField)
-- [x] Create `src/Fields/` directory
-- [x] `src/Fields/TextField.php` — Label + Entry, HasValue(string), emits 'change'
-- [x] `src/Fields/PasswordField.php` — Label + PasswordEntry, HasValue(string), emits 'change'
-- [x] `src/Fields/NumberField.php` — Label + Spinbox, HasValue(int), emits 'change'
-- [x] `src/Fields/SearchField.php` — Label + SearchEntry, HasValue(string), emits 'change'
-- [x] PHP lint all files
+### Phase 14: Dialog/Picker Centering on Parent
+- [x] patches/Window.php: Add centeredOn(Window $parent) method
+- [x] src/Fields/SeparatorLine.php: Add __destruct calling $this->separator->destroy()
+- [x] src/Pickers/*.php: 4 pickers use centeredOn() after show()
+- [x] src/Dialogs/DialogConfirm.php, DialogPrompt.php: Use centeredOn()
 - **Status:** complete
 
-### Phase 2: Group 2 — Picker & Slider Fields
-- [x] `src/Fields/FilePickerField.php` — Entry(readonly) + "Browse" button, opens native file dialog
-- [x] `src/Fields/SliderField.php` — Slider + value label, updates label on drag
-- [x] PHP lint all files
+### Phase 15: 4 New Widgets (CircleProgressBar, Toast, TreeView, CodeEditor)
+- [x] src/Widgets/CircleProgressBar.php: Area-based ring progress bar (fillArc/strokeArc, setProgress/setColor/setThickness)
+- [x] src/Widgets/Toast.php: Native OS toast via PebView Toast.dylib FFI (static show())
+- [x] src/Widgets/TreeView.php: WebView-based tree/file browser with JS-PHP bridge (setData/expandNode/collapseNode/onNodeClick/onNodeToggle)
+- [x] assets/tree-view.html: Collapsible tree HTML with icons, selection, toggle
+- [x] src/Widgets/CodeEditor.php: WebView-based code editor with highlight.js (setCode/getCode/setLanguage/onChange)
+- [x] assets/code-editor.html: CodeMirror-style editor with line numbers, toolbar, 17 language support
 - **Status:** complete
 
-### Phase 3: Verify & Commit
-- [x] Run php -l on all new files
-- [x] Run existing tests
-- [x] Git commit
-- **Status:** complete
+### Phase 16: all-components.php 6-Tab Demo
+- [x] Rewrite to 6 tabs: Fields, Custom, Dialogs, Pickers, Table, WebView
+- [x] CircleProgressBar in Custom tab with +/-/Reset controls
+- [x] Toast button in Dialogs tab
+- [x] TreeView launch button in WebView tab
+- [x] CodeEditor launch button in WebView tab
+- [x] Fix GC/dangling-pointer bug: temporary Composite objects destroyed mid-expression. Rewrote all variables to named persistent storage. No more inline IIFEs.
+- [x] Fix `use Libui\Widget\Button` → `use Libui\Button` (upstream has no `Widget\` sub-namespace)
+- [ ] Fix CircleProgressBar `strokePath()` → `Brush::color()` (needs Brush not Color) — **pending test run**
+- **Status:** in progress (1 known runtime fix remaining, awaiting verification)
 
-### Phase 4: Pest Migration & Documentation
-- [x] README.md — comprehensive project documentation
-- [x] composer.json — phpunit/phpunit → pestphp/pest ^4.0
-- [x] tests/Pest.php — Pest config file
-- [x] tests/DialogsTest.php — PHPUnit → Pest test functions
-- [x] AGENTS.md — updated testing section
-- **Status:** complete
-
-### Phase 5: Gap Analysis — Container Patches
-- [x] `patches/helgesverre/libui/src/Group.php` — Composite support, titled() factory
-- [x] `patches/helgesverre/libui/src/Tab.php` — Composite support in append()/appendMargined()
-- **Status:** complete
-
-### Phase 6: Gap Analysis — New Field Composites
-- [x] `src/Fields/CheckboxField.php` — Label + Checkbox, bool value
-- [x] `src/Fields/RadioGroup.php` — RadioButtons wrapper, int value, addOptions()
-- [x] `src/Fields/ComboBoxField.php` — Label + Combobox, int selected index
-- [x] `src/Fields/EditableComboBoxField.php` — Label + EditableCombobox, string value
-- [x] `src/Fields/DatePickerField.php` — Label + DateTimePicker, DateTimeImmutable, dateOnly()/timeOnly()
-- **Status:** complete
-
-### Phase 7: Gap Analysis — Functional Widgets
-- [x] `src/Fields/TextAreaField.php` — Label + MultilineEntry, vertical layout
-- [x] `src/Fields/ProgressBarField.php` — Label + ProgressBar, setProgress()/indeterminate()
-- [x] `src/Fields/SeparatorLine.php` — Horizontal separator
-- **Status:** complete
-
-### Phase 8: Gap Analysis — Dialog Helpers
-- [x] `src/Dialogs/MessageBox.php` — Static info()/warning()/error()
-- **Status:** complete
-
-### Phase 9: Gap Analysis — Area-based Custom Widgets
-- [x] `src/Widgets/ToggleSwitch.php` — Area-based toggle, emits 'change'
-- [x] `src/Widgets/StatusIndicator.php` — Area-based colored dot, setColor()/setColorHex()
-- **Status:** complete
-
-### Phase 10: Documentation
-- [x] AGENTS.md — updated patch table, fields table, new Dialogs/Widgets sections
-- [x] README.md — updated patch table, fields table, new Dialogs/Widgets sections
-- **Status:** complete
-
-### Phase 11: Testing — Pest Test Suite
-- [x] `tests/FieldsTest.php` — 34 tests for all 12 field composites (constructor, setValue, emit, root)
-- [x] `tests/WidgetsTest.php` — 8 tests for ToggleSwitch + StatusIndicator (construction, state, root)
-- [x] `tests/DialogsTest.php` — 4 tests using ReflectionClass::newInstanceWithoutConstructor (zero FFI, passes alone)
-- [x] Remove `beforeAll(Ffi::init())` from FieldsTest/WidgetsTest (widget constructors init FFI internally)
-- [x] Remove deprecated `setAccessible(true)` from DialogsTest (no-op since 8.1, deprecated in 8.5)
-- **Status:** complete
-
-### Phase 12: Demo + Runtime Fixes
-- [x] `examples/all-components.php` — 4-tab demo (Fields/Custom/Dialogs/Pickers)
-- [x] Fix `Group::titled()` 2-arg requirement (5 call sites)
-- [x] Fix `App::run()` returns void (restructure: create Window first, pass to App)
-- [x] Fix `Build::hbox()` rejects Composite (add ->root() on ToggleSwitch/StatusIndicator)
-- [x] Fix private const access (ToggleSwitch/StatusIndicator consts to public)
-- [x] Fix `Dialogs::msgBoxError()` → `->error()`
-- [x] Fix `use Libui\StrokeParams` → `use Libui\Draw\StrokeParams`
-- [x] Fix FontDescriptor property access (`$font->family` → `$font->family()`, `$font->size` → `$font->size()`)
-- **Status:** complete
-
-## Key Questions
-1. ~~Should FilePickerField accept a parent Window or hold its own reference?~~ ✅ (ref in constructor)
-2. ~~Should SliderField update label in real-time or only on release?~~ ✅ (both)
-3. [NEW] Why does `zend_mm_heap corrupted` occur when all 3 test files run in one PHPUnit process?
-   - Root cause: FFI GC conflict. `ReflectionClass::newInstanceWithoutConstructor` in DialogsTest creates a Window without FFI handle. When PHPUnit collects all objects across files, the orphaned FFI dependent class triggers heap corruption. **Workaround:** run test files individually or with `--filter`.
-
-## Decisions Made
-| Decision | Rationale |
-|----------|-----------|
-| All fields use horizontal Box(root) = Label + Input | Consistent form layout |
-| Fields use EmitsEvents trait for 'change' event | Bridges upstream onChanged → Composite event model |
-| FilePickerField accepts Window in constructor | Dialogs need parent for native modal |
-| SliderField updates label on both onChange AND onRelease | Real-time feedback + final value accuracy |
-| RadioGroup/ComboBoxField/EditableComboBoxField: options via addOptions() | Matches upstream incremental append pattern |
-| DatePickerField: constructor takes optional pre-configured DateTimePicker | Flexibility for dateOnly/timeOnly |
-| ProgressBarField: no value() — read-only display | ProgressBar is display-only in libui |
-| ToggleSwitch: uses Area + internal ToggleDelegate | Custom drawing requires Area |
-| DialogsTest uses newInstanceWithoutConstructor (no FFI) | Avoids native libui dependency in unit tests |
-| Demo uses `App::run()` for layout | Cleaner window construction pattern |
-
-## Errors Encountered
+## Errors Encounterded (additions)
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| Group::titled() "too few arguments" | 1 | Changed to `Group::titled('title')->setChild(...)` |
-| App::run() returns void, not Window | 1 | Create Window first, store in `$mainWindow` ref, pass to `App::new()->window()` |
-| Build::hbox() rejects Composite arg | 1 | Added `->root()` on ToggleSwitch/StatusIndicator args |
-| Private const access in ToggleDelegate::draw() | 1 | Changed `private const` → `public const` |
-| "Call to undefined method Dialogs::msgBoxError()" | 1 | Upstream has `error()` not `msgBoxError()` |
-| "Class Libui\StrokeParams not found" at runtime | 1 | Wrong namespace: `Libui\StrokeParams` → `Libui\Draw\StrokeParams` |
-| "Undefined property FontDescriptor::$family" | 1 | FontDescriptor uses methods `family()`/`size()`, not public properties |
-| zend_mm_heap corrupted (all 3 test files) | 1 | FFI GC conflict with newInstanceWithoutConstructor. Run files individually. |
+| bridge dylib: @rpath/PebView.dylib not found | 1 | ran pebview macos.sh to build PebView.dylib from source; recompiled bridge with -rpath |
+| uiControlVerifySetParent: control already has parent | 1 | GC collecting temporary Composite objects mid-expression. Rewrote all-components.php: no more inline temporaries |
+| Class "Libui\Widget\Button" not found | 1 | Wrong namespace: `Libui\Widget\Button` → `Libui\Button` |
+| strokePath(): Argument #1 must be Brush, Color given | 1 | Wrap Color with `Brush::color($color)` |

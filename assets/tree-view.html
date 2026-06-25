@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1d1d1f;
+  background: #ffffff;
+  overflow: auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tree-container { padding: 4px 0; }
+.tree-node { white-space: nowrap; }
+.tree-row {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px 2px 0;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 4px;
+}
+.tree-row:hover { background: rgba(0, 0, 0, 0.05); }
+.tree-row.selected { background: #0066cc; color: #ffffff; }
+.tree-row.selected:hover { background: #0055b3; }
+.tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #666;
+  transition: transform 0.1s ease;
+}
+.tree-toggle.expanded { transform: rotate(90deg); }
+.tree-toggle.leaf { visibility: hidden; }
+.tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  font-size: 14px;
+  margin-right: 4px;
+}
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-children { display: none; }
+.tree-children.open { display: block; }
+</style>
+</head>
+<body>
+<div class="tree-container" id="tree"></div>
+<script>
+(function() {
+  var selectedPath = "";
+  var nodeMap = {};
+
+  var ICONS = {
+    folder: "\uD83D\uDCC1",
+    file: "\uD83D\uDCC4",
+    image: "\uD83D\uDDBC",
+    code: "\uD83D\uDCBB",
+    default: "\uD83D\uDCC4"
+  };
+
+  function getIcon(node) {
+    var icon = node.icon || "default";
+    return ICONS[icon] || ICONS.default;
+  }
+
+  function buildTree(data, parentPath, container) {
+    if (!data) return;
+    var nodes = Array.isArray(data) ? data : [data];
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var path = parentPath ? parentPath + "." + node.label : node.label;
+      var hasChildren = node.children && node.children.length > 0;
+
+      nodeMap[path] = node;
+
+      var nodeEl = document.createElement("div");
+      nodeEl.className = "tree-node";
+      nodeEl.setAttribute("data-path", path);
+
+      var row = document.createElement("div");
+      row.className = "tree-row";
+      if (path === selectedPath) row.classList.add("selected");
+
+      var toggle = document.createElement("span");
+      toggle.className = "tree-toggle" + (hasChildren ? "" : " leaf");
+      toggle.textContent = "\u25B6";
+
+      var icon = document.createElement("span");
+      icon.className = "tree-icon";
+      icon.textContent = getIcon(node);
+
+      var label = document.createElement("span");
+      label.className = "tree-label";
+      label.textContent = node.label;
+
+      row.appendChild(toggle);
+      row.appendChild(icon);
+      row.appendChild(label);
+      nodeEl.appendChild(row);
+
+      if (hasChildren) {
+        var childContainer = document.createElement("div");
+        childContainer.className = "tree-children";
+        childContainer.style.paddingLeft = "16px";
+        buildTree(node.children, path, childContainer);
+        nodeEl.appendChild(childContainer);
+      }
+
+      (function(p, n, t, cc) {
+        row.addEventListener("click", function(e) {
+          e.stopPropagation();
+          selectedPath = p;
+          updateSelection();
+          if (typeof window.__onNodeClick === "function") {
+            window.__onNodeClick(p, n);
+          }
+        });
+        if (n.children && n.children.length > 0) {
+          t.addEventListener("click", function(e) {
+            e.stopPropagation();
+            toggleNode(p, t, cc, n);
+          });
+        }
+      })(path, node, toggle, nodeEl.querySelector(".tree-children"));
+
+      container.appendChild(nodeEl);
+    }
+  }
+
+  function toggleNode(path, toggleEl, childContainer, node) {
+    if (!childContainer) return;
+    var isOpen = childContainer.classList.contains("open");
+    if (isOpen) {
+      childContainer.classList.remove("open");
+      toggleEl.classList.remove("expanded");
+    } else {
+      childContainer.classList.add("open");
+      toggleEl.classList.add("expanded");
+    }
+    if (typeof window.__onNodeToggle === "function") {
+      window.__onNodeToggle(path, !isOpen, node);
+    }
+  }
+
+  function updateSelection() {
+    var rows = document.querySelectorAll(".tree-row");
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].classList.remove("selected");
+    }
+    var target = document.querySelector('[data-path="' + cssEscape(selectedPath) + '"] > .tree-row');
+    if (target) target.classList.add("selected");
+  }
+
+  function cssEscape(str) {
+    return str.replace(/([.*+?^=!:${}()|[\]\/\\])/g, "\\$1");
+  }
+
+  function render(data) {
+    var container = document.getElementById("tree");
+    container.innerHTML = "";
+    nodeMap = {};
+    buildTree(data, "", container);
+  }
+
+  window.__treeData = window.__treeData || [];
+
+  window.__setTreeData = function(data) {
+    window.__treeData = data;
+    render(data);
+  };
+
+  window.__expandNode = function(path) {
+    var nodeEl = document.querySelector('[data-path="' + cssEscape(path) + '"]');
+    if (!nodeEl) return;
+    var toggle = nodeEl.querySelector(":scope > .tree-toggle");
+    var children = nodeEl.querySelector(":scope > .tree-children");
+    if (toggle && children && !children.classList.contains("open")) {
+      children.classList.add("open");
+      toggle.classList.add("expanded");
+    }
+    var parts = path.split(".");
+    var partial = "";
+    for (var i = 0; i < parts.length - 1; i++) {
+      partial = partial ? partial + "." + parts[i] : parts[i];
+      var parentEl = document.querySelector('[data-path="' + cssEscape(partial) + '"]');
+      if (parentEl) {
+        var pt = parentEl.querySelector(":scope > .tree-toggle");
+        var pc = parentEl.querySelector(":scope > .tree-children");
+        if (pt && pc && !pc.classList.contains("open")) {
+          pc.classList.add("open");
+          pt.classList.add("expanded");
+        }
+      }
+    }
+  };
+
+  window.__collapseNode = function(path) {
+    var nodeEl = document.querySelector('[data-path="' + cssEscape(path) + '"]');
+    if (!nodeEl) return;
+    var toggle = nodeEl.querySelector(":scope > .tree-toggle");
+    var children = nodeEl.querySelector(":scope > .tree-children");
+    if (toggle && children && children.classList.contains("open")) {
+      children.classList.remove("open");
+      toggle.classList.remove("expanded");
+    }
+  };
+
+  window.__getSelectedPath = function() {
+    return selectedPath;
+  };
+
+  window.__onNodeClick = null;
+  window.__onNodeToggle = null;
+
+  if (window.__treeData) {
+    render(window.__treeData);
+  }
+})();
+</script>
+</body>
+</html>

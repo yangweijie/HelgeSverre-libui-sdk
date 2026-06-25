@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+.editor-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+.toolbar select {
+  background: #3c3c3c;
+  color: #d4d4d4;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.toolbar span#langLabel {
+  font-size: 12px;
+  color: #999;
+}
+.code-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.line-numbers {
+  padding: 8px 0;
+  min-width: 40px;
+  text-align: right;
+  color: #555;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  user-select: none;
+  -webkit-user-select: none;
+  background: #1e1e1e;
+  border-right: 1px solid #333;
+  flex-shrink: 0;
+}
+pre, code {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, "Courier New", monospace;
+}
+pre {
+  margin: 0;
+  padding: 0;
+}
+.line-num {
+  padding: 0 8px;
+}
+.editor-textarea {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+}
+#codeEditor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  margin: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  background: transparent;
+  color: transparent;
+  caret-color: #fff;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 4;
+}
+#codeHighlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  margin: 0;
+  border: 0;
+  outline: none;
+  pointer-events: none;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Monaco, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  white-space: pre;
+  tab-size: 4;
+}
+.highlight pre {
+  background: transparent !important;
+}
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 8px;
+  background: #007acc;
+  color: #fff;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="editor-container">
+  <div class="toolbar">
+    <span id="langLabel">Language:</span>
+    <select id="langSelect">
+      <option value="php">PHP</option>
+      <option value="javascript">JavaScript</option>
+      <option value="typescript">TypeScript</option>
+      <option value="python">Python</option>
+      <option value="html">HTML</option>
+      <option value="css">CSS</option>
+      <option value="json">JSON</option>
+      <option value="sql">SQL</option>
+      <option value="xml">XML</option>
+      <option value="markdown">Markdown</option>
+      <option value="java">Java</option>
+      <option value="cpp">C++</option>
+      <option value="c">C</option>
+      <option value="rust">Rust</option>
+      <option value="go">Go</option>
+      <option value="yaml">YAML</option>
+      <option value="bash">Bash</option>
+    </select>
+    <span style="flex:1"></span>
+    <span id="linesLabel" style="font-size:12px;color:#999;">Ln 1, Col 1</span>
+  </div>
+  <div class="code-area">
+    <div class="line-numbers" id="lineNumbers"></div>
+    <div class="editor-textarea">
+      <div id="codeHighlight" class="highlight"></div>
+      <textarea id="codeEditor" spellcheck="false" autocomplete="off"></textarea>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span id="statusText">Ready</span>
+    <span id="charCount">0 chars</span>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/vs2015.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/php.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/typescript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/python.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/java.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/json.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/sql.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/markdown.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/bash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/xml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/go.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/rust.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/languages/cpp.min.js"></script>
+<script>
+(function() {
+  var editor = document.getElementById("codeEditor");
+  var highlight = document.getElementById("codeHighlight");
+  var lineNumbers = document.getElementById("lineNumbers");
+  var langSelect = document.getElementById("langSelect");
+  var linesLabel = document.getElementById("linesLabel");
+  var statusText = document.getElementById("statusText");
+  var charCount = document.getElementById("charCount");
+
+  var currentLanguage = "php";
+  var debounceTimer = null;
+
+  function updateLineNumbers(text) {
+    var lines = text.split("\n");
+    var html = "";
+    for (var i = 1; i <= lines.length; i++) {
+      html += '<div class="line-num">' + i + "</div>";
+    }
+    lineNumbers.innerHTML = html;
+  }
+
+  function updateHighlight() {
+    var text = editor.value;
+    var result;
+
+    try {
+      result = hljs.highlight(text, { language: currentLanguage, ignoreIllegals: true });
+    } catch(e) {
+      // fallback: escape HTML
+      result = { value: text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") };
+    }
+
+    highlight.innerHTML = '<pre><code>' + result.value + '</code></pre>';
+    updateLineNumbers(text);
+
+    // Update cursor position
+    var pos = editor.selectionStart;
+    var before = text.substring(0, pos);
+    var line = (before.match(/\n/g) || []).length + 1;
+    var col = pos - before.lastIndexOf("\n");
+    linesLabel.textContent = "Ln " + line + ", Col " + col;
+
+    // Char count
+    var len = text.length;
+    charCount.textContent = len + " char" + (len !== 1 ? "s" : "");
+
+    statusText.textContent = "Ready";
+  }
+
+  editor.addEventListener("input", function() {
+    statusText.textContent = "Modified";
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(updateHighlight, 50);
+  });
+
+  editor.addEventListener("scroll", function() {
+    highlight.scrollTop = editor.scrollTop;
+    highlight.scrollLeft = editor.scrollLeft;
+    lineNumbers.scrollTop = editor.scrollTop;
+  });
+
+  editor.addEventListener("keydown", function(e) {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      var start = editor.selectionStart;
+      var end = editor.selectionEnd;
+      editor.value = editor.value.substring(0, start) + "    " + editor.value.substring(end);
+      editor.selectionStart = editor.selectionEnd = start + 4;
+      updateHighlight();
+    }
+  });
+
+  editor.addEventListener("click", updateHighlight);
+  editor.addEventListener("keyup", updateHighlight);
+
+  langSelect.addEventListener("change", function() {
+    currentLanguage = langSelect.value;
+    updateHighlight();
+  });
+
+  // ── JS ↔ PHP bridge ──
+
+  window.__setCode = function(code) {
+    editor.value = code;
+    updateHighlight();
+  };
+
+  window.__getCode = function() {
+    return editor.value;
+  };
+
+  window.__setLanguage = function(lang) {
+    currentLanguage = lang;
+    langSelect.value = lang;
+    updateHighlight();
+  };
+
+  window.__getLanguage = function() {
+    return currentLanguage;
+  };
+
+  window.__onCodeChange = null;
+
+  editor.addEventListener("input", function() {
+    if (typeof window.__onCodeChange === "function") {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        window.__onCodeChange(editor.value);
+      }, 300);
+    }
+  });
+
+  // Initial render
+  updateHighlight();
+})();
+</script>
+</body>
+</html>

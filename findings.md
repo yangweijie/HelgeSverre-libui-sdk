@@ -69,3 +69,23 @@ DialogsTest must use `ReflectionClass::newInstanceWithoutConstructor()` to creat
 
 ## FFI Autoloading
 Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` → `self::init()` which is idempotent. No `beforeAll(Ffi::init())` is needed in test files. Removing it avoids cross-test-file FFI re-initialization issues.
+
+## WebView Bridge
+- `src/WebView.php` wraps two FFI libraries: bridge (wvb_create/move/destroy) + PebView (webview_set_html/navigate/bind/return/eval)
+- macOS bridge requires `@rpath` pointing to PebView.dylib location in `vendor/kingbes/pebview/lib/macos/arm64/`
+- Bridge source: `bridge/webview_bridge.m` (ObjC WKWebView wrapper), compiled with -rpath flag
+- PebView.dylib is built from kingbes/pebview source via `pebview/macos.sh`
+
+## Circular Progress Bar Drawing
+- `DrawContext::strokePath()` takes `Brush $brush`, NOT `Color`
+- Must wrap via `Brush::color(Color $color)` or use shorthand `Brush::rgb(int $hex)`
+- The patched DrawContext has convenience methods (strokeArc, strokeCircle, etc.) that accept `Brush|Color$` and auto-convert
+
+## GC Issue with Temporary Composite Objects
+- PHP destroys temporary objects at statement end
+- If a `Composite` has `__destruct()` that destroys its libui Control, but the Control is still in libui's widget tree, GC causes `uiControlVerifySetParent` errors
+- **Fix**: always store Composite objects in named persistent variables — never use inline temporaries like `(new SeparatorLine())->root()` inside an array/argument list
+
+## Upstream Namespace
+- All upstream widget classes are directly in `Libui\` namespace (e.g. `Libui\Button`, `Libui\Entry`)
+- There is NO `Libui\Widget\` sub-namespace — using it causes "Class not found" errors

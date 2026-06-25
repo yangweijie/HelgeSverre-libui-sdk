@@ -1,44 +1,43 @@
 <?php
 
-declare(strict_types=1);
-
 /**
- * All-components demo — demonstrates every Field, Widget, and Dialog
- * from the yangweijie/ui2 convenience layer.
+ * All Components Demo — showcases every widget/field/picker in the ui2 SDK.
+ *
+ * Tabs:
+ *   - "Fields"   — all HasValue fields (TextField, NumberField, SliderField, …)
+ *   - "Custom"   — ToggleSwitch, StatusIndicator, CircleProgressBar
+ *   - "Dialogs"  — MessageBox, DialogConfirm, DialogPrompt, Toast
+ *   - "Pickers"  — ColorPickerDialog, FontPickerDialog, DatePickerDialog, TimePickerDialog
+ *   - "Table"    — TableView (editable cells, sortable headers)
+ *   - "WebView"  — TreeView, CodeEditor (overlay child-window widgets)
  *
  * Run: php examples/all-components.php
- *
- * Layout: A Tab control with 4 tabs:
- *   - "Fields" — all 12 field composites
- *   - "Custom" — ToggleSwitch, StatusIndicator
- *   - "Dialogs" — MessageBox helpers
- *   - "Pickers" — ColorPickerDialog, FontPickerDialog
- *
- * @see patches/helgesverre/libui/src/Form.php  (values/setValues)
- * @see patches/helgesverre/libui/src/Group.php (titled factory)
- * @see patches/helgesverre/libui/src/Tab.php   (Composite children)
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
 
 use Libui\App;
-use Libui\Box;
-use Libui\Button;
 use Libui\Build;
 use Libui\Color;
-use Libui\Ffi;
-use Libui\Form;
 use Libui\Group;
 use Libui\Label;
+use Libui\Separator;
 use Libui\Tab;
 use Libui\Window;
+use Libui\Button;
+use Libui\Entry;
+
 use Yangweijie\Ui2\Dialogs\DialogConfirm;
 use Yangweijie\Ui2\Dialogs\DialogPrompt;
 use Yangweijie\Ui2\Dialogs\MessageBox;
+
 use Yangweijie\Ui2\Fields\CheckboxField;
 use Yangweijie\Ui2\Fields\ComboBoxField;
 use Yangweijie\Ui2\Fields\DatePickerField;
 use Yangweijie\Ui2\Fields\EditableComboBoxField;
+use Yangweijie\Ui2\Fields\FilePickerField;
 use Yangweijie\Ui2\Fields\NumberField;
 use Yangweijie\Ui2\Fields\PasswordField;
 use Yangweijie\Ui2\Fields\ProgressBarField;
@@ -48,98 +47,89 @@ use Yangweijie\Ui2\Fields\SeparatorLine;
 use Yangweijie\Ui2\Fields\SliderField;
 use Yangweijie\Ui2\Fields\TextAreaField;
 use Yangweijie\Ui2\Fields\TextField;
+
 use Yangweijie\Ui2\Pickers\ColorPickerDialog;
 use Yangweijie\Ui2\Pickers\DatePickerDialog;
 use Yangweijie\Ui2\Pickers\FontPickerDialog;
 use Yangweijie\Ui2\Pickers\TimePickerDialog;
+
+use Yangweijie\Ui2\Widgets\CircleProgressBar;
+use Yangweijie\Ui2\Widgets\CodeEditor;
 use Yangweijie\Ui2\Widgets\StatusIndicator;
 use Yangweijie\Ui2\Widgets\TableView;
+use Yangweijie\Ui2\Widgets\Toast;
 use Yangweijie\Ui2\Widgets\ToggleSwitch;
+use Yangweijie\Ui2\Widgets\TreeView;
 
-Ffi::init();
-
-// =========================================================================
-// Shared state
-// =========================================================================
-
+// ── Status / output label (shared across all tabs) ──
 $outputLabel = new Label('Interact with the controls above — events appear here.');
-$mainWindow = null; // will be set after window construction
 
-// =========================================================================
-// TAB 1 — All Field Composites
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB 1 — Fields
+// ═════════════════════════════════════════════════════════════════════════════
 
-$textField = new TextField('Text:', 'Hello');
-$passwordField = new PasswordField('Password:');
-$searchField = new SearchField('Search:', 'libui');
-$numberField = new NumberField('Count:', 0, 100, 42);
-$sliderField = new SliderField('Volume:', 0, 100, 75);
-$checkboxField = new CheckboxField('Dark Mode:', true);
-$radioGroup = new RadioGroup('Color Theme:');
-$radioGroup->addOptions(['System', 'Light', 'Dark']);
+$textField = new TextField('Name:', 'John Doe');
+$searchField = new SearchField('Search:', '');
+$passwordField = new PasswordField('Password:', '');
+$numberField = new NumberField('Quantity:', 0, 100, 5);
+$sliderField = new SliderField('Volume:', 0, 100);
+$checkboxField = new CheckboxField('Enable feature');
+$radioGroup = new RadioGroup('Theme:');
 $comboBoxField = new ComboBoxField('Font Size:');
-$comboBoxField->addOptions(['Small', 'Medium', 'Large']);
-$editableComboBoxField = new EditableComboBoxField('Custom City:');
-$editableComboBoxField->addOptions(['Beijing', 'Shanghai', 'Shenzhen']);
-$datePickerField = DatePickerField::dateOnly('Appointment Date:');
-$textAreaField = new TextAreaField('Notes:', 'Write your notes here...');
-$progressBarField = new ProgressBarField('Download:', 0);
-$separatorLine = new SeparatorLine();
+$editableComboBoxField = new EditableComboBoxField('City:');
+$datePickerField = DatePickerField::dateOnly('Date:');
+$textAreaField = new TextAreaField('Description:', '');
+$progressBarField = new ProgressBarField('Progress:');
 
-// Wire up events to the shared output label
+$radioGroup->addOptions(['Light', 'Dark', 'Auto']);
+$comboBoxField->addOptions(['12px', '14px', '16px', '18px', '24px']);
+$editableComboBoxField->addOptions(['Beijing', 'Shanghai', 'Shenzhen', 'Guangzhou']);
+
+// FilePickerField needs a Window — entries added after window creation below
+$filePickerField = null;
+
+$fieldFormEntries = [
+    'Text'       => $textField,
+    'Search'     => $searchField,
+    'Password'   => $passwordField,
+    'Number'     => $numberField,
+    'Slider'     => $sliderField,
+    'Checkbox'   => $checkboxField,
+    'Radio'      => $radioGroup,
+    'Combo'      => $comboBoxField,
+    'Editable'   => $editableComboBoxField,
+    'Date'       => $datePickerField,
+    'Text Area'  => $textAreaField,
+    'Progress'   => $progressBarField,
+];
+
+$fieldsGroup = Build::form($fieldFormEntries);
+
 $onChange = function (mixed $val) use ($outputLabel): void {
     $outputLabel->setText('Changed: ' . (is_bool($val) ? ($val ? 'true' : 'false') : (string) $val));
 };
-
 $textField->on('change', $onChange);
-$passwordField->on('change', fn () => $outputLabel->setText('Password changed'));
 $searchField->on('change', $onChange);
 $numberField->on('change', $onChange);
 $sliderField->on('change', $onChange);
 $checkboxField->on('change', $onChange);
+$passwordField->on('change', fn () => $outputLabel->setText('Password changed'));
 $radioGroup->on('change', fn (int $idx) => $outputLabel->setText("Theme index: {$idx}"));
 $comboBoxField->on('change', fn (int $idx) => $outputLabel->setText("Font size index: {$idx}"));
 $editableComboBoxField->on('change', fn (string $val) => $outputLabel->setText("City: {$val}"));
 $datePickerField->on('change', fn (\DateTimeImmutable $dt) => $outputLabel->setText("Date: {$dt->format('Y-m-d')}"));
 $textAreaField->on('change', fn () => $outputLabel->setText('Notes updated'));
 
-// Build the form
-$fieldsForm = new Form();
-$fieldsForm->setPadded(true);
-$fieldsForm->append('Text', $textField->root());
-$fieldsForm->append('Password', $passwordField->root());
-$fieldsForm->append('Search', $searchField->root());
-$fieldsForm->append('Number', $numberField->root());
-$fieldsForm->append('Slider', $sliderField->root());
-$fieldsForm->append('Checkbox', $checkboxField->root());
-$fieldsForm->append('Radio', $radioGroup->root());
-$fieldsForm->append('Combo', $comboBoxField->root());
-$fieldsForm->append('Editable Combo', $editableComboBoxField->root());
-$fieldsForm->append('Date Picker', $datePickerField->root());
-$fieldsForm->append('Progress', $progressBarField->root());
-// TextAreaField has its own internal label — just use appendStretchy
-$fieldsForm->appendStretchy('', $textAreaField->root());
-
-// Group of Fields
-$fieldsGroup = Group::titled('All Field Composites', $fieldsForm);
-
-// Buttons row
 $buttonsBox = Build::hbox(
-    Build::stretchy(new Label('')),
-    (new Button('Read Values'))->onClicked(function () use (
-        $textField, $checkboxField, $radioGroup, $comboBoxField, $editableComboBoxField,
+    (new Button('Read All Fields'))->onClicked(function () use (
         $datePickerField, $textAreaField, $numberField, $sliderField, $outputLabel
     ): void {
         $lines = [
-            "Text: {$textField->value()}",
-            "Number: {$numberField->value()}",
-            "Slider: {$sliderField->value()}",
-            "Checkbox: " . ($checkboxField->value() ? 'ON' : 'OFF'),
-            "Theme (index): {$radioGroup->value()}",
-            "Font (index): {$comboBoxField->value()}",
-            "City: {$editableComboBoxField->value()}",
-            "Date: {$datePickerField->value()->format('Y-m-d')}",
-            "Notes: " . mb_substr($textAreaField->value(), 0, 30) . '...',
+            'Text: ' . $textField->value(),
+            'Number: ' . $numberField->value(),
+            'Slider: ' . $sliderField->value(),
+            'Date: ' . $datePickerField->value()->format('Y-m-d'),
+            'Notes: ' . mb_substr($textAreaField->value(), 0, 30),
         ];
         $outputLabel->setText(implode(' | ', $lines));
     }),
@@ -148,11 +138,15 @@ $buttonsBox = Build::hbox(
         $outputLabel->setText('Progress: indeterminate');
     }),
 );
+
+$separator1 = new SeparatorLine();
+$separator2 = new SeparatorLine();
+
 $fieldsBox = Build::vbox($fieldsGroup, $buttonsBox);
 
-// =========================================================================
-// TAB 2 — Custom Widgets (ToggleSwitch, StatusIndicator)
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB 2 — Custom Widgets (ToggleSwitch, StatusIndicator, CircleProgressBar)
+// ═════════════════════════════════════════════════════════════════════════════
 
 $toggle = new ToggleSwitch(false);
 $toggle->on('change', fn (bool $on) => $outputLabel->setText($on ? 'Toggle: ON' : 'Toggle: OFF'));
@@ -161,24 +155,26 @@ $statusGreen = new StatusIndicator(Color::rgb(0x22C55E));
 $statusRed = new StatusIndicator(Color::rgb(0xEF4444));
 $statusYellow = new StatusIndicator(Color::rgb(0xEAB308));
 
-$toggleControls = Build::vbox(
-    Group::titled('Toggle Switch',
-        Build::hbox(new Label('Enable feature:'), $toggle->root(), Build::stretchy(new Label(''))),
+$groupToggleSwitch = Group::titled('Toggle Switch',
+    Build::hbox(new Label('Enable feature:'), $toggle->root(), Build::stretchy(new Label(''))),
+);
+
+$groupStatus = Group::titled('Status Indicators',
+    Build::hbox(
+        new Label('Online:'),
+        $statusGreen->root(),
+        new Label('   '),
+        new Label('Offline:'),
+        $statusRed->root(),
+        new Label('   '),
+        new Label('Warning:'),
+        $statusYellow->root(),
+        Build::stretchy(new Label('')),
     ),
-    Group::titled('Status Indicators',
-        Build::hbox(
-            new Label('Online:'),
-            $statusGreen->root(),
-            new Label('   '),
-            new Label('Offline:'),
-            $statusRed->root(),
-            new Label('   '),
-            new Label('Warning:'),
-            $statusYellow->root(),
-            Build::stretchy(new Label('')),
-        ),
-    ),
-    (new Button('Toggle Status'))->onClicked(function () use ($statusGreen, $statusRed, $outputLabel): void {
+);
+
+$toggleStatusBtn = (new Button('Toggle Status'))
+    ->onClicked(function () use ($statusGreen, $statusRed, $outputLabel): void {
         static $which = false;
         $which = !$which;
         if ($which) {
@@ -190,13 +186,64 @@ $toggleControls = Build::vbox(
             $statusRed->setColorHex(0xEF4444);
             $outputLabel->setText('Status: restored');
         }
-    }),
+    });
+
+$separator3 = new SeparatorLine();
+$separator4 = new SeparatorLine();
+
+$circleBar = new CircleProgressBar(35);
+
+$customLabel1 = new Label('CircleProgressBar — custom-drawn ring progress:');
+$circleProgressLabel = new Label('   ');
+
+$circleBtnMinus = (new Button('-10'))->onClicked(function () use ($circleBar, $outputLabel): void {
+    $circleBar->setProgress(max(0, $circleBar->getProgress() - 10));
+    $outputLabel->setText("Progress: {$circleBar->getProgress()}%");
+});
+$circleBtnPlus = (new Button('+10'))->onClicked(function () use ($circleBar, $outputLabel): void {
+    $circleBar->setProgress(min(100, $circleBar->getProgress() + 10));
+    $outputLabel->setText("Progress: {$circleBar->getProgress()}%");
+});
+$circleBtnReset = (new Button('Reset'))->onClicked(function () use ($circleBar, $outputLabel): void {
+    $circleBar->setProgress(0);
+    $outputLabel->setText('Progress: 0%');
+});
+
+$circleHbox = Build::hbox(
+    $circleBar->root(),
+    $circleProgressLabel,
+    $circleBtnMinus,
+    $circleBtnPlus,
+    $circleBtnReset,
     Build::stretchy(new Label('')),
 );
 
-// =========================================================================
+$customToastLabel = new Label('Toast — native OS desktop notification:');
+$toastBtn = (new Button('Send Toast'))->onClicked(function () use ($outputLabel): void {
+    $ok = Toast::show('ui2 Demo', 'This is a native OS notification!');
+    $outputLabel->setText($ok ? 'Toast sent' : 'Toast failed (check console)');
+});
+
+$toggleControls = Build::vbox(
+    $groupToggleSwitch,
+    $groupStatus,
+    $toggleStatusBtn,
+    $separator3->root(),
+    $customLabel1,
+    $circleHbox,
+    $separator4->root(),
+    $customToastLabel,
+    Build::hbox($toastBtn, Build::stretchy(new Label(''))),
+    Build::stretchy(new Label('')),
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
 // TAB 3 — Dialogs (MessageBox, DialogConfirm, DialogPrompt)
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
+
+$separator5 = new SeparatorLine();
+$separator6 = new SeparatorLine();
+$separator7 = new SeparatorLine();
 
 $dialogControls = Build::vbox(
     new Label('MessageBox — native info/warning/error dialogs:'),
@@ -215,7 +262,7 @@ $dialogControls = Build::vbox(
         }),
         Build::stretchy(new Label('')),
     ),
-    (new SeparatorLine())->root(),
+    $separator5->root(),
     new Label('DialogConfirm — return true/false:'),
     Build::hbox(
         (new Button('Confirm Delete'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
@@ -224,7 +271,7 @@ $dialogControls = Build::vbox(
         }),
         Build::stretchy(new Label('')),
     ),
-    (new SeparatorLine())->root(),
+    $separator6->root(),
     new Label('DialogPrompt — return ?string:'),
     Build::hbox(
         (new Button('Enter Name'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
@@ -236,9 +283,9 @@ $dialogControls = Build::vbox(
     Build::stretchy(new Label('')),
 );
 
-// =========================================================================
-// TAB 4 — Pickers (ColorPickerDialog, FontPickerDialog, DatePickerDialog, TimePickerDialog)
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB 4 — Pickers
+// ═════════════════════════════════════════════════════════════════════════════
 
 $colorSwatch = new Label('(click Pick Color)');
 $fontPreview = new Label('(click Pick Font)');
@@ -313,9 +360,9 @@ $pickerControls = Build::vbox(
     Build::stretchy(new Label('')),
 );
 
-// =========================================================================
-// TAB 5 — TableView (editable cells + sortable headers)
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB 5 — TableView
+// ═════════════════════════════════════════════════════════════════════════════
 
 $table = new TableView(
     columns: ['Name', 'Age', 'Score'],
@@ -324,9 +371,8 @@ $table = new TableView(
         ['Bob', 25, 87],
         ['Charlie', 35, 92],
     ],
-    editable: [1, 2], // Age and Score are editable in-place
+    editable: [1, 2],
 );
-// Toggle sort on header click: click once = asc, click again = desc
 $table->onHeaderClicked(function ($t, int $col) use ($table, $outputLabel): void {
     static $direction = [];
     $dir = ($direction[$col] ?? 'desc') === 'asc' ? 'desc' : 'asc';
@@ -338,31 +384,81 @@ $table->onRowClicked(function ($t, int $row) use ($outputLabel, $table): void {
     $rows = $table->selectedRows();
     $outputLabel->setText('Row ' . $row . ' clicked, ' . count($rows) . ' selected');
 });
+$addRowBtn = (new Button('Add Row'))->onClicked(function () use ($table, $outputLabel): void {
+    $table->addRow(['New', 0, 0]);
+    $outputLabel->setText('Row added (count: ' . $table->rowCount() . ')');
+});
+$removeRowBtn = (new Button('Remove Last'))->onClicked(function () use ($table, $outputLabel): void {
+    if ($table->rowCount() > 0) {
+        $table->removeRow($table->rowCount() - 1);
+        $outputLabel->setText('Last row removed');
+    }
+});
 
 $tableControls = Build::vbox(
     Group::titled('Data Table (Age/Score editable — click headers to sort)',
         Build::vbox(
             $table->root(),
-            Build::hbox(
-                (new Button('Add Row'))->onClicked(function () use ($table, $outputLabel): void {
-                    $table->addRow(['New', 0, 0]);
-                    $outputLabel->setText('Row added (count: ' . $table->rowCount() . ')');
-                }),
-                (new Button('Remove Last'))->onClicked(function () use ($table, $outputLabel): void {
-                    if ($table->rowCount() > 0) {
-                        $table->removeRow($table->rowCount() - 1);
-                        $outputLabel->setText('Last row removed');
-                    }
-                }),
-                Build::stretchy(new Label('')),
-            ),
+            Build::hbox($addRowBtn, $removeRowBtn, Build::stretchy(new Label(''))),
         ),
     ),
 );
 
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB 6 — WebView (TreeView, CodeEditor)
+// ═════════════════════════════════════════════════════════════════════════════
+
+$separator8 = new SeparatorLine();
+$separator9 = new SeparatorLine();
+
+$webviewControls = Build::vbox(
+    new Label('TreeView — collapsible file tree (opens in overlay child window):'),
+    Build::hbox(
+        (new Button('Open File Tree'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
+            if ($mainWindow === null) return;
+            $tree = new TreeView($mainWindow, 0, 0, 260, 400, [
+                ['label' => 'src', 'icon' => 'folder', 'children' => [
+                    ['label' => 'index.php', 'icon' => 'code'],
+                    ['label' => 'style.css', 'icon' => 'file'],
+                    ['label' => 'app.js', 'icon' => 'code'],
+                    ['label' => 'images', 'icon' => 'folder', 'children' => [
+                        ['label' => 'logo.png', 'icon' => 'image'],
+                        ['label' => 'bg.jpg', 'icon' => 'image'],
+                    ]],
+                ]],
+                ['label' => 'vendor', 'icon' => 'folder', 'children' => [
+                    ['label' => 'autoload.php', 'icon' => 'code'],
+                ]],
+                ['label' => 'composer.json', 'icon' => 'file'],
+                ['label' => 'README.md', 'icon' => 'file'],
+            ]);
+            $tree->onNodeClick(fn (string $path, array $node) => $outputLabel->setText("Tree clicked: {$path}"));
+            $outputLabel->setText('File tree opened (right side of window)');
+        }),
+        Build::stretchy(new Label('')),
+    ),
+    $separator8->root(),
+    new Label('CodeEditor — highlight.js code editor (opens in overlay child window):'),
+    Build::hbox(
+        (new Button('Open Code Editor'))->onClicked(function () use (&$mainWindow, $outputLabel): void {
+            if ($mainWindow === null) return;
+            $editor = new CodeEditor($mainWindow, 0, 20, 500, 360, 'php', false,
+                "<?php\n\necho 'Hello, World!';\n\n\$data = ['foo' => 'bar'];\nforeach (\$data as \$k => \$v) {\n    print \"\$k: \$v\\n\";\n}\n"
+            );
+            $editor->onChange(fn (string $code) => $outputLabel->setText('Editor: ' . mb_substr($code, 0, 40) . '...'));
+            $outputLabel->setText('Code editor opened');
+        }),
+        Build::stretchy(new Label('')),
+    ),
+    $separator9->root(),
+    new Label('Note: WebView-based widgets open borderless child windows that float'),
+    new Label('over the libui layout. They can be repositioned with autoResize().'),
+    Build::stretchy(new Label('')),
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
 // Window + Tab container
-// =========================================================================
+// ═════════════════════════════════════════════════════════════════════════════
 
 $tab = new Tab();
 $tab->appendMargined('Fields', $fieldsBox);
@@ -370,14 +466,18 @@ $tab->appendMargined('Custom', $toggleControls);
 $tab->appendMargined('Dialogs', $dialogControls);
 $tab->appendMargined('Pickers', $pickerControls);
 $tab->appendMargined('Table', $tableControls);
+$tab->appendMargined('WebView', $webviewControls);
 
-// Build the main layout: tab takes all vertical space, status bar sits at the bottom
+// Window takes the tab layout + output label at bottom
 $mainWindow = new Window('All Components — ui2 Demo', 560, 520, true);
+
+// FilePickerField needs a Window reference — set up now
+$filePickerField = new FilePickerField($mainWindow, 'Browse…');
+$fieldsGroup->append('File', $filePickerField);
+
 $mainWindow->setChild(Build::vbox($tab, $outputLabel));
 
 App::new()
     ->window($mainWindow)
     ->onShouldQuit(fn () => true)
     ->run();
-
-// App::run() blocks until the window closes; code here runs after.

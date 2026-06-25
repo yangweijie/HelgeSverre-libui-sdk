@@ -2,12 +2,13 @@
 
 **A thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre/libui)** — a native desktop GUI toolkit for PHP powered by `libui-ng` via FFI.
 
-This package adds composite widgets, field helpers, and picker dialogs on top of the upstream's typed widget classes, custom 2D drawing, tables, menus, and dialogs.
+This package adds composite widgets, field helpers, picker dialogs, custom-drawn widgets, an embedded WebView engine, tree/file browser, code editor, and circular progress bars on top of the upstream's typed widget classes, custom 2D drawing, tables, menus, and dialogs.
 
 ## Requirements
 
 - **PHP ≥ 8.5** (`ext-ffi` required)
 - Platform library: `libui-ng` (ships prebuilt for macOS, Linux, Windows in the upstream)
+- For WebView-based widgets: the PebView native library is downloaded and compiled via `composer install`
 
 > ⚠️ The upstream requires PHP 8.5+. PHP 8.4.x will fail on `composer install`.
 
@@ -17,7 +18,9 @@ This package adds composite widgets, field helpers, and picker dialogs on top of
 composer require yangweijie/ui2
 ```
 
-The `post-autoload-dump` script automatically applies patches to the upstream vendor files (see [Patch system](#patch-system)).
+The `post-autoload-dump` script automatically:
+1. Applies patches to the upstream vendor files (see [Patch system](#patch-system))
+2. Builds the native PebView library from source on macOS (requires Xcode CLI tools)
 
 ## Quick start
 
@@ -91,9 +94,9 @@ All Field composites use this trait and emit `'change'` when the input value cha
 Each Field is a `Composite` that pairs a `Label` with a specific input widget in a horizontal row:
 
 | Class | Input widget | Value type | Notes |
-|---|---|---|---|---|
+|---|---|---|---|
 | `TextField` | `Entry` | `string` | Simple text input |
-| `SearchField` | `Entry::search()` | `string` | Search-style field; `onChanged` may debounce on macOS |
+| `SearchField` | `Entry::search()` | `string` | Search-style field; may debounce on macOS |
 | `PasswordField` | `Entry::password()` | `string` | Text masked on screen, readable via `value()` |
 | `NumberField` | `Spinbox` | `int` | Requires min/max range |
 | `SliderField` | `Slider` | `int` | Has live value readout label |
@@ -122,52 +125,128 @@ $field->setValue('New value');
 | Class | Description |
 |---|---|
 | `MessageBox` | Static helpers: `info()`, `warning()`, `error()` — wraps upstream native msgBox API |
+| `DialogConfirm` | `ask(Window, $title, $message): bool` — modal yes/no dialog |
+| `DialogPrompt` | `ask(Window, $title, $label, $default): ?string` — modal text input dialog |
+
+All modal dialogs accept an optional parent Window parameter; when provided, the dialog is centered on the parent window rather than screen-center.
 
 ```php
 use Yangweijie\Ui2\Dialogs\MessageBox;
+use Yangweijie\Ui2\Dialogs\DialogConfirm;
+use Yangweijie\Ui2\Dialogs\DialogPrompt;
 
 MessageBox::info($window, 'Saved', 'Document saved successfully.');
-MessageBox::warning($window, 'Disk Space', 'Low disk space.');
-MessageBox::error($window, 'Error', 'Could not open file.');
+
+$confirmed = DialogConfirm::ask($window, 'Delete', 'Are you sure?');
+$name = DialogPrompt::ask($window, 'Input', 'Enter your name:', 'John');
+```
+
+### Pickers
+
+Modal dialogs for picking values. All use a **nested event-loop step** (`uiMainStep(1)`) — they do NOT call `uiQuit()`, so they can be called from within an already-running `uiMain()` loop. All accept an optional parent Window parameter for centering.
+
+| Class | Returns | Description |
+|---|---|---|
+| `ColorPickerDialog` | `?Color` | Wraps `ColorButton` in a temp modal window |
+| `FontPickerDialog` | `?FontDescriptor` | Wraps `FontButton` in a temp modal window |
+| `DatePickerDialog` | `?\DateTimeImmutable` | Date-only picker (no time) |
+| `TimePickerDialog` | `?\DateTimeImmutable` | Time-only picker (no date) |
+
+```php
+$color = ColorPickerDialog::pick($mainWindow);
+if ($color !== null) { /* use color */ }
+
+$font = FontPickerDialog::pick($mainWindow);
+if ($font !== null) { /* use font */ }
+
+$date = DatePickerDialog::pick($mainWindow);
+$time = TimePickerDialog::pick($mainWindow);
 ```
 
 ### Widgets
 
-Custom-drawn widgets using `Area` + `AreaDelegate`:
+#### Custom-drawn (Area-based)
 
 | Class | Description |
 |---|---|
-| `ToggleSwitch` | Area-based toggle switch, emits `'change'` |
+| `ToggleSwitch` | Area-based toggle switch; `on('change')` emits `bool` |
 | `StatusIndicator` | Colored dot indicator; `setColor()` / `setColorHex()` |
+| `CircleProgressBar` | Circular / ring-style progress bar; `setProgress()`, `setColor()`, `setThickness()` |
+| `TableView` | Wraps upstream `Table` with typed columns and data binding |
 
 ```php
 $toggle = new ToggleSwitch(true);
 $toggle->on('change', fn (bool $on) => print($on ? 'ON' : 'OFF'));
 
-$status = new StatusIndicator(Color::rgb(0x22C55E)); // green dot
-$status->setColorHex(0xEF4444); // red dot
+$status = new StatusIndicator(new Color(0x22, 0xC5, 0x5E));
+$status->setColorHex(0xEF4444);
+
+$bar = new CircleProgressBar(50);
+$bar->setProgress(75);
+$bar->setColor(new Color(0, 0.5, 1));   // blue accent
+$bar->setThickness(16);                  // ring width
 ```
 
-### Pickers
+#### Native OS Toast
 
-Modal dialogs for picking colors and fonts. Both use a **nested event-loop step** (`uiMainStep(1)`) — they do NOT call `uiQuit()`, so they can be called from within an already-running `uiMain()` loop.
-
-| Class | Returns | Description |
-|---|---|---|
-| `ColorPickerDialog` | `?Color` | Wraps `ColorButton` in a temp modal window. Call: `ColorPickerDialog::pick($window)` |
-| `FontPickerDialog` | `?FontDescriptor` | Wraps `FontButton` in a temp modal window. Call: `FontPickerDialog::pick($window)` |
+| Class | Description |
+|---|---|
+| `Toast` | Static helpers: `show(title, message, ?icon)` — sends native OS desktop notification |
 
 ```php
-$color = ColorPickerDialog::pick($mainWindow);
-if ($color !== null) {
-    // Use the selected color
-}
+use Yangweijie\Ui2\Widgets\Toast;
 
-$font = FontPickerDialog::pick($mainWindow);
-if ($font !== null) {
-    // Use the selected font descriptor
-}
+Toast::show('ui2', 'File saved successfully!');
+Toast::show('Alert', 'Low disk space', '/path/to/icon.png');
 ```
+
+Only one static method — no instance needed. Works on macOS (Notification Center), Linux (D-Bus), and Windows (Toast API).
+
+### WebView
+
+Embeds a native browser engine (WKWebView on macOS, WebKitGTK on Linux, WebView2 on Windows) inside a libui Window as a borderless child window. This is not a Composite — it creates an **overlay** child window at absolute coordinates.
+
+```php
+use Yangweijie\Ui2\WebView;
+
+$webview = new WebView($window, $x, $y, $width, $height, $debug);
+$webview->navigate('https://example.com');
+$webview->setHtml('<h1>Hello</h1>');
+
+// JS ↔ PHP bridge
+$webview->bind('ping', function (string $id, string $req) use ($webview) {
+    $webview->return($id, 0, json_encode(['ok' => true]));
+});
+$webview->eval('ping("hello")');
+
+// Auto-resize with window
+$webview->autoResize($window, $sidebarWidth, $topMargin);
+```
+
+**WebView-based widgets** (also create child windows):
+
+| Class | Description |
+|---|---|
+| `TreeView` | Collapsible file/object tree with icons, click and toggle callbacks |
+| `CodeEditor` | Code editor with syntax highlighting via highlight.js (17 languages) |
+
+```php
+$tree = new TreeView($window, 0, 0, 260, 400, [
+    ['label' => 'src', 'icon' => 'folder', 'children' => [
+        ['label' => 'index.php', 'icon' => 'code'],
+        ['label' => 'style.css', 'icon' => 'file'],
+    ]],
+]);
+$tree->onNodeClick(fn (string $path, array $node) => print("Clicked: {$path}"));
+
+$editor = new CodeEditor($window, 0, 0, 600, 400, 'php', false,
+    "<?php\n\necho 'hello';\n"
+);
+$editor->onChange(fn (string $code) => print("Editor changed: {$code}"));
+```
+
+`TreeView` supports `expandNode()`, `collapseNode()`, `setData()`, `onNodeClick()`, `onNodeToggle()`.
+`CodeEditor` supports `setCode()`, `getCode()`, `setLanguage()`, `onChange()`.
 
 ## Patch system
 
@@ -188,7 +267,7 @@ Instead of forking the upstream library, this project overrides specific files v
 | `Tab.php` | Accepts `Composite` children in `append()`/`appendMargined()` |
 | `Menu.php` | Fluent builder API (`create()->item()->separator()->quitItem()`); improved `MenuOrderException` |
 | `MenuItem.php` | `onClick()` replaces handler (no C trampoline stacking); `removeOnClick()`; per-call & global error handlers |
-| `Window.php` | `centered()` positioning; `getContentSize()`/`getPosition()`; `onClose()`; `run()` single-window loop; menu lock tracking |
+| `Window.php` | `centered()` positioning; `centeredOn()` parent-relative centering; `getContentSize()`/`getPosition()`; `onClose()`; `run()` single-window loop; menu lock tracking |
 | `Exception/MenuOrderException.php` | Carries the Window title that locked menus |
 | `Draw/DrawContext.php` | `fillRect`/`strokeRect`/`fillCircle`/`strokeCircle`/`*Arc`/`*RoundedRect`/`*Polygon`/`strokeLine`/`line`/`dot`; `withSave()`; `drawString()` |
 | `Draw/Path.php` | `wedge()`/`polygon()`/`ellipse()`/`roundedRect()`/`quadTo()`/`bezierThrough()`; `line()`/`circle()`/`arc()` shorthands |
@@ -196,6 +275,18 @@ Instead of forking the upstream library, this project overrides specific files v
 | `Draw/Params/AreaMouseEvent.php` | Semantic query methods (e.g. `isLeftButtonDown()`) |
 
 > **Do not edit files inside `vendor/` directly.** Place overrides in `patches/` — they will be mirrored on next install.
+
+## Bridge system
+
+The `bridge/` directory contains platform-specific C source files that connect PHP to native WebView APIs:
+
+| Platform | Source | Binary |
+|---|---|---|
+| macOS | `bridge/webview_bridge.m` (Objective-C) | `webview_bridge.dylib` |
+| Linux | `bridge/webview_bridge_linux.c` | `webview_bridge.so` |
+| Windows | `bridge/webview_bridge_win.c` | `webview_bridge.dll` |
+
+The bridge library is loaded via FFI and handles creating, moving, and destroying the child window that hosts the native WebView.
 
 ## Drawing
 
@@ -219,10 +310,10 @@ $context->drawString('Hello', 10, 10, $font, $brush);
 The patched `Path` adds convenience methods:
 
 ```php
-$path->wedge(100, 100, 50, 0, M_PI_2);  // Pie slice
-$path->polygon([10, 50, 90], [10, 90, 10]);  // Triangle
-$path->roundedRect(10, 10, 100, 50, 10);  // Rounded corners
-$path->bezierThrough([10, 40, 90], [50, 10, 50]);  // Smooth curve through points
+$path->wedge(100, 100, 50, 0, M_PI_2);          // Pie slice
+$path->polygon([10, 50, 90], [10, 90, 10]);     // Triangle
+$path->roundedRect(10, 10, 100, 50, 10);        // Rounded corners
+$path->bezierThrough([10, 40, 90], [50, 10, 50]); // Smooth curve
 ```
 
 ## Menus
@@ -262,10 +353,18 @@ The project uses Pest 4 (built on PHPUnit 12). The existing `tests/DialogsTest.p
 ## Examples
 
 ```bash
-php examples/menu.php
+php examples/all-components.php   # Full demo with 6 tabs showing all widgets
+php examples/menu.php              # Declarative vs imperative menu APIs
+php examples/webview.php           # WebView with sidebar, JS ↔ PHP bridge
 ```
 
-The included example demonstrates both Menu API styles with the patched `MenuItem::onClick()`.
+The `all-components.php` example demonstrates every widget in this package across 6 tabs:
+1. **Fields** — all input field types
+2. **Custom** — ToggleSwitch, StatusIndicator, CircleProgressBar
+3. **Dialogs** — MessageBox, DialogConfirm, DialogPrompt, Toast
+4. **Pickers** — Color, Font, Date, Time pickers
+5. **Table** — Tabular data with TableView
+6. **WebView** — TreeView and CodeEditor launch buttons
 
 ## Upstream essentials
 
@@ -275,6 +374,7 @@ The included example demonstrates both Menu API styles with the patched `MenuIte
 - Closures passed to libui C callbacks are retained by the framework — you do not need to keep references.
 - `Window::run()` calls `Ffi::uninit()` in a `finally` block — code after `run()` in the same script runs in a torn-down state. Use the `$afterClose` callback for cleanup.
 - `fn () => echo …` is a syntax error in PHP — use `print` or a `function () { … }` body.
+- **WebView widgets are not** `Composite` objects. They create borderless child windows at absolute coordinates. They cannot be placed inside `Box`, `Form`, or `Tab` layouts. Use `autoResize()` to keep them positioned correctly when the parent window resizes.
 
 ## License
 

@@ -8,6 +8,7 @@ use Libui\Area;
 use Libui\AreaDelegate;
 use Libui\Color;
 use Libui\Control;
+use Libui\Draw\Brush;
 use Libui\Draw\DrawContext;
 use Libui\Draw\Params\AreaDrawParams;
 use Libui\Draw\StrokeParams;
@@ -122,7 +123,7 @@ final class CircleProgressDelegate extends AreaDelegate
             join: \Libui\Generated\Enum\DrawLineJoin::Round,
         );
         $ctx->strokePath(
-            Color::rgba(...self::TRACK_COLOR),
+            Brush::color(Color::rgba(...self::TRACK_COLOR)),
             $trackStroke,
             static fn ($p) => $p->arc($cx, $cy, $radius, 0.0, 2 * M_PI),
         );
@@ -139,7 +140,7 @@ final class CircleProgressDelegate extends AreaDelegate
             join: \Libui\Generated\Enum\DrawLineJoin::Round,
         );
         $ctx->strokePath(
-            $this->color,
+            Brush::color($this->color),
             $progressStroke,
             static fn ($p) => $p->arc($cx, $cy, $radius, $startAngle, $sweep),
         );

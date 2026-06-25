@@ -73,7 +73,21 @@
   7. FontDescriptor: `$font->family` → `$font->family()` (methods not properties)
 
 ## Summary
-- **16 new files** (2 patches + 8 fields + 1 dialog + 2 widgets + 3 test files + 1 demo)
-- **7 modified files** (AGENTS.md, composer.json, composer.lock, README.md, tests/DialogsTest.php, task_plan.md, progress.md, findings.md)
-- **46 total tests** (42 field/widget + 4 dialogs) — all pass individually
-- **8 runtime fixes** during demo verification
+- **Phase 0-12**: 16 new files, 7 modified files, 46 total tests, Phase 12 demo 4-tab
+- **Phase 13**: WebView port — 7 files (bridge/*.m/*.c/*.dll/.dylib/.so/README.md, src/WebView.php, examples/webview.php), rpath fix for PebView.dylib
+- **Phase 14**: Dialog/picker centering — centeredOn() in Window patch, SeparatorLine __destruct, 6 picker/dialog files updated
+- **Phase 15**: 4 new widgets — CircleProgressBar (Area-based), Toast (PebView FFI), TreeView (WebView+html), CodeEditor (WebView+highlight.js html)
+- **Phase 16**: all-components.php rewritten to 6 tabs, GC rewrite (no more inline temporaries), namespace fix (Widget\Button → Button), Brush::color() fix in progress
+
+## Runtime Fixes (Phase 12-16 Cumulative)
+1. Group::titled() requires 2 args — fixed 5 call sites
+2. App::run() returns void — restructured with $mainWindow ref
+3. Build::hbox() rejects Composite — added ->root()
+4. Private const → public const in ToggleSwitch/StatusIndicator
+5. Dialogs::msgBoxError() → ::error()
+6. ToggleSwitch: `use Libui\StrokeParams` → `use Libui\Draw\StrokeParams`
+7. FontDescriptor: `$font->family` → `$font->family()`
+8. Bridge dylib rpath: rebuilt PebView.dylib from source, recompiled bridge
+9. GC dangling-pointer: all-components.php rewritten, no inline temporaries
+10. Namespace: `Libui\Widget\Button` → `Libui\Button`
+11. CircleProgressBar: `Color` → `Brush::color()` in strokePath() calls
