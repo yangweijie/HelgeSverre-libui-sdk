@@ -277,6 +277,25 @@ class Window extends Generated\Window
         return $this->positionOnScreen(self::CENTER, $screenWidth, $screenHeight);
     }
 
+    /**
+     * Position this dialog window centred over the given parent window.
+     *
+     * Uses the parent's position and content size to compute a centred offset.
+     * Falls back to screen-centering if the parent's position is (0,0) or the
+     * child is larger than the parent.
+     */
+    public function centeredOn(self $parent): static
+    {
+        [$pw, $ph] = $parent->getContentSize();
+        [$px, $py] = $parent->getPosition();
+        [$cw, $ch] = $this->getContentSize();
+
+        $x = $px + (int)(($pw - $cw) / 2);
+        $y = $py + (int)(($ph - $ch) / 2);
+
+        return $this->setPosition(\max(0, $x), \max(0, $y));
+    }
+
     /** Top-left corner. */
     public function topLeft(?int $screenWidth = null, ?int $screenHeight = null): static
     {

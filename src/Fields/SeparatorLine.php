@@ -26,6 +26,11 @@ class SeparatorLine extends Composite
         $this->separator = new Separator();
     }
 
+    public function __destruct()
+    {
+        $this->separator->destroy();
+    }
+
     public function root(): Control
     {
         return $this->separator;

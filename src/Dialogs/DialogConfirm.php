@@ -76,6 +76,10 @@ final class DialogConfirm
 
         $window->show();
 
+        if ($parent !== null) {
+            $window->centeredOn($parent);
+        }
+
         while (!$finished && Ffi::get()->uiMainStep(1)) {
             // Process one platform event, then re-check $finished.
         }

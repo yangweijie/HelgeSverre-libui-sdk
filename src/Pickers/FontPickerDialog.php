@@ -77,6 +77,10 @@ final class FontPickerDialog
 
         $window->show();
 
+        if ($parent !== null) {
+            $window->centeredOn($parent);
+        }
+
         // Blocking modal step loop — does NOT call uiQuit(), so any outer
         // uiMain() loop the caller may be inside is unaffected.
         while (!$finished && Ffi::get()->uiMainStep(1)) {
