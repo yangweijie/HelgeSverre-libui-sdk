@@ -5,7 +5,8 @@
     "require": {
         "helgesverre/libui": "dev-main",
         "kingbes/pebview": "^0.1.1",
-        "jolicode/jolinotif": "^3.0@dev"
+        "jolicode/jolinotif": "^3.0@dev",
+        "utopia-php/system": "^0.10.5"
     },
     "require-dev": {
         "pestphp/pest": "^4.0"

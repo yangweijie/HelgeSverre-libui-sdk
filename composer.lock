@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "22e0571003bef8d75f58912099b1d2eb",
+    "content-hash": "5390f3ddc87cdb412f050138a24e4094",
     "packages": [
         {
             "name": "helgesverre/libui",
@@ -324,6 +324,51 @@
                 "source": "https://github.com/symfony/process/tree/8.1"
             },
             "time": "2026-05-29T05:06:50+00:00"
+        },
+        {
+            "name": "utopia-php/system",
+            "version": "0.10.5",
+            "dist": {
+                "type": "zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/utopia-php/system/0.10.5/utopia-php-system-0.10.5.zip",
+                "reference": "57a2ab17f5346f171c796e29a6c2202bfaa21303",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.0.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Utopia\\System\\": "src/System"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Eldad Fux",
+                    "email": "eldad@appwrite.io"
+                },
+                {
+                    "name": "Torsten Dittmann",
+                    "email": "torsten@appwrite.io"
+                }
+            ],
+            "description": "A simple library for obtaining information about the host's system.",
+            "keywords": [
+                "framework",
+                "php",
+                "system",
+                "upf",
+                "utopia"
+            ],
+            "support": {
+                "issues": "https://github.com/utopia-php/system/issues",
+                "source": "https://github.com/utopia-php/system/tree/0.10.5"
+            },
+            "time": "2026-06-26T10:48:18+00:00"
         }
     ],
     "packages-dev": [

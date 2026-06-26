@@ -122,3 +122,34 @@ Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` 
   - `assets/code-editor.html`: Added `autofocus` attribute + `editor.focus()` JS call
   - `src/Widgets/CodeEditor.php`: Added `focus()` public method, called from constructor
 - **Bridge rebuilt:** `clang -shared -fobjc-arc` - no errors
+
+## WebView Eval Timing & Bind Lifecycle (2026-06-26 session-2)
+- `webview_bind()`'s internal `eval("window.__webview__.onBind(name)")` fails if page hasn't loaded
+- `replace_bind_script()` updates WKUserScript for **future** page loads, not current one
+- HTML no-ops (`__treeNodeClick = function(){}`) prevent `setTimeout` fallback from calling `onBind()`
+  - Fix: remove HTML no-ops — the `__onNodeClick` fallback already checks `typeof __treeNodeClick === "function"` before calling
+- `req` parameter from `webview_bind()` callback is a JSON **array** of arguments, not a JSON object
+  - `json_decode($req, true)` → `[arg1, arg2, ...]` (numeric array, not associative)
+  - Fix: access `$args[0]`, `$args[1]` instead of `$data['path']`
+- `:scope > .tree-toggle` selector failed because `.tree-toggle` is inside `.tree-row`, not a direct child
+  - Fix: use `.tree-row > .tree-toggle` instead of `:scope > .tree-toggle`
+
+## macOS Toast Notification on macOS 15 (2026-06-26)
+- **Fundamental issue:** macOS 15 Sequoia has deprecated all non-UNUserNotificationCenter notification APIs for non-bundled processes
+- `NSUserNotificationCenter` class still exists but `defaultUserNotificationCenter` returns **nil** (Apple gutted the implementation)
+- `UNUserNotificationCenter` crashes with `NSInternalInconsistencyException` because `[NSBundle mainBundle].bundleIdentifier` is nil for CLI PHP
+- `CFUserNotificationDisplayNotice` likely routes through UN internally on macOS 15
+- `osascript -e 'display notification ...'` works from terminal but NOT from PHP/FFI context (exit 0, no visible notification)
+- Even a helper `.app` bundle with Info.plist launched via `open` doesn't produce visible notifications
+- The `__NSBundleIdentifier` NSUserDefaults workaround doesn't help because UN framework's `dispatch_once` initializer already ran with nil bundle
+- **Working solution:** In-app overlay NSWindow (borderless, styled as native toast, shown at top-right, auto-dismisses after 4s) — requires no bundle ID, no authorization, works from any GUI process
+
+## Utopia System Library (2026-06-27)
+- **Package:** `utopia-php/system` v0.10.5
+- **API:** OS info (getOS/getArch/getHostname), CPU (getCPUCores/getCPUUsage), memory (getMemoryTotal/getMemoryFree/getMemoryAvailable), disk (getDiskTotal/getDiskFree), IO (getIOUsage), network (getNetworkUsage), env (getEnv), arch checks (isArm64/isX86/etc)
+- **macOS limitations:** `getCPUUsage()`, `getMemoryAvailable()`, `getIOUsage()`, `getNetworkUsage()` throw `Exception('Darwin not supported')`
+- **Inconsistent memory units across OSes (upstream bug):**
+  - Darwin: `getMemoryTotal()` returns **MB** (sysctl bytes → /1024/1024)
+  - Linux: `getMemoryTotal()` returns **kB** (/proc/meminfo raw value)
+- **Fix:** SystemInfo wrapper normalizes all values to bytes via `match($os)` in constructor
+- **Architecture checks** (isArm64/isX86/etc) work on all platforms, read from `php_uname('m')`

@@ -141,7 +141,57 @@
 - **Bridge rebuilt:** `clang -shared -fobjc-arc` — 0 errors
 - **Verification:** PHP syntax check on all changed files passed; ObjC `-fsyntax-only` passed
 
-## Runtime Fixes (Cumulative)
+## Session: 2026-06-26 (Evening)
+
+### Phase 23: TreeView Button Event Fixes ✅
+- **Status:** complete
+- **Files modified:**
+  - `src/Widgets/TreeView.php` — getSelectedPath() tracks path in PHP; bindNodeClick/Toggle use positional args (not JSON.stringify)
+  - `src/WebView.php` — revert flushPendingEval to simple version (no CData comparison bug)
+  - `assets/tree-view.html` — remove `__treeNodeClick`/`__treeNodeToggle` no-ops; fix `:scope > .tree-toggle` → `.tree-row > .tree-toggle`; reset selectedPath in render()
+  - `examples/test-treeview.php` — expand/collapse buttons now context-aware (use selected path)
+- **Bugs found & fixed (4 issues):**
+  1. `getSelectedPath()` returned TreeView instance → tracks path in PHP via nodeClick glue
+  2. `req` parameter from webview_bind is JSON array of args, not JSON object → fixed positional arg handling
+  3. HTML `__treeNodeClick` no-op prevented `onBind()` fallback from creating real function → removed no-ops
+  4. `:scope > .tree-toggle` CSS selector failed (toggle inside `.tree-row`) → fixed to `.tree-row > .tree-toggle`
+
+### Phase 24: CodeEditor CSS Fixes ✅
+- **Status:** complete
+- **Files modified:** `assets/code-editor.html`
+- **Fixes:**
+  - Added `background: #1e1e1e` to `.code-area` (fill right-side gap)
+  - Added `overflow: hidden` to `.editor-container` (prevent overflow)
+  - Changed `.editor-textarea` `overflow: auto` → `overflow: hidden` (let textarea handle its own scroll)
+  - Added `overscroll-behavior: none` to body (prevent WKWebView rubber-banding)
+
+### Phase 25: CodeEditor autoResize Fix ✅
+- **Status:** complete
+- **Files modified:** `examples/test-codeeditor.php`
+- Added `$editor->autoResize($window, 0, 0, 20, 40)` — webview now follows window resize
+
+### Phase 26: macOS Toast Notification (In Progress) ⏳
+- **Status:** in_progress
+- **Problem:** macOS 15 Sequoia silently drops all native notification APIs from non-bundled CLI processes (PHP via Homebrew)
+- **Attempted approaches (all failed):**
+  1. `NSUserNotificationCenter` — class exists but `defaultUserNotificationCenter` returns `nil` (Apple gutted it)
+  2. `UNUserNotificationCenter` — crashes with `NSInternalInconsistencyException` (no bundle identifier)
+  3. `CFUserNotificationDisplayNotice` — likely routes through UN internally; no visible result
+  4. `osascript` via `system()` — exit 0 but no notification appears from PHP/FFI context
+  5. `osascript` via `NSTask` — same, exit 0, no notification
+  6. `osascript` via double-fork + setsid() — fully detached, still no notification
+  7. ToastHelper.app bundle via `open` — minimal .app with Info.plist + UNUserNotificationCenter, still silent
+- **Current approach:** In-app overlay NSWindow (borderless floating window styled as native toast, top-right, 4s auto-dismiss)
+
+## Session: 2026-06-27
+
+### Phase 27: SystemInfo Utility ✅
+- **Status:** complete
+- **Installed:** `utopia-php/system` v0.10.5
+- **Created:** `src/System/SystemInfo.php` — wraps Utopia System with graceful macOS fallbacks
+- **Created:** `examples/test-system-info.php` — demo CLI script
+- **Note:** Utopia System has limited macOS support (CPU usage, memAvailable throw on Darwin). All handled with try/catch returning null.
+- **Memory unit normalization:** Utopia returns different units per OS (Darwin=MB, Linux=kB). SystemInfo normalizes to bytes.
 1. Group::titled() requires 2 args — fixed 5 call sites
 2. App::run() returns void — restructured with $mainWindow ref
 3. Build::hbox() rejects Composite — added ->root()
