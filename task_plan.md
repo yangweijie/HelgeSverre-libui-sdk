@@ -1,107 +1,58 @@
-# Task Plan: Composite GUI Components
+# Task Plan: 修复 macOS 右键菜单黑色背景问题
 
 ## Goal
-Build a set of reusable Composite-based GUI components in `src/Fields/`, plus patches, dialogs, and custom widgets. Complete implementation of the 5-phase gap analysis derived from `software—arch.md`.
+修复 macOS 右键上下文菜单弹出时背景显示为黑色的问题，使其使用系统原生样式正常渲染。
 
 ## Current Phase
-Phase 26: macOS Toast Notification — In Progress ⏳
+Phase 5 — Delivery
 
 ## Phases
 
-### Phase 0-12: Core Components + Demo ✅
-- All complete (see progress.md for details)
-
-### Phase 13: WebView Port ✅
-- [x] Bridge compiled with rpath, mouse/keyboard events
-- [x] CodeEditor keyboard input fix
-
-### Phase 14: Dialog/Picker Centering ✅
-- [x] centeredOn(), SeparatorLine __destruct, 6 picker/dialog files
-
-### Phase 15: 4 New Widgets ✅
-- [x] CircleProgressBar, Toast, TreeView, CodeEditor
-
-### Phase 16: all-components.php 6-Tab Demo ✅
-- [x] Window 800×600, layout fixes, GC rewrite
-
-### Phase 17: Test Coverage ✅
-- [x] 47 → 120 tests, 11 files
-
-### Phase 18: Toast Error Handling ✅
-- [x] $lastError + lastError() static methods
-
-### Phase 19: WebView Bridge Fixes ✅
-- [x] ARC, rpath, mouse/keyboard events
-
-### Phase 20: WebView Eval Queue ✅
-- [x] setHtml() queues evals, flushes 300ms later via Ffi::timer()
-- [x] test-debug-bridge.php passes all 6 steps
-
-### Phase 21: TreeView PHP ↔ WebView Communication ✅
-- [x] All sub-tasks complete (see progress.md)
+### Phase 1: ✅ Requirements & Discovery
+- [x] 确认问题：macOS 右键菜单弹出时背景为黑色
+- [x] 分析 bridge/context_menu.m 代码
+- [x] 确定根因：自定义 NSWindow 方式渲染异常，需改用原生 NSMenu API
 - **Status:** complete
 
-### Phase 22: CodeEditor Keyboard Focus Fix ✅
+### Phase 2: ✅ Solution Design
+- [x] 确定使用 NSMenu 的 popUpMenuPositioningItem:atLocation:inView: 方法
+- [x] 通过临时不可见窗口提供 NSEvent 上下文
+- [x] 移除复杂的自定义 NSView/NSButton 渲染逻辑
 - **Status:** complete
 
-### Phase 23: TreeView Button Event Fixes ✅
-- [x] getSelectedPath() tracks path in PHP (no eval round-trip)
-- [x] bindNodeClick/Toggle use positional args (not JSON.stringify)
-- [x] Remove HTML __treeNodeClick/__treeNodeToggle no-ops
-- [x] Fix `:scope > .tree-toggle` → `.tree-row > .tree-toggle`
-- [x] Expand/collapse buttons context-aware (use selected path)
+### Phase 3: ✅ Implementation
+- [x] 重写 bridge/context_menu.m 使用 NSMenu + 临时窗口方案
+- [x] 编译新的 context_menu.dylib
+- [x] 运行测试验证
 - **Status:** complete
 
-### Phase 24: CodeEditor CSS Fixes ✅
-- [x] Right-side gap: .code-area background, overflow fixes, overscroll-behavior
+### Phase 4: ✅ Testing & Verification
+- [x] 运行 test-context-menu-area.php 测试右键菜单
+- [x] 确保无黑色背景、无忙光标、功能正常
+- [x] 修复：右键仅响应蓝色矩形区域内（添加坐标范围判断 x:20~220, y:20~170）
 - **Status:** complete
 
-### Phase 25: CodeEditor autoResize Fix ✅
-- [x] Added autoResize() call in test-codeeditor.php
-- **Status:** complete
-
-### Phase 26: macOS Toast Notification ⏳
-- [x] Diagnosed all 7 failed approaches (NSUserNotification/UNUserNotification/CFUserNotification/osascript/ToastHelper)
-- [~] Current: in-app overlay NSWindow (borderless floating toast)
+### Phase 5: Delivery
+- [ ] 更新进度文件
+- [ ] 总结修复内容
 - **Status:** in_progress
 
-### Phase 27: SystemInfo Utility ✅
-- [x] Install utopia-php/system v0.10.5
-- [x] Create src/System/SystemInfo.php with graceful macOS fallbacks
-- [x] Create examples/test-system-info.php
-- [x] Handle memory unit normalization (Darwin=MB, Linux=kB → bytes)
-- **Status:** complete
-
-### Phase 28: ProcessUtil Utility ✅
-- [x] Install illuminate/process v13.x-dev
-- [x] Create src/System/ProcessUtil.php with static + fluent API
-- [x] Create examples/test-process-util.php (8 tests)
-- [x] Fix duplicate run() method → renamed instance method to execute()
-- **Status:** complete
-
-### Phase 29: Tray Icon Component ✅
-- [x] Create src/System/Tray.php wrapping PebView window_tray/window_tray_add_menu/window_tray_remove
-- [x] Create examples/test-tray.php demo
-- [x] Handle tray_menu struct via FFI::new() + callback trampoline retention
-- **Status:** complete
+## Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| 使用 NSMenu 代替自定义 NSWindow | NSMenu 是 macOS 原生右键菜单 API，自动处理渲染、动画、位置、光标和事件循环 |
+| 使用临时不可见 NSWindow 提供 menu 上下文 | NSMenu 的 popUpMenuPositioningItem 需要在 NSView 上调用，临时窗口作为宿主 |
+| 移除 NSView/NSButton 自定义渲染 | NSMenu 自动处理样式、高亮、禁用状态，无需手动绘制 |
+| 使用 NSEvent 的 mouseLocation 定位 | 更精确的鼠标位置获取方式 |
+| 仅矩形区域内响应右键 | Area mouse 事件覆盖整个控件区域，需按绘制区域做坐标过滤 |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| bridge dylib: @rpath/PebView.dylib not found | 1 | Rebuilt with -rpath flag |
-| uiControlVerifySetParent: control already has parent | 1 | GC: no inline temporaries |
-| Class "Libui\Widget\Button" not found | 1 | `Libui\Button` |
-| strokePath(): Argument #1 must be Brush | 1 | `Brush::color()` |
-| Bridge ARC: [obj release] unavailable | 1 | Removed manual release calls |
-| WebView keyboard input not received | 1 | NSWindow makeKeyAndOrderFront + acceptsMouseMovedEvents |
-| webview_eval() silently fails after setHtml() | 1 | Queue evals, flush 300ms via Ffi::timer() |
-| TreeView bind() creates functions too late | 1 | Define no-op bridge functions in HTML template |
-| getSelectedPath() always returns null | 1 | Track path in PHP via nodeClick glue |
-| req parameter is JSON array, not object | 1 | Use positional args binding |
-| HTML no-op prevents onBind() fallback | 1 | Remove no-ops from HTML |
-| `:scope > .tree-toggle` returns null | 1 | Use `.tree-row > .tree-toggle` |
-| NSUserNotificationCenter.defaultCenter nil on macOS 15 | 1 | In-app overlay NSWindow |
-| UNUserNotificationCenter crashes: no bundle ID | 1 | In-app overlay NSWindow (can't fix bundle for CLI PHP) |
-| osascript NSTask/system() silent from FFI context | 2 | Use in-app overlay NSWindow |
-| CFUserNotificationDisplayNotice silent on macOS 15 | 1 | Use in-app overlay NSWindow |
-| ToastHelper.app via `open` silent | 1 | Use in-app overlay NSWindow |
+| 黑色背景 | 1 | 将 windowLevel 从 CGShieldingWindowLevel 改为 NSPopUpMenuWindowLevel |
+| 黑色背景 | 2 | 重写使用 NSMenu 原生 API，完全移除自定义 NSWindow 渲染 |
+| 矩形外也能右键出菜单 | 1 | 在 mouse() 中添加 x:20~220, y:20~170 坐标范围判断 |
+
+## Notes
+- 编译命令：`cd bridge && clang -shared -fobjc-arc context_menu.m -framework Foundation -framework AppKit -o context_menu.dylib`
+- 测试命令：`rm -f ~/.tmp/ctxmenu.log && php85 examples/test-context-menu-area.php`

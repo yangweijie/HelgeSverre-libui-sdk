@@ -1,177 +1,53 @@
-# Findings — Composite GUI Components
+# Findings & Decisions — macOS Context Menu Black Background Fix
 
 ## Requirements
-- Group 1: TextField, PasswordField, NumberField, SearchField — Label + input, HasValue, 'change' event
-- Group 2: FilePickerField (Entry + Browse), SliderField (Slider + value label)
-- Gap Analysis phases 1-5: 13 new files across patches, fields, dialogs, widgets
-- All extend `Yangweijie\Ui2\Composite`, use `EmitsEvents` trait
-- All bundle into `Yangweijie\Ui2\Fields` namespace at `src/Fields/`
+- macOS 右键上下文菜单弹出时背景应为正常的系统样式（浅色/深色主题适配）
+- 无黑色背景
+- 无忙光标
+- 菜单在正确位置弹出
+- 点击项目后执行对应回调
+- 菜单自动关闭
 
-## Available Upstream Controls
-| Control | Constructor | Value API | Change Event |
-|---------|-------------|-----------|-------------|
-| Label(string) | Label(string $text) | text()/setText() | none |
-| Entry | Entry() | text()/setText() | onChanged(callable) |
-| Entry::password() | static — password entry | same as Entry | same |
-| Entry::search() | static — search entry | same as Entry | same |
-| Spinbox(int, int) | Spinbox($min, $max) | value()/setValue(int) | onChanged(callable) |
-| Slider(int, int) | Slider($min, $max) | value()/setValue(int) | onChanged + onReleased |
-| Button(string) | Button($text) | text()/setText() | onClicked(callable) |
-| Checkbox(string) | Checkbox($text) | checked()/setChecked(bool)/onToggled | onToggled |
-| RadioButtons | RadioButtons() | selected()/setSelected(int) | onSelected |
-| Combobox | Combobox() | selected()/setSelected(int) | onSelected |
-| EditableCombobox | EditableCombobox() | text()/setText(string) | onChanged |
-| DateTimePicker | DateTimePicker() | `\DateTime` value / setValue(`\DateTime`) | onChanged |
-| MultilineEntry | MultilineEntry() | text()/setText(string) | onChanged |
-| ProgressBar | ProgressBar() | value()/setValue(int 0-100) | none (read-only) |
-| Separator(uiSeparatorOrientationHorizontal) | Separator() | none | none |
+## Research Findings
 
-## Design Pattern
-Each field:
-- `root()` → Box (horizontal: Label + stretchy control)
-- `value()` → delegates to inner control
-- `setValue(mixed)` → delegates to inner control
-- Constructor wires upstream onChanged → `$this->emit('change', $this->value())`
+### Root Cause Analysis
+1. **原始实现**：使用自定义 NSWindow + NSView/NSButton 手动构建菜单
+2. **问题**：
+   - `NSPopUpMenuWindowLevel` 下的自定义 NSWindow 渲染时背景变黑
+   - 系统主题适配困难，需要手动处理深浅色模式
+   - 事件循环管理复杂 (`runModalForWindow:`)，可能导致忙光标
+3. **最佳方案**：使用系统原生 `NSMenu` API
 
-## FilePickerField Design
-- Constructor: `__construct(string $label, string $mode = 'open', ?Window $parent = null)`
-- Internal: Box(Label + Entry(read-only) + Button("Browse"))
-- Browse button calls Dialogs::for($parent)->openFile()/saveFile()
-- Sets Entry text from returned path, emits 'change'
+### NSMenu Popup API
+- `[NSMenu popUpMenuPositioningItem:atLocation:inView:]` — 标准右键菜单弹出方法
+- 需要 NSView 作为宿主（通过临时 NSWindow 提供）
+- 自动处理：渲染、动画、主题适配、高亮、事件循环
+- 返回值为点击的菜单 item，或 nil（取消时）
+- 同步调用，阻塞直到菜单关闭
+- 每个菜单 item 可设 tag 用于识别
 
-## SliderField Design  
-- Constructor: `__construct(string $label, int $min, int $max, int $initial = 0, bool $showTooltip = true)`
-- Internal: Box(Label + Slider + StaticLabel(value))
-- onChange → updates value label + emit 'change'
-- onRelease → emit 'released'
+### NSMenu Event Context
+- NSMenu 需要 NSEvent 上下文来处理鼠标跟踪
+- 方法1：使用 `[NSApp currentEvent]`
+- 方法2：创建临时 NSWindow 作为宿主，在 window 上调用
+- 临时窗口方案更可靠
 
-## Container Patch Design
-- All container patches (Box, Form, Grid, Group, Tab) accept `Control|Composite`
-- `$child instanceof Composite ? $child->root() : $child` unwrapping pattern
-- Group::titled() — static factory for titled groups
-- Tab::append($label, Control|Composite, $margined = false)
-- Tab::pages() — returns array of [label, Control]
+## Technical Decisions
+| Decision | Rationale |
+|----------|-----------|
+| NSMenu + NSMenuItem 替代 NSView/NSButton | 原生菜单渲染，完美适配系统主题 |
+| 临时 NSWindow 作为 NSMenu 宿主 | NSMenu 需要 NSView 上下文才能弹出 |
+| NSMenuItem tag 做回调索引 | JSON 解析后按 tag 关联点击回调 |
+| 同步阻塞式 API (popUpMenuPositioningItem) | 与 FFI 接口兼容，直接返回选中项索引 |
 
-## Custom Widget Design
-- ToggleSwitch: Area-based using fillCircle/strokeCircle, ToggleDelegate internal class
-- StatusIndicator: Area-based colored circle, setColor(Color)/setColorHex(int)
-- Both use the patched DrawContext::fillCircle/strokeCircle API
+## Resources
+- bridge/context_menu.m — macOS 桥接代码（需重写）
+- bridge/context_menu.dylib — 编译后的二进制文件
+- examples/test-context-menu-area.php — 测试脚本
+- src/Widgets/ContextMenu.php — PHP ContextMenu 类
+- Apple NSMenu docs: https://developer.apple.com/documentation/appkit/nsmenu
 
-## Runtime Issues Discovered (Demo Run)
-1. **Group::titled() is a factory requiring 2 args** — `Group::titled('Title', $child)` not `Group::titled('Title')->setChild($child)`. The factory creates and immediately sets the child.
-2. **App::run() returns void** — `$window = App::new()->window(...)->run()` doesn't work. Create Window first, store ref, pass to `App::new()->window($window)->run()`.
-3. **Build::hbox() doesn't accept Composite** — only upstream Control. Must call `->root()` explicitly for Composite widgets.
-4. **ToggleSwitch/StatusIndicator constants must be public** — `ToggleDelegate::draw()` accesses them by class name from a different file (class in same file).
-5. **FontDescriptor uses accessor methods** — `family()`/`size()`, not public properties.
-
-## Test Isolation Requirement
-DialogsTest must use `ReflectionClass::newInstanceWithoutConstructor()` to create a Window without FFI handle (passes alone). When run together with FieldsTest/WidgetsTest (which use real FFI widgets), PHP's GC gets confused and corrupts the `zend_mm_heap`. This is a known PHP FFI limitation — each test file runs fine individually.
-
-## FFI Autoloading
-Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` → `self::init()` which is idempotent. No `beforeAll(Ffi::init())` is needed in test files. Removing it avoids cross-test-file FFI re-initialization issues.
-
-## WebView Bridge
-- `src/WebView.php` wraps two FFI libraries: bridge (wvb_create/move/destroy) + PebView (webview_set_html/navigate/bind/return/eval)
-- macOS bridge requires `@rpath` pointing to PebView.dylib location in `vendor/kingbes/pebview/lib/macos/arm64/`
-- Bridge source: `bridge/webview_bridge.m` (ObjC WKWebView wrapper), compiled with -rpath flag
-- PebView.dylib is built from kingbes/pebview source via `pebview/macos.sh`
-- Bridge macOS with `-fobjc-arc`: no manual `[obj release]` calls allowed
-- Borderless child NSWindow needs `makeKeyAndOrderFront:`, `setAcceptsMouseMovedEvents:YES`, `setIgnoresMouseEvents:NO`
-
-## WebView Eval Queue Mechanism
-- `webview_eval()` silently fails after `webview_set_html()` — `eval_impl()` checks `webkit_web_view_get_uri()`, returns `{}` if null (before content loads)
-- Fix: `setHtml()` sets `pageLoading = true`, queues evals, flushes 300ms later via `Libui\Ffi::timer()`
-- `eval()` queues JS when `pageLoading` is true, executes directly otherwise
-- Verified: test-debug-bridge.php passes all 6 steps (bind, eval, callback, round-trip)
-
-## WebView Bind Lifecycle
-- `webview_bind()` calls `eval("window.__webview__.onBind(name)")` synchronously — BEFORE the new page's init script runs after `set_html()`
-- `window.__webview__` is undefined at that point → `if` guard silently skips → JS function never created
-- PebView C++ bindings map survives `set_html()` but JS-side `window[name]` does not
-- Re-binding same name returns `WEBVIEW_ERROR_DUPLICATE`
-
-## TreeView Communication Pattern
-- `bind()` creates JS function via queued eval → but eval is queued because `pageLoading` is true
-- HTML template defines `__onNodeClick`/`__onNodeToggle` as functions calling `__treeNodeClick`/`__treeNodeToggle` if they exist
-- Bridge functions defined as no-ops in HTML to prevent crashes before `bind()` flushes
-- Timing issue: user click before flush hits no-op → callback silently swallowed
-- `getSelectedPath()` fundamentally broken: `eval()` returns `$this` (WebView), not JS result. Must use bind-based return pattern.
-
-## Circular Progress Bar Drawing
-- `DrawContext::strokePath()` takes `Brush $brush`, NOT `Color`
-- Must wrap via `Brush::color(Color $color)` or use shorthand `Brush::rgb(int $hex)`
-- The patched DrawContext has convenience methods (strokeArc, strokeCircle, etc.) that accept `Brush|Color$` and auto-convert
-
-## GC Issue with Temporary Composite Objects
-- PHP destroys temporary objects at statement end
-- If a `Composite` has `__destruct()` that destroys its libui Control, but the Control is still in libui's widget tree, GC causes `uiControlVerifySetParent` errors
-- **Fix**: always store Composite objects in named persistent variables — never use inline temporaries like `(new SeparatorLine())->root()` inside an array/argument list
-
-## Upstream Namespace
-- All upstream widget classes are directly in `Libui\` namespace (e.g. `Libui\Button`, `Libui\Entry`)
-- There is NO `Libui\Widget\` sub-namespace — using it causes "Class not found" errors
-
-## PHP 8.5 Limitations
-- Cannot use `?callable` as property type — use `mixed` instead
-- `fn () => echo …` is a syntax error — use `print` or `function () {}` body
-
-## CodeEditor Focus Issue (2026-06-26)
-- **Root cause:** `NSWindow` with `NSWindowStyleMaskBorderless` returns `NO` for `canBecomeKeyWindow` by default in Cocoa. The bridge's `makeKeyAndOrderFront:nil` call silently fails — keyboard events never reach the WKWebView's `<textarea>`.
-- **Fix:** Added `KeyableWindow` NSWindow subclass overriding `canBecomeKeyWindow` and `canBecomeMainWindow` to return `YES`. Used in `wvb_create()` instead of plain `NSWindow`.
-- **Supplementary fixes:**
-  - `assets/code-editor.html`: Added `autofocus` attribute + `editor.focus()` JS call
-  - `src/Widgets/CodeEditor.php`: Added `focus()` public method, called from constructor
-- **Bridge rebuilt:** `clang -shared -fobjc-arc` - no errors
-
-## WebView Eval Timing & Bind Lifecycle (2026-06-26 session-2)
-- `webview_bind()`'s internal `eval("window.__webview__.onBind(name)")` fails if page hasn't loaded
-- `replace_bind_script()` updates WKUserScript for **future** page loads, not current one
-- HTML no-ops (`__treeNodeClick = function(){}`) prevent `setTimeout` fallback from calling `onBind()`
-  - Fix: remove HTML no-ops — the `__onNodeClick` fallback already checks `typeof __treeNodeClick === "function"` before calling
-- `req` parameter from `webview_bind()` callback is a JSON **array** of arguments, not a JSON object
-  - `json_decode($req, true)` → `[arg1, arg2, ...]` (numeric array, not associative)
-  - Fix: access `$args[0]`, `$args[1]` instead of `$data['path']`
-- `:scope > .tree-toggle` selector failed because `.tree-toggle` is inside `.tree-row`, not a direct child
-  - Fix: use `.tree-row > .tree-toggle` instead of `:scope > .tree-toggle`
-
-## macOS Toast Notification on macOS 15 (2026-06-26)
-- **Fundamental issue:** macOS 15 Sequoia has deprecated all non-UNUserNotificationCenter notification APIs for non-bundled processes
-- `NSUserNotificationCenter` class still exists but `defaultUserNotificationCenter` returns **nil** (Apple gutted the implementation)
-- `UNUserNotificationCenter` crashes with `NSInternalInconsistencyException` because `[NSBundle mainBundle].bundleIdentifier` is nil for CLI PHP
-- `CFUserNotificationDisplayNotice` likely routes through UN internally on macOS 15
-- `osascript -e 'display notification ...'` works from terminal but NOT from PHP/FFI context (exit 0, no visible notification)
-- Even a helper `.app` bundle with Info.plist launched via `open` doesn't produce visible notifications
-- The `__NSBundleIdentifier` NSUserDefaults workaround doesn't help because UN framework's `dispatch_once` initializer already ran with nil bundle
-- **Working solution:** In-app overlay NSWindow (borderless, styled as native toast, shown at top-right, auto-dismisses after 4s) — requires no bundle ID, no authorization, works from any GUI process
-
-## Utopia System Library (2026-06-27)
-- **Package:** `utopia-php/system` v0.10.5
-- **API:** OS info (getOS/getArch/getHostname), CPU (getCPUCores/getCPUUsage), memory (getMemoryTotal/getMemoryFree/getMemoryAvailable), disk (getDiskTotal/getDiskFree), IO (getIOUsage), network (getNetworkUsage), env (getEnv), arch checks (isArm64/isX86/etc)
-- **macOS limitations:** `getCPUUsage()`, `getMemoryAvailable()`, `getIOUsage()`, `getNetworkUsage()` throw `Exception('Darwin not supported')`
-- **Inconsistent memory units across OSes (upstream bug):**
-  - Darwin: `getMemoryTotal()` returns **MB** (sysctl bytes → /1024/1024)
-  - Linux: `getMemoryTotal()` returns **kB** (/proc/meminfo raw value)
-- **Fix:** SystemInfo wrapper normalizes all values to bytes via `match($os)` in constructor
-- **Architecture checks** (isArm64/isX86/etc) work on all platforms, read from `php_uname('m')`
-
-## Illuminate Process Library (2026-06-27)
-- **Package:** `illuminate/process` v13.x-dev (Laravel's process abstraction over Symfony Process)
-- **Key classes:** `Factory` (entry point), `PendingProcess` (fluent builder), `ProcessResult` (output/exit code)
-- **API:** `->run()`, `->start()` (background), `->path()`, `->timeout()`, `->env()`, `->input()`, `->quietly()`, `->tty()`
-- **ProcessResult methods:** `exitCode()`, `successful()`, `failed()`, `output()`, `errorOutput()`, `seeInOutput()`, `throw()`
-- **Testing support:** Built-in `fake()` / `assertRan()` / `preventStrayProcesses()` for process mocking in tests
-- **Pool/pipe support:** `pool()` for concurrent processes, `pipe()` for chained commands
-- **ProcessUtil wrapper design:** Static methods for one-offs (`run()`, `capture()`, `success()`, `which()`), fluent for config (`new()->path()->timeout()->execute()`)
-- **PHP limitation:** Cannot have static and instance methods with the same name — renamed instance `run()` → `execute()`
-
-## PebView Tray API (2026-06-27)
-- **C API (PebView.h):** `window_tray(ptr, icon)`, `window_tray_add_menu(tray, menu)`, `window_tray_remove(tray)`
-- **struct tray_menu:** `{ int id; char *text; int disabled; int checked; void (*callback)(const void *ptr); }`
-- **macOS implementation:** Uses `NSStatusItem` + `NSMenu` for system menu bar tray icon
-- **macOS `window_tray`:** Takes `NSWindow *` as first arg, creates `NSStatusItem`, returns `TrayData *`
-- **macOS `window_tray_add_menu`:** Creates `NSMenuItem` with `TrayMenuTarget` for callback bridge
-- **FFI challenges:**
-  - `tray_menu` struct creation via `FFI::new()` — must retain the CData to prevent GC
-  - Callback function pointer `void (*)(const void *)` — PHP FFI wraps closures into C trampolines, must retain via class array
-  - C string (`char *text`) — must allocate `FFI::new('char[N]')` and memcpy, retain to prevent free
-- **Window handle:** `$window->handle()` returns `uintptr_t` (NSWindow pointer as integer). Pass as `void*` to `window_tray`.
+## Visual/Browser Findings
+- 用户截图显示：右键菜单区域显示为纯黑色方块/矩形
+- 忙光标问题已在前一轮修复
+- 当前仅剩黑色背景问题未解决
