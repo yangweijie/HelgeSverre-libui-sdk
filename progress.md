@@ -94,6 +94,28 @@
   - examples/test-tray.php（修复 App::quit + 添加 Ffi use）
   - assets/icon.png（新建，32×32 PNG）
 
+### 新增任务: 添加全局快捷键支持
+
+- **Status:** complete
+- **Started:** 2026-06-26 ~22:50
+- Actions taken:
+  - macOS 桥接：bridge/hotkey.m（Carbon RegisterEventHotKey），编译为 hotkey.dylib，10/10 测试通过
+  - Linux 桥接：bridge/hotkey_linux.c（X11 XGrabKey）
+  - Windows 桥接：bridge/hotkey_win.c（Win32 RegisterHotKey + HWND_MESSAGE 隐藏窗口）
+  - PHP 类：src/System/GlobalHotkey.php（register/unregister/unregisterAll/poll/startPolling）
+  - 测试示例：examples/test-global-hotkey.php（Cmd+Shift+H 切换窗口，Cmd+Shift+Q 退出）
+  - 修复：kVK_ANSI_A == 0 导致字母键被误判为 unknown（sentinel 改为 0xFFFF）
+  - 修复：parse_modifiers 中 Alt 与字母 A 的误匹配
+  - 错误消息：更新为三平台编译说明
+- Files created/modified:
+  - bridge/hotkey.m（新建，macOS Carbon 桥接）
+  - bridge/hotkey_linux.c（新建，Linux X11 桥接）
+  - bridge/hotkey_win.c（新建，Windows 桥接）
+  - bridge/hotkey.dylib（编译产物）
+  - src/System/GlobalHotkey.php（新建 PHP 类）
+  - examples/test-global-hotkey.php（新建测试）
+  - task_plan.md（更新为全部完成）
+
 ## Test Results
 | Test | Input | Expected | Actual | Status |
 |------|-------|----------|--------|--------|
