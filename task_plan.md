@@ -79,6 +79,12 @@ Phase 26: macOS Toast Notification — In Progress ⏳
 - [x] Fix duplicate run() method → renamed instance method to execute()
 - **Status:** complete
 
+### Phase 29: Tray Icon Component ✅
+- [x] Create src/System/Tray.php wrapping PebView window_tray/window_tray_add_menu/window_tray_remove
+- [x] Create examples/test-tray.php demo
+- [x] Handle tray_menu struct via FFI::new() + callback trampoline retention
+- **Status:** complete
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |-------|---------|------------|

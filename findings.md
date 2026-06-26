@@ -163,3 +163,15 @@ Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` 
 - **Pool/pipe support:** `pool()` for concurrent processes, `pipe()` for chained commands
 - **ProcessUtil wrapper design:** Static methods for one-offs (`run()`, `capture()`, `success()`, `which()`), fluent for config (`new()->path()->timeout()->execute()`)
 - **PHP limitation:** Cannot have static and instance methods with the same name — renamed instance `run()` → `execute()`
+
+## PebView Tray API (2026-06-27)
+- **C API (PebView.h):** `window_tray(ptr, icon)`, `window_tray_add_menu(tray, menu)`, `window_tray_remove(tray)`
+- **struct tray_menu:** `{ int id; char *text; int disabled; int checked; void (*callback)(const void *ptr); }`
+- **macOS implementation:** Uses `NSStatusItem` + `NSMenu` for system menu bar tray icon
+- **macOS `window_tray`:** Takes `NSWindow *` as first arg, creates `NSStatusItem`, returns `TrayData *`
+- **macOS `window_tray_add_menu`:** Creates `NSMenuItem` with `TrayMenuTarget` for callback bridge
+- **FFI challenges:**
+  - `tray_menu` struct creation via `FFI::new()` — must retain the CData to prevent GC
+  - Callback function pointer `void (*)(const void *)` — PHP FFI wraps closures into C trampolines, must retain via class array
+  - C string (`char *text`) — must allocate `FFI::new('char[N]')` and memcpy, retain to prevent free
+- **Window handle:** `$window->handle()` returns `uintptr_t` (NSWindow pointer as integer). Pass as `void*` to `window_tray`.

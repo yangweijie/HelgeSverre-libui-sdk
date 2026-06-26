@@ -199,6 +199,14 @@
 - **Created:** `src/System/ProcessUtil.php` — wraps illuminate/process with convenient static + fluent API
 - **Created:** `examples/test-process-util.php` — 8-tests demo covering run/capture/success/which/fluent/error/throw
 - **Fixed:** Duplicate `run()` method (static + instance) → renamed instance method to `execute()`
+
+### Phase 29: Tray Icon Component ✅
+- **Status:** complete
+- **Created:** `src/System/Tray.php` — wraps PebView's `window_tray` / `window_tray_add_menu` / `window_tray_remove` via FFI
+- **Created:** `examples/test-tray.php` — demo creating tray icon with context menu
+- **macOS implementation:** Uses `NSStatusItem` (system menu bar icon) with `NSMenu` for context menu
+- **FFI challenges:** Struct `tray_menu` created via `FFI::new()`, callbacks via FFI trampolines retained in class arrays
+- **Note:** macOS may not reliably show tray icons for CLI-launched apps — production use should wrap in `.app` bundle
 1. Group::titled() requires 2 args — fixed 5 call sites
 2. App::run() returns void — restructured with $mainWindow ref
 3. Build::hbox() rejects Composite — added ->root()
