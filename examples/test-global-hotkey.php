@@ -36,7 +36,6 @@ $window->setChild($label);
 // Create and register hotkeys
 $hotkey = new GlobalHotkey();
 $hotkeyRegisterCount = 0;
-$toggleVisible = true; // Track visibility state
 
 try {
     $hotkey->register('Cmd+Shift+H', function () use ($window): void {
