@@ -17,6 +17,7 @@ use RuntimeException;
 class Toast
 {
     private static ?\FFI $ffi = null;
+    private static ?string $lastError = null;
 
     /**
      * Show a native desktop toast notification.
@@ -33,11 +34,21 @@ class Toast
         try {
             $ffi = self::ffi();
             $result = $ffi->toastShow('ui2', $title, $message, $icon ?? '');
-            return (bool) $result;
+            if (!$result) {
+                self::$lastError = 'toastShow returned false';
+                return false;
+            }
+            self::$lastError = null;
+            return true;
         } catch (\Throwable $e) {
-            fwrite(STDERR, "Toast error: {$e->getMessage()}\n");
+            self::$lastError = $e->getMessage();
             return false;
         }
+    }
+
+    public static function lastError(): ?string
+    {
+        return self::$lastError;
     }
 
     /**
