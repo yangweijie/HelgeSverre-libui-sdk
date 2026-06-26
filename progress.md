@@ -129,6 +129,18 @@
   - Bridge: ARC cleanup (removed `[obj release]`), mouse/keyboard (`acceptMouseMovedEvents`, `makeKeyAndOrderFront`)
   - `bridge/README.md`: added `-rpath` flag documentation
 
+## Session: 2026-06-26
+
+### Phase 22: CodeEditor Keyboard Focus Fix ✅
+- **Status:** complete
+- **Root cause:** `NSWindow` with `NSWindowStyleMaskBorderless` returns `NO` for `canBecomeKeyWindow` by default in Cocoa. Bridge's `makeKeyAndOrderFront:nil` silently fails — keyboard events never reach WKWebView's `<textarea>`.
+- **Fix — new `KeyableWindow` subclass:** Added `KeyableWindow` NSWindow subclass in `bridge/webview_bridge.m` overriding `canBecomeKeyWindow` and `canBecomeMainWindow` to return `YES`. Used instead of plain `NSWindow` in `wvb_create()`.
+- **Supplementary fixes:**
+  - `assets/code-editor.html`: Added `autofocus` attribute + `editor.focus()` JS call after init
+  - `src/Widgets/CodeEditor.php`: Added public `focus()` method, called from constructor
+- **Bridge rebuilt:** `clang -shared -fobjc-arc` — 0 errors
+- **Verification:** PHP syntax check on all changed files passed; ObjC `-fsyntax-only` passed
+
 ## Runtime Fixes (Cumulative)
 1. Group::titled() requires 2 args — fixed 5 call sites
 2. App::run() returns void — restructured with $mainWindow ref
@@ -144,3 +156,4 @@
 12. Bridge ARC: removed manual `[obj release]` calls
 13. Bridge mouse/keyboard: NSWindow acceptMouseMovedEvents + makeKeyAndOrderFront
 14. WebView eval queue: 300ms deferred flush via Ffi::timer()
+15. CodeEditor focus: KeyableWindow subclass overrides canBecomeKeyWindow for borderless NSWindow

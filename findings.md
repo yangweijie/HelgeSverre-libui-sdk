@@ -114,3 +114,11 @@ Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` 
 ## PHP 8.5 Limitations
 - Cannot use `?callable` as property type — use `mixed` instead
 - `fn () => echo …` is a syntax error — use `print` or `function () {}` body
+
+## CodeEditor Focus Issue (2026-06-26)
+- **Root cause:** `NSWindow` with `NSWindowStyleMaskBorderless` returns `NO` for `canBecomeKeyWindow` by default in Cocoa. The bridge's `makeKeyAndOrderFront:nil` call silently fails — keyboard events never reach the WKWebView's `<textarea>`.
+- **Fix:** Added `KeyableWindow` NSWindow subclass overriding `canBecomeKeyWindow` and `canBecomeMainWindow` to return `YES`. Used in `wvb_create()` instead of plain `NSWindow`.
+- **Supplementary fixes:**
+  - `assets/code-editor.html`: Added `autofocus` attribute + `editor.focus()` JS call
+  - `src/Widgets/CodeEditor.php`: Added `focus()` public method, called from constructor
+- **Bridge rebuilt:** `clang -shared -fobjc-arc` - no errors

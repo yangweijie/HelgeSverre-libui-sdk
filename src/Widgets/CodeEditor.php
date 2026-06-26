@@ -66,6 +66,23 @@ class CodeEditor extends WebView
         }
 
         $this->setLanguage($this->language);
+
+        // Focus the editor once the page has loaded (after pending eval flush).
+        $this->focus();
+    }
+
+    /**
+     * Programmatically focus the editor textarea.
+     *
+     * Call this after the parent window is shown if auto-focus didn't work,
+     * or to restore focus after another widget was interacted with.
+     *
+     * @return $this
+     */
+    public function focus(): static
+    {
+        $this->eval('document.getElementById("codeEditor").focus();');
+        return $this;
     }
 
     /**

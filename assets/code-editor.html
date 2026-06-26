@@ -10,6 +10,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #1e1e1e;
   color: #d4d4d4;
 }
@@ -19,6 +20,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .toolbar {
   display: flex;
@@ -46,6 +48,7 @@ body {
   flex: 1;
   display: flex;
   overflow: hidden;
+  background: #1e1e1e;
 }
 .line-numbers {
   padding: 8px 0;
@@ -74,7 +77,7 @@ pre {
 .editor-textarea {
   flex: 1;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
 }
 #codeEditor {
   position: absolute;
@@ -160,7 +163,7 @@ pre {
     <div class="line-numbers" id="lineNumbers"></div>
     <div class="editor-textarea">
       <div id="codeHighlight" class="highlight"></div>
-      <textarea id="codeEditor" spellcheck="false" autocomplete="off"></textarea>
+      <textarea id="codeEditor" spellcheck="false" autocomplete="off" autofocus></textarea>
     </div>
   </div>
   <div class="statusbar">
@@ -299,6 +302,11 @@ pre {
 
   // Initial render
   updateHighlight();
+
+  // Focus the editor textarea so it immediately receives keyboard input.
+  // autofocus alone may not work reliably inside a borderless child NSWindow
+  // (the WKWebView needs an explicit programmatic focus).
+  editor.focus();
 })();
 </script>
 </body>

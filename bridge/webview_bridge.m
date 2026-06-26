@@ -38,6 +38,21 @@
 #import <Cocoa/Cocoa.h>
 
 // ---------------------------------------------------------------------------
+// Borderless NSWindow subclass that can become key/main window.
+//
+// NSWindow with NSWindowStyleMaskBorderless returns NO for
+// canBecomeKeyWindow by default, which means makeKeyAndOrderFront:
+// silently fails — the WKWebView inside the child window never
+// receives keyboard events. This subclass overrides both to return YES.
+// ---------------------------------------------------------------------------
+@interface KeyableWindow : NSWindow
+@end
+@implementation KeyableWindow
+- (BOOL)canBecomeKeyWindow { return YES; }
+- (BOOL)canBecomeMainWindow { return YES; }
+@end
+
+// ---------------------------------------------------------------------------
 // PebView/webview C API — symbols resolved by linking against PebView.dylib
 // ---------------------------------------------------------------------------
 extern void *webview_create(int debug, void *window);
@@ -98,8 +113,8 @@ void *wvb_create(int debug, uintptr_t parent_handle,
         NSRect windowed = [parentView convertRect:viewRect toView:nil];
         windowed.origin = [parentWindow convertRectToScreen:windowed].origin;
 
-        // Create a borderless child NSWindow
-        NSWindow *childWin = [[NSWindow alloc]
+        // Create a borderless child KeyableWindow
+        NSWindow *childWin = [[KeyableWindow alloc]
             initWithContentRect:windowed
                      styleMask:NSWindowStyleMaskBorderless
                        backing:NSBackingStoreBuffered

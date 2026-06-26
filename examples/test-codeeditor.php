@@ -25,6 +25,9 @@ $editor = new CodeEditor(
     "<?php\n\necho 'Hello, World!';\n\n\$data = ['foo' => 'bar'];\nforeach (\$data as \$k => \$v) {\n    print \"\$k: \$v\\n\";\n}\n",
 );
 
+// Keep the editor filling the window content area on resize (20px right/bottom margin)
+$editor->autoResize($window, 0, 0, 20, 40);
+
 $editor->onChange(function (string $code) use ($label): void {
     $label->setText('Changed: ' . mb_substr($code, 0, 60) . '...');
 });
