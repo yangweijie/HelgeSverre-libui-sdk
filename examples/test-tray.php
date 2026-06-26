@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use Libui\App;
+use Libui\Ffi;
 use Libui\Label;
 use Libui\Window;
 use Yangweijie\Ui2\System\Tray;
@@ -25,6 +26,9 @@ $label = new Label('Check the system tray (menu bar) for the tray icon.' . PHP_E
 
 $window->setChild($label);
 
+// Create the App instance early so tray callbacks can reference it
+$app = App::new();
+
 // Create tray icon — must be done before App starts the event loop
 $tray = new Tray($window, __DIR__ . '/../assets/icon.png');
 
@@ -41,9 +45,9 @@ $tray
         $label->setText('Check the system tray (menu bar) for the tray icon.');
     })
     ->addSeparator()
-    ->addItem('Quit', function () use ($app, $window, $tray): void {
+    ->addItem('Quit', function () use ($window, $tray): void {
         $tray->remove();
-        $app->quit();
+        Ffi::quit();
     })
     ->attach();
 

@@ -4,7 +4,7 @@
 修复 macOS 右键上下文菜单弹出时背景显示为黑色的问题，使其使用系统原生样式正常渲染。
 
 ## Current Phase
-Phase 5 — Delivery
+全部完成
 
 ## Phases
 
@@ -32,10 +32,10 @@ Phase 5 — Delivery
 - [x] 修复：右键仅响应蓝色矩形区域内（添加坐标范围判断 x:20~220, y:20~170）
 - **Status:** complete
 
-### Phase 5: Delivery
-- [ ] 更新进度文件
-- [ ] 总结修复内容
-- **Status:** in_progress
+### Phase 5: ✅ Delivery
+- [x] 更新进度文件
+- [x] 总结修复内容
+- **Status:** complete
 
 ## Decisions Made
 | Decision | Rationale |
@@ -56,3 +56,4 @@ Phase 5 — Delivery
 ## Notes
 - 编译命令：`cd bridge && clang -shared -fobjc-arc context_menu.m -framework Foundation -framework AppKit -o context_menu.dylib`
 - 测试命令：`rm -f ~/.tmp/ctxmenu.log && php85 examples/test-context-menu-area.php`
+- 日志用法：`php85 -r 'require "vendor/autoload.php"; \Yangweijie\Ui2\Logging\Log::info("hello"); Log::flush();'`

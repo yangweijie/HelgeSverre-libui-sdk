@@ -42,6 +42,12 @@ class Tray
 
     private string $iconPath;
 
+    /** @var list<array{text:string, callback:?callable, disabled:bool, checked:bool}> Buffered items before attach() */
+    private array $pendingItems = [];
+
+    /** @var bool Whether attach() has been called */
+    private bool $attached = false;
+
     /**
      * @param Window $window  The libui Window to attach the tray to.
      * @param string $iconPath  Path to the tray icon file
@@ -71,33 +77,38 @@ class Tray
         $ffi = self::ffi();
 
         // Get the native NSWindow/NSView handle from the libui Window
-        // uiControlHandle(uiControl($window)) returns the NSWindow* on macOS
         $winHandle = $this->window->handle();
 
-        // Cast to void* via a CData pointer type
-        $ptrType = \FFI::type('void*');
-        $this->winPtr = \FFI::cast($ptrType, $winHandle);
+        // Cast to void* via FFI instance (avoids deprecated static calls)
+        $ptrType = $ffi->type('void*');
+        $this->winPtr = $ffi->cast($ptrType, $winHandle);
 
-        $iconCStr = \FFI::cdef('const char* ffi_strdup(const char*);');
-        $iconNative = $ffi->ffi_strdup ? \FFI::new('char[' . (\strlen($this->iconPath) + 1) . ']')
-                                       : null;
-
-        if ($iconNative === null) {
-            // Simple approach: use FFI::new for the string
-            $iconNative = \FFI::new('char[' . (\strlen($this->iconPath) + 1) . ']');
-            \FFI::memcpy($iconNative, $this->iconPath, \strlen($this->iconPath));
-        }
+        // Allocate and copy icon path as a C string
+        $iconNative = $ffi->new('char[' . (\strlen($this->iconPath) + 1) . ']');
+        \FFI::memcpy($iconNative, $this->iconPath, \strlen($this->iconPath));
 
         $this->trayHandle = $ffi->window_tray(
-            \FFI::addr($this->winPtr[0]),
+            $ffi->cast($ptrType, \FFI::addr($winHandle)),
             $iconNative,
         );
 
-        if ($this->trayHandle === null || \FFI::isNull($this->trayHandle)) {
+        if (\FFI::isNull($this->trayHandle)) {
             throw new \RuntimeException(
                 'Failed to create tray icon. Check that the icon file exists: ' . $this->iconPath,
             );
         }
+
+        // Flush any items buffered before attach()
+        foreach ($this->pendingItems as $item) {
+            $this->addItemInternal(
+                $item['text'],
+                $item['callback'],
+                $item['disabled'],
+                $item['checked'],
+            );
+        }
+        $this->pendingItems = [];
+        $this->attached = true;
 
         return $this;
     }
@@ -118,37 +129,53 @@ class Tray
         bool $disabled = false,
         bool $checked = false,
     ): static {
+        // Not yet attached — buffer the item for later submission
         if ($this->trayHandle === null) {
-            throw new \LogicException('Call attach() before adding menu items.');
+            $this->pendingItems[] = [
+                'text'     => $text,
+                'callback' => $callback,
+                'disabled' => $disabled,
+                'checked'  => $checked,
+            ];
+            return $this;
         }
+
+        return $this->addItemInternal($text, $callback, $disabled, $checked);
+    }
+
+    /**
+     * Internal: actually add an item to the native tray (requires trayHandle).
+     */
+    private function addItemInternal(
+        string $text,
+        ?callable $callback = null,
+        bool $disabled = false,
+        bool $checked = false,
+    ): static {
 
         $ffi = self::ffi();
         $id = $this->nextId++;
 
         // Create the tray_menu struct
-        $menuType = \FFI::type('struct tray_menu');
-        $menu = \FFI::new($menuType);
+        $menuType = $ffi->type('struct tray_menu');
+        $menu = $ffi->new($menuType);
         $menu->id = $id;
 
         // Text: allocate a C string
         $textLen = \strlen($text);
-        $textBuf = \FFI::new("char[{$textLen} + 1]");
+        $textBuf = $ffi->new("char[{$textLen} + 1]");
         \FFI::memcpy($textBuf, $text, $textLen);
         $textBuf[$textLen] = "\0";
-        $menu->text = \FFI::cast('char*', \FFI::addr($textBuf));
+        $menu->text = $ffi->cast('char*', \FFI::addr($textBuf));
 
         $menu->disabled = $disabled ? 1 : 0;
         $menu->checked = $checked ? 1 : 0;
 
         // Callback: wrap the PHP callable into a C function pointer.
-        // The C signature is: void (*)(const void *ptr)
         if ($callback !== null && $text !== '-') {
-            $cbType = \FFI::type('void(*)(const void*)');
-            $cbCData = \FFI::new($cbType);
+            $cbType = $ffi->type('void(*)(const void*)');
+            $cbCData = $ffi->new($cbType);
 
-            // Wrap the PHP callable – FFI will create a trampoline.
-            // The trampoline is kept alive by storing $cbCData.
-            $self = $this;
             $cbCData = function ($ptr) use ($callback): void {
                 $callback();
             };
