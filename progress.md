@@ -192,6 +192,13 @@
 - **Created:** `examples/test-system-info.php` — demo CLI script
 - **Note:** Utopia System has limited macOS support (CPU usage, memAvailable throw on Darwin). All handled with try/catch returning null.
 - **Memory unit normalization:** Utopia returns different units per OS (Darwin=MB, Linux=kB). SystemInfo normalizes to bytes.
+
+### Phase 28: ProcessUtil Utility ✅
+- **Status:** complete
+- **Installed:** `illuminate/process` v13.x-dev (17 dependencies including symfony/process)
+- **Created:** `src/System/ProcessUtil.php` — wraps illuminate/process with convenient static + fluent API
+- **Created:** `examples/test-process-util.php` — 8-tests demo covering run/capture/success/which/fluent/error/throw
+- **Fixed:** Duplicate `run()` method (static + instance) → renamed instance method to `execute()`
 1. Group::titled() requires 2 args — fixed 5 call sites
 2. App::run() returns void — restructured with $mainWindow ref
 3. Build::hbox() rejects Composite — added ->root()

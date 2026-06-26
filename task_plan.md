@@ -72,6 +72,13 @@ Phase 26: macOS Toast Notification — In Progress ⏳
 - [x] Handle memory unit normalization (Darwin=MB, Linux=kB → bytes)
 - **Status:** complete
 
+### Phase 28: ProcessUtil Utility ✅
+- [x] Install illuminate/process v13.x-dev
+- [x] Create src/System/ProcessUtil.php with static + fluent API
+- [x] Create examples/test-process-util.php (8 tests)
+- [x] Fix duplicate run() method → renamed instance method to execute()
+- **Status:** complete
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |-------|---------|------------|

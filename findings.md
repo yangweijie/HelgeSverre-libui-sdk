@@ -153,3 +153,13 @@ Widget constructors (Entry, Spinbox, Slider, etc.) internally call `Ffi::get()` 
   - Linux: `getMemoryTotal()` returns **kB** (/proc/meminfo raw value)
 - **Fix:** SystemInfo wrapper normalizes all values to bytes via `match($os)` in constructor
 - **Architecture checks** (isArm64/isX86/etc) work on all platforms, read from `php_uname('m')`
+
+## Illuminate Process Library (2026-06-27)
+- **Package:** `illuminate/process` v13.x-dev (Laravel's process abstraction over Symfony Process)
+- **Key classes:** `Factory` (entry point), `PendingProcess` (fluent builder), `ProcessResult` (output/exit code)
+- **API:** `->run()`, `->start()` (background), `->path()`, `->timeout()`, `->env()`, `->input()`, `->quietly()`, `->tty()`
+- **ProcessResult methods:** `exitCode()`, `successful()`, `failed()`, `output()`, `errorOutput()`, `seeInOutput()`, `throw()`
+- **Testing support:** Built-in `fake()` / `assertRan()` / `preventStrayProcesses()` for process mocking in tests
+- **Pool/pipe support:** `pool()` for concurrent processes, `pipe()` for chained commands
+- **ProcessUtil wrapper design:** Static methods for one-offs (`run()`, `capture()`, `success()`, `which()`), fluent for config (`new()->path()->timeout()->execute()`)
+- **PHP limitation:** Cannot have static and instance methods with the same name — renamed instance `run()` → `execute()`
