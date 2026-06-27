@@ -25,7 +25,6 @@ use Yangweijie\Ui2\Composite;
  */
 class StatusIndicator extends Composite
 {
-    public const SIZE = 14;
     public const RADIUS = 7;
 
     private readonly Area $area;
@@ -34,7 +33,9 @@ class StatusIndicator extends Composite
     public function __construct(Color $color)
     {
         $this->delegate = new StatusDelegate($color);
-        $this->area = new Area($this->delegate, (int) self::SIZE, (int) self::SIZE);
+        $this->area = new Area($this->delegate);
+        // No timer/setSize needed — Area constructor already handles initial
+        // redraw on Windows, and stretchy containers handle sizing.
     }
 
     public function root(): Control
@@ -79,8 +80,8 @@ final class StatusDelegate extends AreaDelegate
 
     public function draw(DrawContext $ctx, AreaDrawParams $params): void
     {
-        $cx = StatusIndicator::SIZE / 2;
-        $cy = StatusIndicator::SIZE / 2;
+        $cx = $params->areaWidth / 2;
+        $cy = $params->areaHeight / 2;
         $r = StatusIndicator::RADIUS;
 
         // Outer glow

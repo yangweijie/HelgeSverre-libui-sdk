@@ -89,22 +89,20 @@ final class ToggleDelegate extends AreaDelegate
         $h = ToggleSwitch::HEIGHT;
         $r = $h / 2;
         $knobR = ToggleSwitch::KNOB_RADIUS;
+        $ox = ($params->areaWidth - $w) / 2;
+        $oy = ($params->areaHeight - $h) / 2;
 
-        // Track background
         $bgColor = $this->on ? Color::rgba(0.2, 0.6, 1.0, 1.0) : Color::rgba(0.5, 0.5, 0.5, 0.4);
-        $ctx->fillRoundedRect(0, 0, $w, $h, $r, $bgColor);
+        $ctx->fillRoundedRect($ox, $oy, $w, $h, $r, $bgColor);
 
-        // Track border
         $borderColor = Color::rgba(0.3, 0.3, 0.3, 0.6);
-        $ctx->strokeRoundedRect(0, 0, $w, $h, $r, $borderColor, StrokeParams::solid(1.0));
+        $ctx->strokeRoundedRect($ox, $oy, $w, $h, $r, $borderColor, StrokeParams::solid(1.0));
 
-        // Knob
-        $knobX = $this->on ? $w - $knobR - 3 : $knobR + 3;
-        $knobY = $h / 2;
+        $knobX = $ox + ($this->on ? $w - $knobR - 3 : $knobR + 3);
+        $knobY = $oy + $h / 2;
         $knobColor = Color::rgba(1.0, 1.0, 1.0, 1.0);
         $ctx->fillCircle($knobX, $knobY, $knobR, $knobColor);
 
-        // Knob shadow/border
         $ctx->strokeCircle($knobX, $knobY, $knobR, Color::rgba(0.2, 0.2, 0.2, 0.3), StrokeParams::solid(0.5));
     }
 

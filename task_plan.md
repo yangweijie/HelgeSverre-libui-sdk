@@ -1,55 +1,74 @@
-# Task Plan: Windows WebView2 / TreeView 修复
+# Task Plan: Windows 兼容性修复
 
 ## Goal
-修复 `test-treeview.php` 在 Windows 上无法运行的问题：WebView2 不渲染、JS↔PHP 桥接断裂。
+修复 HelgeSverre-libui-sdk 在 Windows 上的所有兼容性问题：WebView2 不渲染、JS↔PHP 桥接断裂、自绘控件不显示、TableModel 报错。
 
 ## Current Phase
-全部完成
+全部完成 ✅
 
 ## Phases
 
-### Phase 1: Ffi::init() 缺失
-- [x] `test-treeview.php` 在创建任何控件前未调用 `Ffi::init()`，导致 libui 未初始化
-- **Status:** complete
+### Phase 1: Ffi::init() 缺失 ✅
+- `test-treeview.php` 在创建任何控件前未调用 `Ffi::init()`
 
-### Phase 2: Bridge DLL 加载失败
-- [x] `webview_bridge.dll` 编译时未链接 PebView.dll，导致 `webview_create` 等符号无法解析
-- [x] 用 MinGW 重新编译：`gcc -shared webview_bridge_win.c PebView.dll -o webview_bridge.dll -luser32`
-- [x] PebView.dll 路径错误：代码引用 `x64/PebView.dll`，实际在 `lib/windows/PebView.dll`
-- [x] 加载顺序：PebView 必须先于 bridge 加载（bridge 依赖 PebView 符号）
-- **Status:** complete
+### Phase 2: Bridge DLL 加载失败 ✅
+- MinGW 重编译链接 PebView.dll
+- 修正 PebView 路径、调整加载顺序
 
-### Phase 3: WebView2 widget 0×0 尺寸
-- [x] PebView 创建 `webview_widget` 子窗口初始尺寸为 0×0，依赖 `WM_SIZE` 触发 resize
-- [x] bridge 中 STATIC 窗口的默认 WndProc 不转发 `WM_SIZE` 到 PebView
-- [x] 修复：`webview_create` 后用 `FindWindowExW` 找到 widget，手动 `MoveWindow` + `SendMessage(WM_SIZE)`
-- [x] `wvb_move` 同理添加 widget resize
-- **Status:** complete
+### Phase 3: WebView2 widget 0×0 尺寸 ✅
+- `FindWindowExW` 找 widget + `MoveWindow` + `SendMessage(WM_SIZE)`
 
-### Phase 4: TreeView JS→PHP 桥接断裂
-- [x] `INIT_SCRIPT_POST` 硬编码 `window.webkit.messageHandlers`（macOS 专用）
-- [x] Windows/WebView2 使用 `window.chrome.webview.postMessage`
-- [x] 改为平台自适应检测
-- **Status:** complete
+### Phase 4: TreeView JS→PHP 桥接断裂 ✅
+- `INIT_SCRIPT_POST` 平台自适应：webkit.messageHandlers / chrome.webview
 
-### Phase 5: 示例重写
-- [x] `test-treeview.php` 改为先 show 再创建 TreeView（与 `webview.php` 同模式）
-- [x] 使用 `Loop::run()` 替代 `App::run()`
-- **Status:** complete
+### Phase 5: 示例重写 ✅
+- `test-treeview.php` 改为先 show 再创建 TreeView
+
+### Phase 6: TableModel 报错 ✅
+- `uiTableValueString()` 返回 const char* 被 FFI 自动转为 PHP string，移除 `borrowedString()` 包装
+- 添加 patch: `patches/helgesverre/libui/src/TableModel.php`
+
+### Phase 7: 自绘控件不显示 ✅
+- **根因**：Windows 上 libui Area 在 padded Box 中 draw 回调不触发
+- **发现**：`Build::stretchy($area)` 能让 draw 回调触发
+- ToggleSwitch ✅ — 改用 `Build::stretchy()` + draw 用实际面积尺寸居中
+- StatusIndicator ✅ — 同上
+- CircleProgressBar ✅ — `Build::stretchy()` + timer(0) setSize + queueRedrawAll
+
+### Phase 7b: CircleProgressBar 卡死修复 ✅
+- **根因**：在 stretchy Area 上调用 `setSize()` 与 stretchy 容器冲突，导致卡死
+- **发现**：Area 构造函数已有内置 timer(0) 处理初始绘制，无需额外 timer
+- **修复**：移除 CircleProgressBar 和 StatusIndicator 中的冗余 timer 和 setSize()
+- Files: `src/Widgets/CircleProgressBar.php`, `src/Widgets/StatusIndicator.php`
+
+### Phase 7d: CircleProgressBar 中心文字 + 颜色自定义 ✅
+- 进度百分比显示在圆环中心，字体自动缩放
+- 支持 `setColor()` 自定义颜色
+- 参考 monitor.php `label()` 模式绘制文字
+- Files: `src/Widgets/CircleProgressBar.php`
+
+### Phase 8: 示例 Tab 顺序恢复 ✅
+- Custom 标签页临时放第一个方便调试，调试完后恢复原始顺序
+- 恢复为：Fields → Custom → Dialogs → Pickers → Table → WebView
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| PebView 先于 bridge 加载 | bridge DLL 依赖 PebView 的 `webview_create` 等符号 |
-| Widget 手动 resize | PebView 的 `webview_widget` 初始 0×0，STATIC WndProc 不转发 WM_SIZE |
-| `INIT_SCRIPT_POST` 平台自适应 | macOS 用 webkit.messageHandlers，Windows 用 chrome.webview |
-| 先 show 后创建 WebView | 确保 WebView 子窗口 z-order 正确 |
+| PebView 先于 bridge 加载 | bridge DLL 依赖 PebView 符号 |
+| Widget 手动 resize | PebView widget 初始 0×0 |
+| INIT_SCRIPT_POST 平台自适应 | macOS/Windows 不同桥接 |
+| Area 必须 stretchy 才能 draw | libui Windows 后端限制 |
+| 自绘 draw 用 `$params->areaWidth/Height` | stretchy 后 Area 尺寸变化，不能硬编码 |
 
 ## Errors Encountered
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| `Failed loading webview_bridge.dll (找不到指定的模块)` | 1 | MinGW 重编译链接 PebView.dll |
-| `Failed loading webview_bridge.dll (找不到指定的模块)` | 2 | loadPebView 先于 loadBridge + 修正路径 |
-| 树视图不显示 | 1 | 修复 widget 0×0 尺寸问题 |
-| JS→PHP 通信断裂 | 1 | INIT_SCRIPT_POST 平台自适应 |
-| 示例无响应 | 1 | 添加 Ffi::init() + 调整创建顺序 |
+| Error | Resolution |
+|-------|------------|
+| Bridge DLL 加载失败 | MinGW 重编译 + 加载顺序修正 |
+| WebView2 不渲染 | widget 手动 resize |
+| TreeView 通信断裂 | INIT_SCRIPT_POST 平台自适应 |
+| TableModel borrowedString 报错 | 移除 borrowedString 包装 |
+| Area draw 回调不触发 | 改用 Build::stretchy |
+| CircleProgressBar 拉伸变形 | draw 用实际面积尺寸居中 |
+| CircleProgressBar 卡死 | 移除冗余 timer(0) + setSize() |
+| CircleProgressBar 不可见 | minimum ring envelope + stretchy 布局 |
+| CircleProgressBar 文字偏移 | monitor.php drawString 模式 |

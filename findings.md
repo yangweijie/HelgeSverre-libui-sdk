@@ -1,42 +1,149 @@
-# Findings: Windows WebView2 嵌入机制
+# Findings: Windows 兼容性
 
-## PebView 的 Windows WebView2 架构
+## Area 控件在 Windows 上的限制
+
+### 核心发现：padded Box 阻断 Area draw 回调
+- 非 stretchy Area 在 padded Box 中 draw 回调**永远不触发**
+- `Build::stretchy($area)` 能让 draw 回调正常触发
+- 非滚动 Area + `setSize()` + `queueRedrawAll()` 从 timer 调用也不行
+- 只有 stretchy 模式才能让 libui Windows 后端发起 paint
+
+### ⚠️ 关键发现：不要在 stretchy Area 上调用 setSize()
+- `Area` 构造函数已有内置 timer(0) 处理初始绘制
+- 在 stretchy Area 上调用 `setSize()` 会**与 stretchy 容器冲突**，导致卡死
+- 正确做法：依赖 stretchy 容器自动管理尺寸，draw 中用 `$params->areaWidth/Height`
+
+### 正确用法
+```php
+// ✅ 正确 — stretchy Area 在 Box 中能绘制，无 setSize()
+$box->appendStretchy($area);
+
+// ✅ 正确 — Build::stretchy 包装
+Build::hbox(Build::stretchy($area), ...);
+
+// ❌ 错误 — 非 stretchy Area 在 padded Box 中不绘制
+$box->append($area, false);
+
+// ❌ 错误 — 在 stretchy Area 上调用 setSize() 导致卡死
+$area->setSize(120, 120);
+```
+
+### 自绘控件必须用实际面积尺寸
+- stretchy 后 Area 尺寸不再固定，draw 中不能硬编码
+- 用 `$params->areaWidth` / `$params->areaHeight` 居中绘制
+
+## PebView WebView2 架构
 
 ### 窗口层级
 ```
 libui Window (parent_hwnd)
-  └─ Bridge STATIC child (child_hwnd) — bridge 创建，定位在 (x,y,w,h)
-       └─ PebView webview_widget — PebView 内部创建，初始尺寸 0×0
-            └─ WebView2 controller — 浏览器引擎
+  └─ Bridge STATIC child (child_hwnd)
+       └─ PebView webview_widget — 初始 0×0
+            └─ WebView2 controller
 ```
 
-### 关键发现：webview_widget 初始 0×0
-- `win32_edge_engine` 构造函数在 `m_window`（即 bridge 的 STATIC 窗口）内创建 `webview_widget`
-- `CreateWindowExW(WS_CHILD, "webview_widget", 0,0,0,0, m_window, ...)` — 初始尺寸为零
-- `resize_widget()` 通过 `WM_SIZE` 在 m_window 上触发，读取父窗口 client rect 后 resize widget
-- 但 bridge 的 STATIC 窗口使用默认 WndProc，不转发 `WM_SIZE` → PebView 永远看不到 resize
+### webview_widget 0×0 问题
+- `win32_edge_engine` 在 `m_window` 内创建 `webview_widget` 初始 0×0
+- 需要 `WM_SIZE` 触发 `resize_widget()`，但 STATIC 默认 WndProc 不转发
+- 修复：bridge 中 `webview_create` 后用 `FindWindowExW` + `MoveWindow` + `SendMessage(WM_SIZE)`
 
-### WebView2 的 postMessage 桥接
-- macOS (WKWebView): `window.webkit.messageHandlers.__webview__.postMessage(msg)`
-- Windows (WebView2): `window.chrome.webview.postMessage(msg)`
-- PebView 在 `embed()` 成功后自动注入 init script 设置 `window.chrome.webview`
-- TreeView 的 `INIT_SCRIPT_POST` 之前只支持 macOS 路径
+### JS↔PHP 桥接
+- macOS: `window.webkit.messageHandlers.__webview__.postMessage(msg)`
+- Windows: `window.chrome.webview.postMessage(msg)`
+- TreeView 的 `INIT_SCRIPT_POST` 需要平台自适应检测
 
-### WebView2 Runtime
-- 已安装 v148.0.3967.54
-- 路径: `C:\Program Files (x86)\Microsoft\EdgeWebView\Application\148.0.3967.54`
-- PebView 内嵌 WebView2 loader（`mswebview2::loader`），不需要额外 `WebView2Loader.dll`
+## TableModel 问题
+- `uiTableValueString()` 返回 `const char*`，PHP FFI 自动转为 PHP string
+- `borrowedString()` 需要 `FFI\CData` 参数，类型不匹配
+- 修复：直接用 `uiTableValueString()` 返回值，无需 `borrowedString()` 包装
 
-### bridge 编译要求 (Windows)
+## bridge 编译要求 (Windows)
 ```
 gcc -shared webview_bridge_win.c PebView.dll -o webview_bridge.dll -luser32
 ```
-- 必须链接 PebView.dll（bridge 调用 `webview_create`/`webview_get_window`/`webview_destroy`）
-- 原 README 中的编译命令缺少 PebView 链接
+- 必须链接 PebView.dll
+- PebView.dll 位置：`vendor/kingbes/pebview/lib/windows/PebView.dll`
 
-### PebView.dll 导出符号
+## Area timer 机制
+- `Ffi::timer(0, fn)` 返回 `false` 可停止（一次性）
+- `Ffi::timer(0, fn)` 返回 `true` 或无返回值则重复
+- timer 在事件循环第一个 tick 触发，但 draw 回调需 Area 已在 widget tree 中且 stretchy
+
+## CircleProgressBar 卡死根因
+- **不要在 stretchy Area 上调用 `setSize()`** — 会与 stretchy 容器冲突导致卡死
+- Area 构造函数已有内置 timer(0) 处理初始绘制，无需额外 timer
+- 正确做法：依赖 stretchy 容器自动管理尺寸，draw 中用 `$params->areaWidth/Height`
+
+## CircleProgressBar 可见性根因（非滚动 Area 无 preferred size）
+
+### 问题
+- 非滚动 `Area` 在 libui 布局系统中 **preferred size = 0**
+- `uiAreaSetSize()` 对非滚动 Area 是 **no-op**
+- 在 hbox 中：Area 高度 = max(area preferred=0, label preferred=17px) = 17px
+- CircleProgressBar 在 17px 高度下 radius = min(w, 8.5) - 6 - 4 = -1.5 → 画不出
+
+### 解决方案：minimum ring envelope + 布局拉伸
+1. **draw() 中用 minimum ring envelope**：`$minDiameter = $this->thickness * 2 + 8; $diameter = max($minDiameter, min($w, $h) - 8);` — 任何尺寸都能画出可见的环
+2. **外层 vbox 中 Group 设为 stretchy**：`Build::stretchy($groupCircle)` 让 Group 占满剩余垂直空间
+3. **Group 内部用 vbox 而非 hbox**：`Build::vbox(Build::stretchy($area), $label)` 让 Area 获得 stretchy 垂直空间
+
+### 正确布局模式
+```php
+// ✅ 外层：Group stretchy 在 vbox 中获取高度
+$toggleControls = Build::vbox(
+    ...,
+    Build::stretchy($groupCircle),
+    ...,
+);
+
+// ✅ 内层：Area stretchy 在 vbox 中获取高度
+$groupCircle = Group::titled("Title:",
+    Build::vbox(Build::stretchy($circleBar->root()), $label),
+);
+
+// ❌ 错误：hbox 中 Area 高度受 Label 限制（只有 17px）
+Build::hbox(Build::stretchy($area), $label)
 ```
-webview_bind, webview_create, webview_destroy, webview_eval,
-webview_get_window, webview_init, webview_navigate,
-webview_return, webview_set_html
+
+## CircleProgressBar 文字绘制（monitor.php 模式）
+
+### drawString() API
+```php
+$ctx->drawString(
+    $text,
+    $font,                          // FontDescriptor
+    Color::rgba($r, $g, $b, $a),    // 颜色
+    $x,                             // layout box LEFT edge
+    $y,                             // layout box TOP
+    $width,                         // layout box width（用于 center 对齐）
+    DrawTextAlign::Center,
+);
 ```
+
+### 正确的文字居中模式（参考 monitor.php label()）
+```php
+$fontSize = max(14.0, $innerDiameter * 0.10);
+$font = new FontDescriptor('Arial', $fontSize);
+$str = new AttributedString();
+$str->append($text, Attribute::fromColor(Color::rgba(...$color)), Attribute::size($fontSize));
+$layout = new TextLayout($str, $font, $innerDiameter, DrawTextAlign::Center);
+$ctx->text($layout, $cx - $innerDiameter / 2, $cy - $fontSize / 2);
+$layout->free();
+```
+
+### 关键发现
+- `uiDrawText(ctx, layout, x, y)` 的 (x,y) 是 layout box 的**左上角**
+- `DrawTextAlign::Center` 在 layout box 宽度内居中文本，box 本身需手动居中
+- `TextLayout::extents()` 在极大宽度（1e6）下返回值不准确，不可靠
+- `AttributedString` 需要同时指定 `Attribute::size()` 和 `FontDescriptor`（冗余但必要）
+- 字体缩放公式 `max(14.0, $innerDiameter * 0.10)`：300px→30pt，1000px→100pt，140px→14pt(min)
+
+### 失败方案记录
+| 方案 | 问题 |
+|------|------|
+| `innerDiameter * 0.45` | 144pt 字体填满 300px 环 |
+| `min(D*0.48, D*0.85/(textLen*0.6))` | 仍然太大 |
+| `extents()` + 1e6 宽度居中 | 返回值不准确 |
+| 垂直偏移 `$cy - $fontSize * 0.50` | 文字偏下 |
+| `$cy - $fontSize * 0.45` | 仍然偏下 |
+| `DrawTextAlign::Center` 无 box 居中 | 文字偏右 |

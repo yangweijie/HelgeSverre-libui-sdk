@@ -197,7 +197,7 @@ $groupToggleSwitch = Group::titled(
     "Toggle Switch",
     Build::hbox(
         new Label("Enable feature:"),
-        $toggle->root(),
+        Build::stretchy($toggle->root()),
         Build::stretchy(new Label("")),
     ),
 );
@@ -206,13 +206,13 @@ $groupStatus = Group::titled(
     "Status Indicators",
     Build::hbox(
         new Label("Online:"),
-        $statusGreen->root(),
+        Build::stretchy($statusGreen->root()),
         new Label("   "),
         new Label("Offline:"),
-        $statusRed->root(),
+        Build::stretchy($statusRed->root()),
         new Label("   "),
         new Label("Warning:"),
-        $statusYellow->root(),
+        Build::stretchy($statusYellow->root()),
         Build::stretchy(new Label("")),
     ),
 );
@@ -240,9 +240,6 @@ $separator4 = new SeparatorLine();
 
 $circleBar = new CircleProgressBar(35);
 
-$customLabel1 = new Label("CircleProgressBar — custom-drawn ring progress:");
-$circleProgressLabel = new Label("   ");
-
 $circleBtnMinus = new Button("-10")->onClicked(function () use (
     $circleBar,
     $outputLabel,
@@ -265,11 +262,6 @@ $circleBtnReset = new Button("Reset")->onClicked(function () use (
     $outputLabel->setText("Progress: 0%");
 });
 
-$circleHbox = Build::vbox(
-    Build::hbox($circleBar->root(), $circleProgressLabel, Build::stretchy(new Label(''))),
-    Build::hbox($circleBtnMinus, $circleBtnPlus, $circleBtnReset, Build::stretchy(new Label(''))),
-);
-
 $customToastLabel = new Label("Toast — native OS desktop notification:");
 $toastBtn = new Button("Send Toast")->onClicked(function () use (
     $outputLabel,
@@ -283,17 +275,20 @@ $toastBtn = new Button("Send Toast")->onClicked(function () use (
     }
 });
 
+$groupCircle = Group::titled(
+    "CircleProgressBar — custom-drawn ring progress:",
+    Build::vbox(Build::stretchy($circleBar->root())),
+);
+
 $toggleControls = Build::vbox(
     $groupToggleSwitch,
     $groupStatus,
     $toggleStatusBtn,
     $separator3->root(),
-    $customLabel1,
-    $circleHbox,
+    Build::stretchy($groupCircle),
     $separator4->root(),
     $customToastLabel,
     Build::hbox($toastBtn, Build::stretchy(new Label(""))),
-    Build::stretchy(new Label("")),
 );
 
 // ═════════════════════════════════════════════════════════════════════════════

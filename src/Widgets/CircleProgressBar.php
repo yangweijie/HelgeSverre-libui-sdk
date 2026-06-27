@@ -11,29 +11,35 @@ use Libui\Control;
 use Libui\Draw\Brush;
 use Libui\Draw\DrawContext;
 use Libui\Draw\Params\AreaDrawParams;
+use Libui\Generated\Enum\DrawTextAlign;
 use Libui\Draw\StrokeParams;
+use Libui\Text\AttributedString;
+use Libui\Text\Attribute;
+use Libui\Text\FontDescriptor;
+use Libui\Text\TextLayout;
 use Yangweijie\Ui2\Composite;
 
 /**
  * A custom-drawn circular/ring progress bar, rendered via an Area.
  *
+ * Displays a ring with the progress arc and the percentage text centered
+ * inside the ring.
+ *
  * ```php
- * $progress = new CircleProgressBar();
- * $progress->setProgress(65);
+ * $progress = new CircleProgressBar(65);
+ * $progress->setColor(Color::rgba(0.0, 0.8, 0.0, 1.0)); // green
  * echo $progress->getProgress(); // 65
  * ```
  */
 class CircleProgressBar extends Composite
 {
-    public const SIZE = 120;
-
     private readonly Area $area;
     private readonly CircleProgressDelegate $delegate;
 
     public function __construct(int $initialProgress = 0)
     {
         $this->delegate = new CircleProgressDelegate($initialProgress);
-        $this->area = new Area($this->delegate, self::SIZE, self::SIZE);
+        $this->area = new Area($this->delegate);
     }
 
     public function root(): Control
@@ -64,6 +70,14 @@ class CircleProgressBar extends Composite
     }
 
     /**
+     * Get the current progress arc color.
+     */
+    public function getColor(): Color
+    {
+        return $this->delegate->color;
+    }
+
+    /**
      * Set the progress arc color.
      *
      * @return $this
@@ -73,6 +87,14 @@ class CircleProgressBar extends Composite
         $this->delegate->color = $color;
         $this->delegate->redraw();
         return $this;
+    }
+
+    /**
+     * Get the ring thickness in pixels.
+     */
+    public function getThickness(): float
+    {
+        return $this->delegate->thickness;
     }
 
     /**
@@ -99,6 +121,9 @@ final class CircleProgressDelegate extends AreaDelegate
     /** Background track colour (light gray). */
     private const TRACK_COLOR = [0.88, 0.88, 0.88, 1.0]; // #E0E0E0
 
+    /** Text colour (dark gray). */
+    private const TEXT_COLOR = [0.2, 0.2, 0.2, 1.0];
+
     public int $progress;
     public Color $color;
     public float $thickness = 12.0;
@@ -111,9 +136,21 @@ final class CircleProgressDelegate extends AreaDelegate
 
     public function draw(DrawContext $ctx, AreaDrawParams $params): void
     {
-        $cx = CircleProgressBar::SIZE / 2;
-        $cy = CircleProgressBar::SIZE / 2;
-        $radius = $cx - $this->thickness / 2 - 4; // inset by half thickness + padding
+        $w = $params->areaWidth;
+        $h = $params->areaHeight;
+        $cx = $w / 2;
+        $cy = $h / 2;
+
+        // Minimum ring envelope: the ring needs at least (thickness + 8) diameter
+        // to be visible. When the area is larger, the ring scales up to fill it.
+        $minDiameter = $this->thickness * 2 + 8;
+        $diameter = max($minDiameter, min($w, $h) - 8);
+        $radius = $diameter / 2 - $this->thickness / 2;
+
+        if ($radius <= 0) {
+            return;
+        }
+
         $startAngle = -M_PI / 2; // 12 o'clock
 
         // --- Background track (full ring) ---
@@ -130,19 +167,38 @@ final class CircleProgressDelegate extends AreaDelegate
 
         // --- Progress arc ---
         $sweep = ($this->progress / 100.0) * 2 * M_PI;
-        if ($sweep <= 0) {
-            return;
+        if ($sweep > 0) {
+            $progressStroke = new StrokeParams(
+                thickness: $this->thickness,
+                cap: \Libui\Generated\Enum\DrawLineCap::Round,
+                join: \Libui\Generated\Enum\DrawLineJoin::Round,
+            );
+            $ctx->strokePath(
+                Brush::color($this->color),
+                $progressStroke,
+                static fn ($p) => $p->arc($cx, $cy, $radius, $startAngle, $sweep),
+            );
         }
 
-        $progressStroke = new StrokeParams(
-            thickness: $this->thickness,
-            cap: \Libui\Generated\Enum\DrawLineCap::Round,
-            join: \Libui\Generated\Enum\DrawLineJoin::Round,
+        // --- Center text (percentage) ---
+        $text = $this->progress . '%';
+        $innerDiameter = $diameter - $this->thickness;
+
+        // Font size scales with the ring: min 14pt for small rings, ~10% of inner diameter for large ones.
+        $fontSize = max(14.0, $innerDiameter * 0.10);
+
+        // Build attributed string with explicit size (same pattern as monitor.php label())
+        $font = new FontDescriptor('Arial', $fontSize);
+        $str = new AttributedString();
+        $str->append(
+            $text,
+            Attribute::fromColor(Color::rgba(...self::TEXT_COLOR)),
+            Attribute::size($fontSize),
         );
-        $ctx->strokePath(
-            Brush::color($this->color),
-            $progressStroke,
-            static fn ($p) => $p->arc($cx, $cy, $radius, $startAngle, $sweep),
-        );
+
+        // Center-align within innerDiameter box, positioned so the box is centered in the ring
+        $layout = new TextLayout($str, $font, $innerDiameter, DrawTextAlign::Center);
+        $ctx->text($layout, $cx - $innerDiameter / 2, $cy - $fontSize / 2);
+        $layout->free();
     }
 }
