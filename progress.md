@@ -81,6 +81,27 @@
 - **对比**：`all-components.php` 在按钮回调中创建（App::run() 已 init+show），`test-treeview.php` 已有正确顺序
 - Files: `examples/test-codeeditor.php`, `examples/test-debug-bridge.php`
 
+### Phase 10: ✅ ContextMenu bridge DLL 编译
+- **问题**：`test-context-menu.php` 报错 `Context menu bridge not found` — DLL 未编译
+- **修复**：`gcc -shared -o bridge/context_menu.dll bridge/context_menu_win.c -luser32`（MinGW）
+- **附带修复**：`context_menu_win.c` 缺少 `#include <stdio.h>`（snprintf 隐式声明警告）
+- **附带修复**：`test-context-menu.php` 硬编码 macOS `.dylib` 路径，改为平台自适应 `match(PHP_OS_FAMILY)`
+- Files: `bridge/context_menu.dll`（新建）, `bridge/context_menu_win.c`, `examples/test-context-menu.php`
+
+### Phase 10b: ✅ ContextMenu + Area 示例修复
+- **问题**：`test-context-menu-area.php` 自动终止，无输出
+- **根因**：`new Area($delegate)` 在 `App::run()` 之前调用 → `uiNewArea()` 在 `uiInit()` 之前 → C 级崩溃
+- **修复**：添加 `Ffi::init()` 在 Area 创建前；`Build::stretchy($area)` 确保 Area 有尺寸
+- Files: `examples/test-context-menu-area.php`
+
+### Phase 11: ✅ ContextMenu 右键按钮映射修复
+- **问题**：`test-context-menu-area.php` 右键点击不触发菜单
+- **根因**：本 Windows 系统右键 = `down=3`（非文档中的 `down=2`），`isRightButtonDown()` 检查 `down === 2` 不匹配
+- **修复**：mouse 回调改为 `($event->down === 2 || $event->down === 3)` 检测右键
+- **附带修复**：桥接 DLL 添加 `SetForegroundWindow()` + `PostMessage(WM_NULL)` 修复 TrackPopupMenu
+- **验证**：调试日志确认 4 次成功 show() 调用（返回 0, 1, 2, 4）
+- Files: `examples/test-context-menu-area.php`, `bridge/context_menu_win.c`, `bridge/context_menu.dll`, `patches/.../AreaMouseEvent.php`（注释更新）
+
 ### 待办
 - [ ] 确认 CircleProgressBar 字体大小和位置是否合适
 - [ ] 清理 test_*.php 临时文件

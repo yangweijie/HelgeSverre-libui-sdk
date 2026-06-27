@@ -12,6 +12,7 @@
 #include <windows.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 /* Simple JSON parser (minimal, no external dependency) */
 static const char *json_string_value(const char *json, const char *key, char *buf, int bufsize) {
@@ -163,9 +164,19 @@ int cm_show_menu(const char *menu_json, double x, double y) {
     POINT pt;
     GetCursorPos(&pt);
 
+    // Get the foreground window as parent for the popup menu
+    HWND hwnd = GetForegroundWindow();
+
+    // Windows requires SetForegroundWindow before TrackPopupMenu,
+    // otherwise the menu may not appear when called from a callback.
+    SetForegroundWindow(hwnd);
+
     // Show the popup menu
     int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY,
-                             pt.x, pt.y, 0, NULL, NULL);
+                             pt.x, pt.y, 0, hwnd, NULL);
+
+    // Post a null message to ensure the menu is properly dismissed
+    if (hwnd) PostMessage(hwnd, WM_NULL, 0, 0);
 
     DestroyMenu(hMenu);
 

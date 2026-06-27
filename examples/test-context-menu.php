@@ -29,8 +29,14 @@ echo "--- Menu item consistency ---\n";
 echo "Items count: 7 (5 items + 2 separators)\n";
 
 // 3. Verify the bridge file exists
-$libPath = __DIR__ . '/../bridge/context_menu.dylib';
+$libDir = __DIR__ . '/../bridge';
+$libPath = match (PHP_OS_FAMILY) {
+    'Darwin'  => $libDir . '/context_menu.dylib',
+    'Linux'   => $libDir . '/libcontext_menu.so',
+    'Windows' => $libDir . '/context_menu.dll',
+    default   => '',
+};
+echo "Bridge path: {$libPath}\n";
 echo "Bridge exists: " . (file_exists($libPath) ? 'yes' : 'no') . "\n";
-echo "Bridge arch: " . (file_exists($libPath) ? 'arm64 (verified at compile time)' : 'N/A') . "\n";
 
 echo "\nDone.\n";

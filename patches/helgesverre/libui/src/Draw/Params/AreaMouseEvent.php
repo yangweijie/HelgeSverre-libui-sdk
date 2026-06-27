@@ -15,6 +15,8 @@ final class AreaMouseEvent
         public readonly float $areaWidth,
         public readonly float $areaHeight,
         public readonly int $down, // button pressed this event (1=left, 2=right, 3=middle, 0=none)
+        // NOTE: On some Windows systems, right-click reports as down=3 instead of down=2.
+        // Use ($event->down === 2 || $event->down === 3) to reliably detect right-click.
         public readonly int $up, // button released this event (1=left, 2=right, 3=middle, 0=none)
         public readonly int $count, // click count (1 = single, 2 = double)
         public readonly int $modifiers, // bitmask, see Generated\Flags\Modifiers

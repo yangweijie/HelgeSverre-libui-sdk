@@ -56,6 +56,24 @@
 - **修复**：示例文件在创建 WebView 控件前调用 `Ffi::init()` + `$window->show()`
 - Files: `examples/test-codeeditor.php`, `examples/test-debug-bridge.php`
 
+### Phase 10: ContextMenu bridge DLL 编译 ✅
+- **问题**：context_menu.dll 未编译，test-context-menu.php 报错
+- **修复**：MinGW 编译 `context_menu_win.c` → `context_menu.dll`
+- **附带**：添加 `#include <stdio.h>`，test 脚本路径改为平台自适应
+- Files: `bridge/context_menu.dll`, `bridge/context_menu_win.c`, `examples/test-context-menu.php`
+
+### Phase 10b: ContextMenu + Area 示例修复 ✅
+- **问题**：`test-context-menu-area.php` 自动终止
+- **根因**：Area 在 `Ffi::init()` 之前创建 → `uiNewArea()` C 级崩溃
+- **修复**：添加 `Ffi::init()` + `Build::stretchy($area)`
+- Files: `examples/test-context-menu-area.php`
+
+### Phase 11: ContextMenu 右键按钮映射修复 ✅
+- **问题**：右键点击不触发菜单
+- **根因**：本系统右键 = `down=3`（非文档 `down=2`），`isRightButtonDown()` 不匹配
+- **修复**：mouse 回调改为 `($event->down === 2 || $event->down === 3)`；桥接 DLL 添加 `SetForegroundWindow()`
+- Files: `examples/test-context-menu-area.php`, `bridge/context_menu_win.c`, `bridge/context_menu.dll`
+
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
@@ -64,6 +82,7 @@
 | INIT_SCRIPT_POST 平台自适应 | macOS/Windows 不同桥接 |
 | Area 必须 stretchy 才能 draw | libui Windows 后端限制 |
 | 自绘 draw 用 `$params->areaWidth/Height` | stretchy 后 Area 尺寸变化，不能硬编码 |
+| 右键检测用 `down === 2 \|\| down === 3` | 部分 Windows 系统右键报告为 button 3 |
 
 ## Errors Encountered
 | Error | Resolution |
@@ -78,3 +97,6 @@
 | CircleProgressBar 不可见 | minimum ring envelope + stretchy 布局 |
 | CircleProgressBar 文字偏移 | monitor.php drawString 模式 |
 | CodeEditor 窗口不显示 | Ffi::init() + show() 在创建 WebView 控件前 |
+| ContextMenu bridge 未编译 | MinGW 编译 context_menu_win.c → .dll |
+| context_menu_win.c snprintf 警告 | 添加 `#include <stdio.h>` |
+| ContextMenu 右键不触发 | 按钮映射 down=3 而非 down=2 + SetForegroundWindow |

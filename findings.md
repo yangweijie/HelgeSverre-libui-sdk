@@ -175,3 +175,58 @@ $editor = new CodeEditor($window, ...);  // 3. 创建 WebView 控件
 | 垂直偏移 `$cy - $fontSize * 0.50` | 文字偏下 |
 | `$cy - $fontSize * 0.45` | 仍然偏下 |
 | `DrawTextAlign::Center` 无 box 居中 | 文字偏右 |
+
+## ContextMenu bridge 编译
+
+### 需要手动编译
+`context_menu.dll` 不在 git 中（与 webview_bridge.dll 一样），需要手动编译：
+```bash
+cd bridge && gcc -shared -o context_menu.dll context_menu_win.c -luser32
+```
+
+### 源文件修复
+- `context_menu_win.c` 缺少 `#include <stdio.h>`（snprintf 隐式声明） — 已修复
+
+### 示例脚本路径修复
+- `test-context-menu.php` 硬编码 macOS `.dylib` 路径 — 改为 `match(PHP_OS_FAMILY)` 平台自适应
+
+## Area 创建需要 Ffi::init() 在前
+
+### 根因
+- `new Area($delegate)` 调用 `Ffi::get()` 加载 C 库，然后调用 `uiNewArea()`
+- `uiNewArea()` 需要 `uiInit()` 已调用，否则 C 级崩溃（无 PHP 异常）
+- `App::new()->run()` 内部调用 `Ffi::init()`，但如果 Area 在 `run()` 之前创建就会崩溃
+
+### 正确顺序
+```php
+Ffi::init();           // 1. 必须在任何控件创建前
+$area = new Area(...); // 2. 现在安全
+App::new()->run();     // 3. App::run() 内部也会调 Ffi::init()（幂等）
+```
+
+### 对比
+| 文件 | 顺序 | 结果 |
+|------|------|------|
+| `all-components.php` | `Ffi::init()` 在第 65 行，Area 在回调中创建 | ✅ |
+| `test-circle-progress.php` | `Ffi::init()` 在第 9 行 | ✅ |
+| `test-context-menu-area.php` (修复后) | `Ffi::init()` 在第 23 行 | ✅ |
+
+## Phase 11: 右键按钮映射差异
+
+### 问题
+`test-context-menu-area.php` 右键点击不触发 ContextMenu。代码使用 `isRightButtonDown()` 检查 `$this->down === 2`。
+
+### 根因
+在本 Windows 系统上，右键点击报告为 `down=3`（不是文档中的 `down=2`）。调试日志显示所有右键事件都是 `down=3`，左键是 `down=1`。
+
+### 修复
+- `test-context-menu-area.php`: 改为 `($event->down === 2 || $event->down === 3)` 检测右键
+- `AreaMouseEvent.php`: 在 `$down` 属性注释中添加平台差异说明
+- 桥接 DLL: 添加 `SetForegroundWindow()` + `GetForegroundWindow()` + `PostMessage(WM_NULL)` 修复 `TrackPopupMenu` 不显示问题
+
+### 结果
+调试日志确认 4 次成功的 `show()` 调用，返回索引 0、1、2、4（Red、Green、Blue、Disabled Item）。
+
+### 注意
+- `isRightButtonDown()` 方法保持 `down === 2` 不变（避免影响中间按钮检测）
+- 使用此组件时需在 mouse 回调中手动检查 `down === 2 || down === 3`
