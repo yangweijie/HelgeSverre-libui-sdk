@@ -117,3 +117,27 @@
   - 移除不存在的 `isArmV7()`/`isArmV8()` 方法
 - **限制**：`getMemoryTotal()` 在 Windows 上返回 0（vendor 不支持），显示 "Unsupported" 警告
 - Files: `src/System/SystemInfo.php`, `examples/test-system-info.php`
+
+### Phase 13: ✅ Tray 托盘图标修复
+- **问题**：`php85 examples/test-tray.php` 自动停止（无输出、无窗口）
+- **根因**（3 个）：
+  1. PebView DLL 路径错误：`windows/x86_64/PebView.dll` → 实际为 `windows/PebView.dll`
+  2. `FFI::addr($winHandle)` 传递 `void**`（地址的地址）而非 `void*`（句柄值）
+  3. 测试脚本：缺少 `Ffi::init()` 调用、双 `App::new()` 创建
+- **修复**：
+  - `Tray::ffi()` 路径改为 `$base . '/windows/PebView.dll'`
+  - `Tray::attach()` 移除 `FFI::addr()` 包装，直接传递 `$winHandle`
+  - 移除未使用的 `$winPtr` 属性
+  - `test-tray.php` 添加 `Ffi::init()`，移除多余的 `App::new()`
+- **验证**：脚本打印 "Tray icon created" 并保持运行（事件循环正常）
+- Files: `src/System/Tray.php`, `examples/test-tray.php`
+
+### Phase 13b: ✅ Tray Show Window 修复
+- **问题**：托盘菜单 "Show Window" 点击后窗口不恢复显示
+- **根因**：`$window->handle()` 返回 `uiWindow*`（libui 内部结构体指针），非 Win32 HWND。C 代码 `(HWND)ptr` 把 `uiWindow*` 当 HWND 用是错误的
+- **修复**：
+  - `Tray::showWindow()` 使用 `Ffi::get()->uiControlHandle($window->asControl())` 获取真正的 HWND
+  - `Tray::attach()` 同样用 `uiControlHandle()` 获取 HWND 传给 `window_tray()`
+  - C 源码 `window_show()` 改用 `SW_RESTORE` + `SetForegroundWindow()` 代替 `SW_SHOW`
+- **验证**：最小化窗口后，右键托盘 → Show Window → 窗口正确恢复 ✅
+- Files: `src/System/Tray.php`, `vendor/kingbes/pebview/source/window/window_win.c`

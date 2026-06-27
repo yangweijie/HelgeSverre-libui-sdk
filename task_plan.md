@@ -4,7 +4,7 @@
 修复 HelgeSverre-libui-sdk 在 Windows 上的所有兼容性问题：WebView2 不渲染、JS↔PHP 桥接断裂、自绘控件不显示、TableModel 报错。
 
 ## Current Phase
-Phase 12 完成 ✅ — SystemInfo Windows 兼容性
+Phase 13b 完成 ✅ — Tray Show Window 修复
 
 ## Phases
 
@@ -83,6 +83,7 @@ Phase 12 完成 ✅ — SystemInfo Windows 兼容性
 | Area 必须 stretchy 才能 draw | libui Windows 后端限制 |
 | 自绘 draw 用 `$params->areaWidth/Height` | stretchy 后 Area 尺寸变化，不能硬编码 |
 | 右键检测用 `down === 2 \|\| down === 3` | 部分 Windows 系统右键报告为 button 3 |
+| HWND 通过 `uiControlHandle()` 获取 | `$window->handle()` 返回 `uiWindow*` 非 HWND |
 
 ## Errors Encountered
 | Error | Resolution |
@@ -103,3 +104,14 @@ Phase 12 完成 ✅ — SystemInfo Windows 兼容性
 | SystemInfo 'AMD64' enum not found | try-catch + fallback + 扩展 isX86() |
 | SystemInfo getCPUCores Windows NT | try-catch + %NUMBER_OF_PROCESSORS% fallback |
 | SystemInfo isArm64/isArmV7 方法不存在 | 改为 arch 字符串直接检查 |
+| Tray Show Window 不恢复 | `uiControlHandle()` 获取真正 HWND + `SW_RESTORE` |
+
+### Phase 13: Tray 托盘图标修复 ✅
+- **PebView DLL 路径错误**：`windows/x86_64/PebView.dll` → `windows/PebView.dll`
+- **FFI 参数传递错误**：`FFI::addr($winHandle)` 传递 void** 而非 void*
+- **测试脚本初始化顺序**：添加 `Ffi::init()` + 移除双 `App::new()`
+
+### Phase 13b: Tray Show Window 修复 ✅
+- **HWND 获取错误**：`$window->handle()` 返回 `uiWindow*` 非 HWND，改用 `uiControlHandle($window->asControl())`
+- **window_show() API**：C 端 `SW_SHOW` → `SW_RESTORE` + `SetForegroundWindow()` 恢复最小化窗口
+- **FFI cdef**：添加 `window_show()` 声明，Tray 新增 `showWindow()` 方法

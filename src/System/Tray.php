@@ -10,14 +10,15 @@ use Libui\Ffi;
 /**
  * System tray icon with context menu — wraps PebView's native tray capability.
  *
- * Creates an NSStatusItem (macOS) / GtkStatusIcon (Linux) / system tray icon
- * (Windows) with a popup context menu.  Each menu item can have a click callback.
+ * Creates a system tray icon (Windows) / NSStatusItem (macOS) / GtkStatusIcon (Linux)
+ * with a popup context menu. Each menu item can have a click callback.
  *
  * ```php
- * $tray = new Tray($window, '/path/to/icon.png');
- * $tray->addItem('Show Window', function () use ($window) { $window->show(); })
+ * $tray = new Tray($window, '/path/to/icon.ico');
+ * $tray->setTooltip('My App')
+ *      ->addItem('Show Window', function () use ($window) { $window->show(); })
  *      ->addSeparator()
- *      ->addItem('Quit', function () use ($app) { $app->quit(); })
+ *      ->addItem('Quit', fn() => Ffi::quit())
  *      ->attach();
  * ```
  */
@@ -27,9 +28,6 @@ class Tray
 
     /** @var \FFI\CData|null Tray handle returned by window_tray() */
     private ?\FFI\CData $trayHandle = null;
-
-    /** @var \FFI\CData|null Native window pointer */
-    private ?\FFI\CData $winPtr = null;
 
     /** @var list<\FFI\CData> Retained tray_menu structs (FFI keeps them alive) */
     private array $menuStructs = [];
@@ -42,6 +40,9 @@ class Tray
 
     private string $iconPath;
 
+    /** @var string Tooltip text shown when hovering the tray icon */
+    private string $tooltip = 'Tray';
+
     /** @var list<array{text:string, callback:?callable, disabled:bool, checked:bool}> Buffered items before attach() */
     private array $pendingItems = [];
 
@@ -51,13 +52,26 @@ class Tray
     /**
      * @param Window $window  The libui Window to attach the tray to.
      * @param string $iconPath  Path to the tray icon file
-     *        (macOS: .png recommended; Linux: .png; Windows: .ico).
+     *        (Windows: .ico recommended; macOS: .png; Linux: .png).
      */
     public function __construct(
         private Window $window,
         string $iconPath,
     ) {
         $this->iconPath = $iconPath;
+    }
+
+    /**
+     * Set the tooltip text for the tray icon.
+     *
+     * Must be called before attach().
+     *
+     * @return $this
+     */
+    public function setTooltip(string $tooltip): static
+    {
+        $this->tooltip = $tooltip;
+        return $this;
     }
 
     /**
@@ -76,20 +90,21 @@ class Tray
 
         $ffi = self::ffi();
 
-        // Get the native NSWindow/NSView handle from the libui Window
-        $winHandle = $this->window->handle();
-
-        // Cast to void* via FFI instance (avoids deprecated static calls)
-        $ptrType = $ffi->type('void*');
-        $this->winPtr = $ffi->cast($ptrType, $winHandle);
+        $hwnd = Ffi::get()->uiControlHandle($this->window->asControl());
+        $winHandle = \FFI::cast('void*', $hwnd);
 
         // Allocate and copy icon path as a C string
         $iconNative = $ffi->new('char[' . (\strlen($this->iconPath) + 1) . ']');
         \FFI::memcpy($iconNative, $this->iconPath, \strlen($this->iconPath));
 
+        // Allocate and copy tooltip as a C string
+        $tipNative = $ffi->new('char[' . (\strlen($this->tooltip) + 1) . ']');
+        \FFI::memcpy($tipNative, $this->tooltip, \strlen($this->tooltip));
+
         $this->trayHandle = $ffi->window_tray(
-            $ffi->cast($ptrType, \FFI::addr($winHandle)),
+            $winHandle,
             $iconNative,
+            $tipNative,
         );
 
         if (\FFI::isNull($this->trayHandle)) {
@@ -118,7 +133,6 @@ class Tray
      *
      * @param string   $text     Menu item label. Use '-' for a separator.
      * @param callable $callback Function to call when item is clicked.
-     *                           Receives no arguments (void callback in PebView).
      * @param bool     $disabled Whether the item is greyed out (default: false).
      * @param bool     $checked  Whether the item shows a checkmark (default: false).
      * @return $this
@@ -204,6 +218,13 @@ class Tray
         return $this->addItem('-');
     }
 
+    public function showWindow(): void
+    {
+        $ffi = self::ffi();
+        $hwnd = Ffi::get()->uiControlHandle($this->window->asControl());
+        $ffi->window_show(\FFI::cast('void*', $hwnd));
+    }
+
     /**
      * Remove the tray icon from the system tray.
      */
@@ -241,7 +262,7 @@ class Tray
         $libPath = match (\PHP_OS_FAMILY) {
             'Darwin'  => $base . '/macos/arm64/PebView.dylib',
             'Linux'   => $base . '/linux/x86_64/libPebView.so',
-            'Windows' => $base . '/windows/x86_64/PebView.dll',
+            'Windows' => $base . '/windows/PebView.dll',
             default   => throw new \RuntimeException('Unsupported platform: ' . \PHP_OS_FAMILY),
         };
 
@@ -250,9 +271,10 @@ class Tray
         }
 
         self::$ffi = \FFI::cdef(
-            'void *window_tray(const void *ptr, const char *icon);'
+            'void *window_tray(const void *ptr, const char *icon, const char *tip);'
             . 'void window_tray_add_menu(const void *tray, struct tray_menu *menu);'
             . 'void window_tray_remove(void *tray);'
+            . 'int window_show(const void *ptr);'
             . 'struct tray_menu { int id; char *text; int disabled; int checked; void (*callback)(const void *ptr); };',
             $libPath,
         );

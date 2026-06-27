@@ -253,3 +253,26 @@ App::new()->run();     // 3. App::run() 内部也会调 Ffi::init()（幂等）
 - `getMemoryTotal()` 在 Windows 上不可用 — vendor 不支持
 - `cpuUsage()` 在 Windows 上不可用 — vendor 不支持
 - 需要上游修复或自行实现 Windows 版本
+
+## Tray 托盘图标
+
+### PebView DLL 路径
+- Tray.php 中路径：`vendor/kingbes/pebview/lib/windows/x86_64/PebView.dll`
+- **实际位置**：`vendor/kingbes/pebview/lib/windows/PebView.dll`（无 x86_64 子目录）
+- Toast.dll 在 `windows/x86_64/Toast.dll`，PebView.dll 在 `windows/PebView.dll`
+
+### FFI 参数传递
+- `window_tray(const void *ptr, const char *icon)` 期望 `ptr` = HWND（void*）
+- **错误写法**：`FFI::addr($winHandle)` 传递 void**（地址的地址）
+- **正确写法**：直接传递 `$winHandle`
+
+### HWND 获取方式
+- `$window->handle()` 返回 `uiWindow*`（libui 内部结构体指针），**不是** Win32 HWND
+- **正确方式**：`Ffi::get()->uiControlHandle($window->asControl())` 返回 `uintptr_t`（即 HWND）
+- 需要 `\FFI::cast('void*', $hwnd)` 转为 void* 后传给 C 函数
+- C 端 `window_show()` 需要 `SW_RESTORE`（非 `SW_SHOW`）才能恢复最小化窗口
+
+### 初始化顺序
+- Tray `attach()` 必须在 `App::new()->run()` 之前调用（创建隐藏托盘窗口）
+- 但 `Ffi::init()` 必须在创建任何 Widget 之前调用
+- 正确顺序：`Ffi::init()` → 创建 Window/Label → 创建 Tray → `attach()` → `App::run()`

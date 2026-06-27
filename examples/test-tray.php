@@ -19,6 +19,8 @@ use Yangweijie\Ui2\System\Tray;
  * For production use, wrap in a proper .app bundle.
  */
 
+Ffi::init();
+
 $window = new Window('Tray Demo', 400, 300, true);
 
 $label = new Label('Check the system tray (menu bar) for the tray icon.' . PHP_EOL
@@ -26,16 +28,18 @@ $label = new Label('Check the system tray (menu bar) for the tray icon.' . PHP_E
 
 $window->setChild($label);
 
-// Create the App instance early so tray callbacks can reference it
-$app = App::new();
-
 // Create tray icon — must be done before App starts the event loop
-$tray = new Tray($window, __DIR__ . '/../assets/icon.png');
+// Use .ico on Windows (LoadImage(IMAGE_ICON) doesn't reliably load .png)
+$iconFile = match (PHP_OS_FAMILY) {
+    'Windows' => __DIR__ . '/../assets/icon.ico',
+    default   => __DIR__ . '/../assets/icon.png',
+};
+$tray = new Tray($window, $iconFile);
 
 // Build the context menu
 $tray
-    ->addItem('Show Window', function () use ($window): void {
-        $window->show();
+    ->addItem('Show Window', function () use ($tray): void {
+        $tray->showWindow();
     })
     ->addSeparator()
     ->addItem('Say Hello', function () use ($label): void {
