@@ -51,6 +51,11 @@
 - Custom 标签页临时放第一个方便调试，调试完后恢复原始顺序
 - 恢复为：Fields → Custom → Dialogs → Pickers → Table → WebView
 
+### Phase 9: WebView/CodeEditor 创建顺序修复 ✅
+- **根因**：`wvb_create()` 需要 `uiInit()` + 有效 HWND
+- **修复**：示例文件在创建 WebView 控件前调用 `Ffi::init()` + `$window->show()`
+- Files: `examples/test-codeeditor.php`, `examples/test-debug-bridge.php`
+
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
@@ -72,3 +77,4 @@
 | CircleProgressBar 卡死 | 移除冗余 timer(0) + setSize() |
 | CircleProgressBar 不可见 | minimum ring envelope + stretchy 布局 |
 | CircleProgressBar 文字偏移 | monitor.php drawString 模式 |
+| CodeEditor 窗口不显示 | Ffi::init() + show() 在创建 WebView 控件前 |

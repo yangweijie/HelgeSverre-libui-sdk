@@ -6,13 +6,21 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Libui\App;
 use Libui\Build;
+use Libui\Ffi;
 use Libui\Label;
 use Libui\Window;
 use Yangweijie\Ui2\WebView;
 
+Ffi::init();
+
 $window = new Window('Bridge Debug', 500, 400, true);
 
 $log = new Label('Starting debug...');
+$window->setChild(Build::vbox($log));
+
+// Window must be shown before creating WebView-based widgets —
+// wvb_create() calls IsWindow(HWND) which requires a visible window.
+$window->show();
 
 $webview = new WebView($window, 0, 0, 500, 350, true);
 
@@ -58,8 +66,6 @@ JS
 $webview->eval('setTimeout(function() {
     document.getElementById("log").textContent += " | step6: testBind=" + typeof window.testBind + " __webview__=" + typeof window.__webview__;
 }, 1000);');
-
-$window->setChild(Build::vbox($log));
 
 App::new()
     ->window($window)

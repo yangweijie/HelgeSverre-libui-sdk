@@ -56,6 +56,8 @@
 | `src/Widgets/StatusIndicator.php` | draw 用实际面积居中 + 移除冗余 timer(0) setSize |
 | `examples/all-components.php` | stretchy Group + 内层 vbox + Custom 标签顺序恢复 |
 | `examples/test-circle-progress.php` | STEP 0-6 bisection test with Ffi::init |
+| `examples/test-codeeditor.php` | Ffi::init() + show() before CodeEditor creation |
+| `examples/test-debug-bridge.php` | Ffi::init() + show() before WebView creation |
 
 ### Phase 7d: ✅ CircleProgressBar 中心文字 + 颜色自定义
 - **需求**：将进度百分比显示在圆环中心，字体大小随圆环尺寸自动缩放，支持自定义颜色
@@ -71,6 +73,14 @@
   - 最终方案：`$cy - $fontSize / 2` + `DrawTextAlign::Center` + `$cx - $innerDiameter / 2` box 定位
 - Files: `src/Widgets/CircleProgressBar.php`, `examples/all-components.php`, `examples/test-circle-progress.php`
 
+### Phase 9: ✅ WebView/CodeEditor 创建顺序修复
+- **根因**：`wvb_create()` 调用 `IsWindow(parent_hwnd)`，需要 `uiInit()` + 可见窗口
+- **表现**：`test-codeeditor.php` 和 `test-debug-bridge.php` 运行后立即退出（无错误输出）
+- **修复**：在创建 WebView 控件前调用 `Ffi::init()` + `$window->show()`
+- **正确顺序**：`Ffi::init()` → `$window->show()` → `new CodeEditor/WebView()`
+- **对比**：`all-components.php` 在按钮回调中创建（App::run() 已 init+show），`test-treeview.php` 已有正确顺序
+- Files: `examples/test-codeeditor.php`, `examples/test-debug-bridge.php`
+
 ### 待办
-- [ ] 确认 CircleProgressBar 字体大小和位置是否合适（用户最后说"锁的太小了"，方案已改用 monitor.php 模式）
+- [ ] 确认 CircleProgressBar 字体大小和位置是否合适
 - [ ] 清理 test_*.php 临时文件

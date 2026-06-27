@@ -138,6 +138,34 @@ $layout->free();
 - `AttributedString` 需要同时指定 `Attribute::size()` 和 `FontDescriptor`（冗余但必要）
 - 字体缩放公式 `max(14.0, $innerDiameter * 0.10)`：300px→30pt，1000px→100pt，140px→14pt(min)
 
+## WebView/CodeEditor 创建需要 3 步初始化
+
+### 根因
+- `wvb_create()` 调用 `IsWindow(parent_hwnd)` — 需要有效的 HWND
+- `uiControlHandle()` 返回的 HWND 在 `uiInit()` 之前无效
+- bridge 返回 NULL → WebView 构造函数抛异常 → 进程退出
+
+### 正确顺序（必须按此顺序）
+```php
+Ffi::init();                // 1. 初始化 libui (uiInit)
+$window = new Window(...);
+$window->setChild($layout);
+$window->show();            // 2. 显示窗口 (HWND 生效)
+$editor = new CodeEditor($window, ...);  // 3. 创建 WebView 控件
+```
+
+### 为什么 App::new()->run() 模式下不需要手动 Ffi::init()
+`App::run()` 内部调用 `Ffi::init()` 然后 `$window->show()` — 所以在按钮回调中创建 CodeEditor 是安全的（事件循环已启动）。
+
+### 对比
+| 文件 | 顺序 | 结果 |
+|------|------|------|
+| `all-components.php` | `App::run()` 内部 init+show，CodeEditor 在回调中创建 | ✅ |
+| `webview.php` | `Ffi::init()` + `$win->show()` 后创建 WebView | ✅ |
+| `test-treeview.php` | `Ffi::init()` + `$window->show()` 后创建 TreeView | ✅ |
+| `test-codeeditor.php` (修复后) | `Ffi::init()` + `$window->show()` 后创建 CodeEditor | ✅ |
+| `test-debug-bridge.php` (修复后) | `Ffi::init()` + `$window->show()` 后创建 WebView | ✅ |
+
 ### 失败方案记录
 | 方案 | 问题 |
 |------|------|
