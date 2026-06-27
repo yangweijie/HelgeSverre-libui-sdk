@@ -230,3 +230,26 @@ App::new()->run();     // 3. App::run() 内部也会调 Ffi::init()（幂等）
 ### 注意
 - `isRightButtonDown()` 方法保持 `down === 2` 不变（避免影响中间按钮检测）
 - 使用此组件时需在 mouse 回调中手动检查 `down === 2 || down === 3`
+
+## utopia-php/system Windows 不兼容
+
+### 问题
+`utopia-php/system` 库在 Windows 上多处抛异常：
+
+| 方法 | 问题 | 原因 |
+|------|------|------|
+| `getArchEnum()` | `'AMD64' enum not found` | 正则 `/(x86*\|i386\|i686)/` 不匹配 `AMD64` |
+| `getCPUCores()` | `'Windows NT not supported` | switch 检查 `'Windows'` 但 `php_uname('s')` 返回 `'Windows NT'` |
+| `getMemoryTotal()` | `'Windows NT not supported` | 同上 |
+| `isArch('aarch64')` | `'aarch64' not found` | 只接受 'x86'/'ppc'/'arm' |
+
+### 修复策略
+- 所有不兼容调用用 `try-catch` 包裹 + fallback
+- `isX86()` 扩展：`System::isX86() || str_contains($arch, 'AMD64') || str_contains($arch, 'x86_64')`
+- `isArm64()` 改为直接检查 arch 字符串（避免 `isArch()` 抛异常）
+- `getCPUCores()` fallback: `shell_exec('echo %NUMBER_OF_PROCESSORS%')`
+
+### 限制
+- `getMemoryTotal()` 在 Windows 上不可用 — vendor 不支持
+- `cpuUsage()` 在 Windows 上不可用 — vendor 不支持
+- 需要上游修复或自行实现 Windows 版本

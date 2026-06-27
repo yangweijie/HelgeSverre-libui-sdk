@@ -31,9 +31,8 @@ $diskUsed = $info->diskUsed();
 echo "Disk Used:   " . ($diskUsed !== null ? $diskUsed . '%' : 'N/A') . "\n\n";
 
 echo "--- Architecture ---\n";
+echo "  arm:   " . ($info->isArm() ? 'yes' : 'no') . "\n";
 echo "  arm64: " . ($info->isArm64() ? 'yes' : 'no') . "\n";
-echo "  armv7: " . ($info->isArmV7() ? 'yes' : 'no') . "\n";
-echo "  armv8: " . ($info->isArmV8() ? 'yes' : 'no') . "\n";
 echo "  x86:   " . ($info->isX86() ? 'yes' : 'no') . "\n";
 echo "  ppc:   " . ($info->isPPC() ? 'yes' : 'no') . "\n\n";
 

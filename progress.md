@@ -105,3 +105,15 @@
 ### 待办
 - [ ] 确认 CircleProgressBar 字体大小和位置是否合适
 - [ ] 清理 test_*.php 临时文件
+
+### Phase 12: ✅ SystemInfo Windows 兼容性修复
+- **问题**：`test-system-info.php` 报错 `'AMD64' enum not found` — `utopia-php/system` 不识别 Windows 架构
+- **根因**：`getArchEnum()` 正则 `/(x86*|i386|i686)/` 不匹配 `AMD64`；`getCPUCores()` switch 检查 `'Windows'` 但 `php_uname('s')` 返回 `'Windows NT'`；`isArm64()`/`isArmV7()`/`isArmV8()` 方法不存在
+- **修复**：
+  - `getArchEnum()` try-catch + fallback 到原始 arch 字符串
+  - `getCPUCores()` try-catch + fallback 到 `%NUMBER_OF_PROCESSORS%`
+  - `isX86()` 扩展识别 `AMD64`/`x86_64`
+  - `isArm64()` 改为直接检查 arch 字符串（避免 `isArch()` 抛异常）
+  - 移除不存在的 `isArmV7()`/`isArmV8()` 方法
+- **限制**：`getMemoryTotal()` 在 Windows 上返回 0（vendor 不支持），显示 "Unsupported" 警告
+- Files: `src/System/SystemInfo.php`, `examples/test-system-info.php`

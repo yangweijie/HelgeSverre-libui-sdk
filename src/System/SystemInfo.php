@@ -51,9 +51,23 @@ class SystemInfo
     {
         $this->os = System::getOS();
         $this->arch = System::getArch();
-        $this->archLabel = System::getArchEnum();
-        $this->hostname = System::getHostname();
-        $this->cpuCores = System::getCPUCores();
+        try {
+            $this->archLabel = System::getArchEnum();
+        } catch (\Throwable) {
+            // getArchEnum() regex doesn't cover Windows 'AMD64' — fall back to raw arch
+            $this->archLabel = $this->arch;
+        }
+        try {
+            $this->hostname = System::getHostname();
+        } catch (\Throwable) {
+            $this->hostname = php_uname('n');
+        }
+        try {
+            $this->cpuCores = System::getCPUCores();
+        } catch (\Throwable) {
+            // getCPUCores() uses 'Windows' but php_uname('s') returns 'Windows NT'
+            $this->cpuCores = (int) (shell_exec('echo %NUMBER_OF_PROCESSORS%') ?: 1);
+        }
 
         $unsupported = [];
         try {
@@ -164,11 +178,12 @@ class SystemInfo
     }
 
     /** Architecture checks. */
-    public function isArm64(): bool { return System::isArm64(); }
-    public function isArmV7(): bool { return System::isArmV7(); }
-    public function isArmV8(): bool { return System::isArmV8(); }
-    public function isX86(): bool   { return System::isX86(); }
+    public function isArm(): bool   { return System::isArm(); }
+    public function isX86(): bool   { return System::isX86() || str_contains($this->arch, 'x86_64') || str_contains($this->arch, 'AMD64'); }
     public function isPPC(): bool   { return System::isPPC(); }
+
+    /** Convenience: check if ARM64/aarch64. */
+    public function isArm64(): bool { return str_contains($this->arch, 'arm') || str_contains($this->arch, 'aarch'); }
 
     /**
      * Return all basic info as an associative array.

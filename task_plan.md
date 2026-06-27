@@ -4,7 +4,7 @@
 修复 HelgeSverre-libui-sdk 在 Windows 上的所有兼容性问题：WebView2 不渲染、JS↔PHP 桥接断裂、自绘控件不显示、TableModel 报错。
 
 ## Current Phase
-全部完成 ✅
+Phase 12 完成 ✅ — SystemInfo Windows 兼容性
 
 ## Phases
 
@@ -100,3 +100,6 @@
 | ContextMenu bridge 未编译 | MinGW 编译 context_menu_win.c → .dll |
 | context_menu_win.c snprintf 警告 | 添加 `#include <stdio.h>` |
 | ContextMenu 右键不触发 | 按钮映射 down=3 而非 down=2 + SetForegroundWindow |
+| SystemInfo 'AMD64' enum not found | try-catch + fallback + 扩展 isX86() |
+| SystemInfo getCPUCores Windows NT | try-catch + %NUMBER_OF_PROCESSORS% fallback |
+| SystemInfo isArm64/isArmV7 方法不存在 | 改为 arch 字符串直接检查 |

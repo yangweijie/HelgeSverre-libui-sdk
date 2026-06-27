@@ -1612,3 +1612,31 @@ Stack trace:
 
 [27-Jun-2026 13:17:29 UTC] [mouse] down=0 up=0 count=0 X=498 Y=35 held=0 isRight=no
 
+[27-Jun-2026 13:40:47 UTC] PHP Fatal error:  Uncaught Exception: 'AMD64' enum not found. in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php:104
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\src\System\SystemInfo.php(54): Utopia\System\System::getArchEnum()
+#1 D:\git\php\HelgeSverre-libui-sdk\examples\test-system-info.php(11): Yangweijie\Ui2\System\SystemInfo->__construct()
+#2 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php on line 104
+[27-Jun-2026 13:42:01 UTC] PHP Fatal error:  Uncaught Exception: Windows NT not supported. in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php:197
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\src\System\SystemInfo.php(61): Utopia\System\System::getCPUCores()
+#1 D:\git\php\HelgeSverre-libui-sdk\examples\test-system-info.php(11): Yangweijie\Ui2\System\SystemInfo->__construct()
+#2 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php on line 197
+[27-Jun-2026 13:42:34 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method Utopia\System\System::isArm64() in D:\git\php\HelgeSverre-libui-sdk\src\System\SystemInfo.php:181
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\examples\test-system-info.php(34): Yangweijie\Ui2\System\SystemInfo->isArm64()
+#1 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\src\System\SystemInfo.php on line 181
+[27-Jun-2026 13:43:23 UTC] PHP Fatal error:  Uncaught Exception: Windows NT not supported. in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php:336
+Stack trace:
+#0 Command line code(1): Utopia\System\System::getMemoryTotal()
+#1 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php on line 336
+[27-Jun-2026 13:43:37 UTC] PHP Fatal error:  Uncaught Exception: 'aarch64' not found. in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php:172
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\src\System\SystemInfo.php(187): Utopia\System\System::isArch('aarch64')
+#1 D:\git\php\HelgeSverre-libui-sdk\examples\test-system-info.php(35): Yangweijie\Ui2\System\SystemInfo->isArm64()
+#2 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php on line 172
