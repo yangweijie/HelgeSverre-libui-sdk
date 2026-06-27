@@ -125,8 +125,8 @@ class WebView
         $this->height = $height;
 
         $this->resolveLibraryPaths();
-        $this->loadBridge();
         $this->loadPebView();
+        $this->loadBridge();
         $this->parentHandle = $this->resolveParentHandle($window);
 
         $this->handle = $this->bridge->wvb_create(
@@ -477,7 +477,7 @@ class WebView
         $this->pebviewLib = match (\PHP_OS_FAMILY) {
             'Darwin' => $base . '/vendor/kingbes/pebview/lib/macos/arm64/PebView.dylib',
             'Linux'  => $base . '/vendor/kingbes/pebview/lib/linux/x86_64/libPebView.so',
-            'Windows' => $base . '/vendor/kingbes/pebview/lib/windows/x64/PebView.dll',
+            'Windows' => $base . '/vendor/kingbes/pebview/lib/windows/PebView.dll',
             default  => throw new \RuntimeException('Unsupported platform: ' . \PHP_OS_FAMILY),
         };
     }

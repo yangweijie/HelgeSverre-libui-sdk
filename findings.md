@@ -1,53 +1,42 @@
-# Findings & Decisions — macOS Context Menu Black Background Fix
+# Findings: Windows WebView2 嵌入机制
 
-## Requirements
-- macOS 右键上下文菜单弹出时背景应为正常的系统样式（浅色/深色主题适配）
-- 无黑色背景
-- 无忙光标
-- 菜单在正确位置弹出
-- 点击项目后执行对应回调
-- 菜单自动关闭
+## PebView 的 Windows WebView2 架构
 
-## Research Findings
+### 窗口层级
+```
+libui Window (parent_hwnd)
+  └─ Bridge STATIC child (child_hwnd) — bridge 创建，定位在 (x,y,w,h)
+       └─ PebView webview_widget — PebView 内部创建，初始尺寸 0×0
+            └─ WebView2 controller — 浏览器引擎
+```
 
-### Root Cause Analysis
-1. **原始实现**：使用自定义 NSWindow + NSView/NSButton 手动构建菜单
-2. **问题**：
-   - `NSPopUpMenuWindowLevel` 下的自定义 NSWindow 渲染时背景变黑
-   - 系统主题适配困难，需要手动处理深浅色模式
-   - 事件循环管理复杂 (`runModalForWindow:`)，可能导致忙光标
-3. **最佳方案**：使用系统原生 `NSMenu` API
+### 关键发现：webview_widget 初始 0×0
+- `win32_edge_engine` 构造函数在 `m_window`（即 bridge 的 STATIC 窗口）内创建 `webview_widget`
+- `CreateWindowExW(WS_CHILD, "webview_widget", 0,0,0,0, m_window, ...)` — 初始尺寸为零
+- `resize_widget()` 通过 `WM_SIZE` 在 m_window 上触发，读取父窗口 client rect 后 resize widget
+- 但 bridge 的 STATIC 窗口使用默认 WndProc，不转发 `WM_SIZE` → PebView 永远看不到 resize
 
-### NSMenu Popup API
-- `[NSMenu popUpMenuPositioningItem:atLocation:inView:]` — 标准右键菜单弹出方法
-- 需要 NSView 作为宿主（通过临时 NSWindow 提供）
-- 自动处理：渲染、动画、主题适配、高亮、事件循环
-- 返回值为点击的菜单 item，或 nil（取消时）
-- 同步调用，阻塞直到菜单关闭
-- 每个菜单 item 可设 tag 用于识别
+### WebView2 的 postMessage 桥接
+- macOS (WKWebView): `window.webkit.messageHandlers.__webview__.postMessage(msg)`
+- Windows (WebView2): `window.chrome.webview.postMessage(msg)`
+- PebView 在 `embed()` 成功后自动注入 init script 设置 `window.chrome.webview`
+- TreeView 的 `INIT_SCRIPT_POST` 之前只支持 macOS 路径
 
-### NSMenu Event Context
-- NSMenu 需要 NSEvent 上下文来处理鼠标跟踪
-- 方法1：使用 `[NSApp currentEvent]`
-- 方法2：创建临时 NSWindow 作为宿主，在 window 上调用
-- 临时窗口方案更可靠
+### WebView2 Runtime
+- 已安装 v148.0.3967.54
+- 路径: `C:\Program Files (x86)\Microsoft\EdgeWebView\Application\148.0.3967.54`
+- PebView 内嵌 WebView2 loader（`mswebview2::loader`），不需要额外 `WebView2Loader.dll`
 
-## Technical Decisions
-| Decision | Rationale |
-|----------|-----------|
-| NSMenu + NSMenuItem 替代 NSView/NSButton | 原生菜单渲染，完美适配系统主题 |
-| 临时 NSWindow 作为 NSMenu 宿主 | NSMenu 需要 NSView 上下文才能弹出 |
-| NSMenuItem tag 做回调索引 | JSON 解析后按 tag 关联点击回调 |
-| 同步阻塞式 API (popUpMenuPositioningItem) | 与 FFI 接口兼容，直接返回选中项索引 |
+### bridge 编译要求 (Windows)
+```
+gcc -shared webview_bridge_win.c PebView.dll -o webview_bridge.dll -luser32
+```
+- 必须链接 PebView.dll（bridge 调用 `webview_create`/`webview_get_window`/`webview_destroy`）
+- 原 README 中的编译命令缺少 PebView 链接
 
-## Resources
-- bridge/context_menu.m — macOS 桥接代码（需重写）
-- bridge/context_menu.dylib — 编译后的二进制文件
-- examples/test-context-menu-area.php — 测试脚本
-- src/Widgets/ContextMenu.php — PHP ContextMenu 类
-- Apple NSMenu docs: https://developer.apple.com/documentation/appkit/nsmenu
-
-## Visual/Browser Findings
-- 用户截图显示：右键菜单区域显示为纯黑色方块/矩形
-- 忙光标问题已在前一轮修复
-- 当前仅剩黑色背景问题未解决
+### PebView.dll 导出符号
+```
+webview_bind, webview_create, webview_destroy, webview_eval,
+webview_get_window, webview_init, webview_navigate,
+webview_return, webview_set_html
+```

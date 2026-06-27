@@ -6,12 +6,12 @@
         "helgesverre/libui": "dev-main",
         "kingbes/pebview": "^0.1.1",
         "jolicode/jolinotif": "^3.0@dev",
-        "utopia-php/system": "^0.10.5",
-        "illuminate/process": "13.x-dev",
+        "utopia-php/system": "*",
+        "illuminate/process": "*",
         "monolog/monolog": "^3.0"
     },
     "require-dev": {
-        "pestphp/pest": "^4.0"
+        "pestphp/pest": "*"
     },
     "license": "MIT",
     "autoload": {

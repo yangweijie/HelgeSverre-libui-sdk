@@ -7,7 +7,10 @@ namespace Yangweijie\Ui2\Widgets;
 use RuntimeException;
 
 /**
- * Send native OS desktop toast notifications via the PebView Toast.dylib FFI.
+ * Send native OS desktop toast notifications.
+ *
+ * Uses PebView's Toast.dll (WinToast) on Windows for Windows 10+ native toast.
+ * Falls back to JoliNotif on other platforms.
  *
  * ```php
  * Toast::show('Hello', 'This is a notification');
@@ -26,10 +29,24 @@ class Toast
      * @param string      $message Notification body
      * @param string|null $icon    Optional icon path (null = no icon)
      * @return bool True if the notification was shown successfully
-     *
-     * @throws RuntimeException If the Toast dylib cannot be loaded
      */
     public static function show(string $title, string $message, ?string $icon = null): bool
+    {
+        self::$lastError = null;
+
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return self::showWindows($title, $message, $icon);
+        }
+
+        return self::showJoliNotif($title, $message, $icon);
+    }
+
+    public static function lastError(): ?string
+    {
+        return self::$lastError;
+    }
+
+    private static function showWindows(string $title, string $message, ?string $icon): bool
     {
         try {
             $ffi = self::ffi();
@@ -46,16 +63,6 @@ class Toast
         }
     }
 
-    public static function lastError(): ?string
-    {
-        return self::$lastError;
-    }
-
-    /**
-     * Get or initialise the FFI instance for Toast.dylib.
-     *
-     * @throws RuntimeException If the library cannot be loaded
-     */
     private static function ffi(): \FFI
     {
         if (self::$ffi !== null) {
@@ -76,9 +83,6 @@ class Toast
         return self::$ffi;
     }
 
-    /**
-     * Resolve the platform-specific library path.
-     */
     private static function libraryPath(): string
     {
         $base = dirname(__DIR__, 2) . '/vendor/kingbes/pebview/lib';
@@ -87,7 +91,26 @@ class Toast
             'Darwin'  => $base . '/macos/arm64/Toast.dylib',
             'Linux'   => $base . '/linux/x86_64/libToast.so',
             'Windows' => $base . '/windows/x86_64/Toast.dll',
-            default   => throw new RuntimeException('Unsupported platform for Toast: ' . PHP_OS_FAMILY),
+            default   => throw new RuntimeException('Unsupported platform: ' . PHP_OS_FAMILY),
         };
+    }
+
+    private static function showJoliNotif(string $title, string $message, ?string $icon): bool
+    {
+        try {
+            $notification = (new \Joli\JoliNotif\Notification())
+                ->setTitle($title)
+                ->setBody($message);
+
+            if ($icon !== null) {
+                $notification->setIcon($icon);
+            }
+
+            $notifier = new \Joli\JoliNotif\DefaultNotifier();
+            return $notifier->send($notification);
+        } catch (\Throwable $e) {
+            self::$lastError = $e->getMessage();
+            return false;
+        }
     }
 }

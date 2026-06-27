@@ -1,0 +1,91 @@
+[27-Jun-2026 01:21:17 UTC] PHP Warning:  require(D:\git\php\HelgeSverre-libui-sdk\vendor\composer/../illuminate/collections/functions.php): Failed to open stream: No such file or directory in D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php on line 41
+[27-Jun-2026 01:21:17 UTC] PHP Fatal error:  Uncaught Error: Failed opening required 'D:\git\php\HelgeSverre-libui-sdk\vendor\composer/../illuminate/collections/functions.php' (include_path='.;C:\php\pear') in D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php:41
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php(45): {closure:ComposerAutoloaderInitdfa4ed833851e3a3540eea996b4c65d0::getLoader():37}('23f09fe3194f8c2...', 'D:\\git\\php\\Helg...')
+#1 D:\git\php\HelgeSverre-libui-sdk\vendor\autoload.php(22): ComposerAutoloaderInitdfa4ed833851e3a3540eea996b4c65d0::getLoader()
+#2 D:\git\php\HelgeSverre-libui-sdk\examples\all-components.php(19): require('D:\\git\\php\\Helg...')
+#3 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php on line 41
+[27-Jun-2026 01:25:18 UTC] PHP Warning:  require(D:\git\php\HelgeSverre-libui-sdk\vendor\composer/../illuminate/collections/functions.php): Failed to open stream: No such file or directory in D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php on line 41
+[27-Jun-2026 01:25:18 UTC] PHP Fatal error:  Uncaught Error: Failed opening required 'D:\git\php\HelgeSverre-libui-sdk\vendor\composer/../illuminate/collections/functions.php' (include_path='.;C:\php\pear') in D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php:41
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php(45): {closure:ComposerAutoloaderInitb1573542c8372625fa58fd94abcbfed6::getLoader():37}('23f09fe3194f8c2...', 'D:\\git\\php\\Helg...')
+#1 D:\git\php\HelgeSverre-libui-sdk\vendor\autoload.php(22): ComposerAutoloaderInitb1573542c8372625fa58fd94abcbfed6::getLoader()
+#2 D:\git\php\HelgeSverre-libui-sdk\examples\all-components.php(19): require('D:\\git\\php\\Helg...')
+#3 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\composer\autoload_real.php on line 41
+[27-Jun-2026 01:35:12 UTC] PHP Deprecated:  beforeEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 49
+[27-Jun-2026 01:35:12 UTC] PHP Deprecated:  test(): Implicitly marking parameter $description as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:35:12 UTC] PHP Deprecated:  test(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:35:12 UTC] PHP Deprecated:  it(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 110
+[27-Jun-2026 01:35:12 UTC] PHP Deprecated:  afterEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 124
+[27-Jun-2026 01:35:19 UTC] PHP Deprecated:  beforeEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 49
+[27-Jun-2026 01:35:19 UTC] PHP Deprecated:  test(): Implicitly marking parameter $description as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:35:19 UTC] PHP Deprecated:  test(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:35:19 UTC] PHP Deprecated:  it(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 110
+[27-Jun-2026 01:35:19 UTC] PHP Deprecated:  afterEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 124
+[27-Jun-2026 01:38:10 UTC] PHP Deprecated:  beforeEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 49
+[27-Jun-2026 01:38:10 UTC] PHP Deprecated:  test(): Implicitly marking parameter $description as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:38:10 UTC] PHP Deprecated:  test(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:38:10 UTC] PHP Deprecated:  it(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 110
+[27-Jun-2026 01:38:10 UTC] PHP Deprecated:  afterEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 124
+[27-Jun-2026 01:40:57 UTC] PHP Deprecated:  beforeEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 49
+[27-Jun-2026 01:40:57 UTC] PHP Deprecated:  test(): Implicitly marking parameter $description as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:40:57 UTC] PHP Deprecated:  test(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:40:57 UTC] PHP Deprecated:  it(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 110
+[27-Jun-2026 01:40:57 UTC] PHP Deprecated:  afterEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 124
+[27-Jun-2026 01:46:10 UTC] PHP Deprecated:  beforeEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 49
+[27-Jun-2026 01:46:10 UTC] PHP Deprecated:  test(): Implicitly marking parameter $description as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:46:10 UTC] PHP Deprecated:  test(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 01:46:10 UTC] PHP Deprecated:  it(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 110
+[27-Jun-2026 01:46:10 UTC] PHP Deprecated:  afterEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 124
+[27-Jun-2026 01:46:42 UTC] PHP Parse error:  syntax error, unexpected token "\", expecting end of file in Command line code on line 1
+[27-Jun-2026 01:46:47 UTC] PHP Parse error:  syntax error, unexpected token "=", expecting end of file in Command line code on line 1
+[27-Jun-2026 01:49:23 UTC] PHP Fatal error:  Uncaught Error: Class "Label" not found in D:\git\php\HelgeSverre-libui-sdk\examples\all-components.php:27
+Stack trace:
+#0 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\examples\all-components.php on line 27
+[27-Jun-2026 02:00:59 UTC] PHP Deprecated:  beforeEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 49
+[27-Jun-2026 02:00:59 UTC] PHP Deprecated:  test(): Implicitly marking parameter $description as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 02:00:59 UTC] PHP Deprecated:  test(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 90
+[27-Jun-2026 02:00:59 UTC] PHP Deprecated:  it(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 110
+[27-Jun-2026 02:00:59 UTC] PHP Deprecated:  afterEach(): Implicitly marking parameter $closure as nullable is deprecated, the explicit nullable type must be used instead in D:\git\php\HelgeSverre-libui-sdk\vendor\pestphp\pest\src\Functions.php on line 124
+[27-Jun-2026 02:09:03 UTC] PHP Parse error:  syntax error, unexpected token "\", expecting end of file in Command line code on line 1
+[27-Jun-2026 02:12:17 UTC] PHP Fatal error:  Cannot redeclare function log() in D:\git\php\HelgeSverre-libui-sdk\examples\toast-test.php on line 8
+Stack trace:
+#0 {main}
+[27-Jun-2026 02:33:37 UTC] PHP Fatal error:  Uncaught TypeError: FFI::string(): Argument #1 ($ptr) must be of type FFI\CData, string given in D:\git\php\HelgeSverre-libui-sdk\vendor\helgesverre\libui\src\Ffi.php:169
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\vendor\helgesverre\libui\src\Ffi.php(169): FFI::string('error initializ...')
+#1 D:\git\php\HelgeSverre-libui-sdk\examples\toast-test.php(23): Libui\Ffi::init()
+#2 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\helgesverre\libui\src\Ffi.php on line 169
+[27-Jun-2026 02:48:29 UTC] PHP Fatal error:  Uncaught FFI\Exception: Failed loading 'D:\git\php\HelgeSverre-libui-sdk/bridge/webview_bridge.dll' (找不到指定的模块。) in D:\git\php\HelgeSverre-libui-sdk\src\WebView.php:490
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\src\WebView.php(490): FFI::cdef('void* wvb_creat...', 'D:\\git\\php\\Helg...')
+#1 D:\git\php\HelgeSverre-libui-sdk\src\WebView.php(128): Yangweijie\Ui2\WebView->loadBridge()
+#2 D:\git\php\HelgeSverre-libui-sdk\src\Widgets\TreeView.php(64): Yangweijie\Ui2\WebView->__construct(Object(Libui\Window), 260, 0, 420, 340, false)
+#3 D:\git\php\HelgeSverre-libui-sdk\examples\test-treeview.php(40): Yangweijie\Ui2\Widgets\TreeView->__construct(Object(Libui\Window), 260, 0, 420, 340, Array)
+#4 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\src\WebView.php on line 490
+[27-Jun-2026 02:50:22 UTC] PHP Fatal error:  Uncaught FFI\Exception: Failed loading 'D:\git\php\HelgeSverre-libui-sdk\bridge\webview_bridge.dll' (找不到指定的模块。) in Command line code:1
+Stack trace:
+#0 Command line code(1): FFI::cdef('void* wvb_creat...', 'D:\\git\\php\\Helg...')
+#1 {main}
+  thrown in Command line code on line 1
+[27-Jun-2026 02:50:57 UTC] PHP Fatal error:  Uncaught FFI\Exception: Failed loading 'D:\git\php\HelgeSverre-libui-sdk\bridge\webview_bridge.dll' (找不到指定的模块。) in Command line code:1
+Stack trace:
+#0 Command line code(1): FFI::cdef('void* wvb_creat...', 'D:\\git\\php\\Helg...')
+#1 {main}
+  thrown in Command line code on line 1
+[27-Jun-2026 02:52:40 UTC] PHP Parse error:  syntax error, unexpected token "\", expecting end of file in Command line code on line 1
+[27-Jun-2026 03:05:37 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method Libui\Ffi::cdef() in D:\git\php\HelgeSverre-libui-sdk\test_diag.php:19
+Stack trace:
+#0 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\test_diag.php on line 19
+[27-Jun-2026 03:06:07 UTC] PHP Parse error:  syntax error, unexpected token "=" in D:\git\php\HelgeSverre-libui-sdk\test_diag.php on line 19
+[27-Jun-2026 03:06:23 UTC] PHP Fatal error:  Uncaught FFI\Exception: Failed loading 'D:\git\php\HelgeSverre-libui-sdk/bridge/webview_bridge.dll' (找不到指定的模块。) in D:\git\php\HelgeSverre-libui-sdk\test_diag.php:19
+Stack trace:
+#0 D:\git\php\HelgeSverre-libui-sdk\test_diag.php(19): FFI::cdef('void* wvb_creat...', 'D:\\git\\php\\Helg...')
+#1 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\test_diag.php on line 19

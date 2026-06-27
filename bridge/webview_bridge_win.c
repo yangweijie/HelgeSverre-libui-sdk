@@ -69,13 +69,42 @@ void *wvb_create(int debug, uintptr_t parent_handle,
 
     if (!child_hwnd) return NULL;
 
+    /* Ensure the child HWND is at the top of the z-order so libui's
+     * internal rendering doesn't paint over it. */
+    SetWindowPos(child_hwnd, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
     /* Create the webview inside the child HWND.
-     * webview_create() will repurpose the child HWND's client area
-     * for the browser engine (WebView2 or MSHTML). */
+     * PebView creates its own "webview_widget" child window inside our
+     * STATIC HWND at 0,0,0,0 and embeds WebView2 there.  It sizes the
+     * widget via WM_SIZE on the parent — but our STATIC's default WndProc
+     * never forwards that.  So we enumerate the widget and resize it
+     * manually after creation. */
     void *wv = webview_create(debug, child_hwnd);
     if (!wv) {
         DestroyWindow(child_hwnd);
         return NULL;
+    }
+
+    /* Find PebView's widget child and resize it to fill our STATIC HWND. */
+    {
+        RECT cr;
+        if (GetClientRect(child_hwnd, &cr)) {
+            int cw = cr.right - cr.left;
+            int ch = cr.bottom - cr.top;
+
+            /* PebView registers "webview_widget" — find it. */
+            HWND widget = FindWindowExW(child_hwnd, NULL, L"webview_widget", NULL);
+            if (!widget) {
+                /* Fallback: grab whatever child exists. */
+                widget = GetWindow(child_hwnd, GW_CHILD);
+            }
+            if (widget) {
+                MoveWindow(widget, 0, 0, cw, ch, TRUE);
+                /* Trigger WM_SIZE on the widget so PebView resizes WebView2. */
+                SendMessage(widget, WM_SIZE, 0, MAKELPARAM(cw, ch));
+            }
+        }
     }
 
     return wv;
@@ -97,6 +126,16 @@ void wvb_move(void *wv, uintptr_t parent_handle,
 
     /* MoveWindow with TRUE redraws the child immediately */
     MoveWindow(child_hwnd, x, y, w, h, TRUE);
+
+    /* Also resize PebView's widget to match. */
+    HWND widget = FindWindowExW(child_hwnd, NULL, L"webview_widget", NULL);
+    if (!widget) {
+        widget = GetWindow(child_hwnd, GW_CHILD);
+    }
+    if (widget) {
+        MoveWindow(widget, 0, 0, w, h, TRUE);
+        SendMessage(widget, WM_SIZE, 0, MAKELPARAM(w, h));
+    }
 }
 
 /**

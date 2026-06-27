@@ -46,7 +46,12 @@ class TreeView extends WebView
      * page context that destroys the previous bridge.
      */
     private const INIT_SCRIPT_POST = 'function(message) {
-  return window.webkit.messageHandlers.__webview__.postMessage(message);
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.__webview__) {
+    return window.webkit.messageHandlers.__webview__.postMessage(message);
+  }
+  if (window.chrome && window.chrome.webview) {
+    return window.chrome.webview.postMessage(message);
+  }
 }';
 
     public function __construct(

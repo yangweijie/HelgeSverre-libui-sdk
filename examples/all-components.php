@@ -28,6 +28,7 @@ use Libui\Tab;
 use Libui\Window;
 use Libui\Button;
 use Libui\Entry;
+use Libui\Ffi;
 
 use Yangweijie\Ui2\Dialogs\DialogConfirm;
 use Yangweijie\Ui2\Dialogs\DialogPrompt;
@@ -60,6 +61,8 @@ use Yangweijie\Ui2\Widgets\TableView;
 use Yangweijie\Ui2\Widgets\Toast;
 use Yangweijie\Ui2\Widgets\ToggleSwitch;
 use Yangweijie\Ui2\Widgets\TreeView;
+
+Ffi::init();
 
 // ── Status / output label (shared across all tabs) ──
 $outputLabel = new Label(
