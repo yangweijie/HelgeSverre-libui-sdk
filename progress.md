@@ -231,3 +231,16 @@
 - **修复 1**：`composer.json` 新增 `build`/`build:pebview`/`build:bridge` 脚本，自动检测平台调用对应编译命令
 - **修复 2**：`WebView.php` 新增 `checkLibraries()` 方法，检测库文件是否存在，缺失时输出完整构建指引
 - Files: `composer.json`, `src/WebView.php`
+
+### Phase 23: ✅ Windows setWindowIcon 图标不显示修复
+- **问题**：`setWindowIcon()` 在 Windows 上返回成功 (code=0) 但图标不显示
+- **根因 3 个**（已修复 2 个，第 3 个本次修复）：
+  1. PebView DLL 路径错误 `windows/x86_64/PebView.dll` → `windows/PebView.dll` ✅
+  2. HWND 未转换：`uiControlHandle()` 返回 `uintptr_t` → `\FFI::cast('void*')` ✅
+  3. **`DestroyIcon(hIcon)` 在 `WM_SETICON` 后立即销毁图标句柄** → 图标失效 ❌→✅
+- **修复 3（本次）**：
+  - `icon.c`：移除 `DestroyIcon(hIcon)` — `WM_SETICON` 存储句柄引用，应用必须保持图标存活
+  - `icon.c`：添加 `WM_SETICON ICON_SMALL` — 任务栏常使用小图标
+  - 重新编译 `PebView.dll`（75KB）
+- **验证**：`test-set-icon.php` 返回 code 0（待用户视觉确认）
+- Files: `vendor/kingbes/pebview/source/seticon/icon.c`, `vendor/kingbes/pebview/lib/windows/PebView.dll`

@@ -163,3 +163,17 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 - `composer.json` 新增 `build`/`build:pebview`/`build:bridge` 脚本
 - `WebView.php` 新增 `checkLibraries()` 缺失提示
 - Files: `composer.json`, `src/WebView.php`
+
+### Phase 23: Windows setWindowIcon 修复 ✅
+- **问题**：`setWindowIcon()` 在 Windows 上返回成功但图标不显示
+- **根因 3 个**：
+  1. PebView DLL 路径错误：`windows/x86_64/PebView.dll` → `windows/PebView.dll`
+  2. HWND 未转换：`uiControlHandle()` 返回 `uintptr_t`，需 `\FFI::cast('void*')`
+  3. **`DestroyIcon(hIcon)` 在 `WM_SETICON` 后立即销毁句柄** → 图标失效
+- **修复**：
+  - `Window.php` DLL 路径 + HWND 转换
+  - `all-components.php` Windows 用 `.ico` 格式
+  - `icon.c`：移除 `DestroyIcon`，添加 `ICON_SMALL`
+  - 重新编译 `PebView.dll`
+- **验证**：用户确认窗口图标正常显示 ✅
+- Files: `patches/helgesverre/libui/src/Window.php`, `vendor/kingbes/pebview/source/seticon/icon.c`, `vendor/kingbes/pebview/lib/windows/PebView.dll`, `examples/all-components.php`, `examples/test-set-icon.php`

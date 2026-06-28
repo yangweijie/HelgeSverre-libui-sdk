@@ -422,7 +422,10 @@ $iconLabel = new Label("App Icon — set dock/taskbar icon at runtime:");
 $iconBtn = new Button("Set App Icon");
 $iconBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
     if ($mainWindow === null) return;
-    $iconPath = __DIR__ . '/../assets/app-icon.png';
+    $iconPath = match(PHP_OS_FAMILY) {
+        'Windows' => __DIR__ . '/../assets/icon.ico',
+        default   => __DIR__ . '/../assets/app-icon.png',
+    };
     if (!file_exists($iconPath)) {
         $outputLabel->setText("Icon not found: {$iconPath}");
         return;
@@ -481,7 +484,10 @@ $mainWindow = new Window("All Components — ui2 Demo", 800, 600, true);
 $mainWindow->setChild(Build::vbox($tab, $outputLabel));
 
 // Auto-apply app icon at startup (afterInit = after Ffi::init, before event loop)
-$autoIconPath = __DIR__ . '/../assets/app-icon.png';
+$autoIconPath = match(PHP_OS_FAMILY) {
+    'Windows' => __DIR__ . '/../assets/icon.ico',
+    default   => __DIR__ . '/../assets/app-icon.png',
+};
 $app = App::new()->window($mainWindow)->onShouldQuit(fn() => true);
 if (file_exists($autoIconPath)) {
     $app->afterInit(function () use (&$mainWindow, $autoIconPath): void {

@@ -514,3 +514,43 @@ $ctx->drawString($text, $font, $color, $x, $y);
 - 滚动 Area 的 `$params->areaWidth/Height` 在 draw 回调中报告 0×0
 - draw 坐标在 content 空间，不是 viewport 空间
 - 适合固定尺寸绘图（如 SVG），不适合需要动态 viewport 的场景
+
+## Windows setWindowIcon 图标不显示
+
+### 根因（3 个）
+
+#### 1. PebView DLL 路径错误
+- `Window.php` 中路径：`windows/x86_64/PebView.dll`
+- **实际位置**：`windows/PebView.dll`（同 Tray Phase 13）
+
+#### 2. HWND 未转换
+- `uiControlHandle()` 返回 `uintptr_t`，传给 `const void*` 需要 `\FFI::cast('void*', $hwnd)`
+
+#### 3. DestroyIcon 在 WM_SETICON 后立即销毁图标句柄
+- `icon.c` 中：`SendMessageW(WM_SETICON, ICON_BIG, hIcon)` → `DestroyIcon(hIcon)`
+- `WM_SETICON` 存储图标句柄引用，应用必须保持 HICON 存活
+- `DestroyIcon` 立即使图标失效，导致标题栏/任务栏无图标
+- **修复**：移除 `DestroyIcon(hIcon)`，添加 `ICON_SMALL` 设置小图标
+
+### PebView icon.c 修复前后对比
+```c
+// 修复前 — DestroyIcon 使图标失效
+SendMessageW(window, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+free(iconPath);
+DestroyIcon(hIcon);
+
+// 修复后 — 保持图标句柄存活
+SendMessageW(window, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+SendMessageW(window, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+free(iconPath);
+```
+
+### HWND 获取方式（与 Tray 相同）
+- `$window->handle()` 返回 `uiWindow*`（libui 内部结构体指针），**不是** Win32 HWND
+- **正确方式**：`Ffi::get()->uiControlHandle($window->asControl())` 返回 `uintptr_t`
+- 需要 `\FFI::cast('void*', $hwnd)` 转为 void* 后传给 C 函数
+
+### Windows 图标格式
+- `LoadImageW(IMAGE_ICON, LR_LOADFROMFILE)` 需要 `.ico` 格式
+- `.png` 在 Windows 上不可靠（部分系统加载失败）
+- 使用 PowerShell `[System.Drawing.Bitmap]::GetHicon()` + ICO 编码器转换

@@ -352,7 +352,7 @@ class Window extends Generated\Window
         if ($ffi === null) {
             $base = \dirname(__DIR__, 4) . '/vendor/kingbes/pebview/lib';
             $lib = match (PHP_OS_FAMILY) {
-                'Windows' => $base . '/windows/x86_64/PebView.dll',
+                'Windows' => $base . '/windows/PebView.dll',
                 'Linux'   => $base . '/linux/x86_64/PebView.so',
                 default   => null,
             };
@@ -364,7 +364,8 @@ class Window extends Generated\Window
                 $lib,
             );
         }
-        $handle = Ffi::get()->uiControlHandle($this->asControl());
+        $hwnd = Ffi::get()->uiControlHandle($this->asControl());
+        $handle = \FFI::cast('void*', $hwnd);
         $code = $ffi->set_icon($handle, $iconPath);
         if ($code !== 0) {
             throw new \RuntimeException(

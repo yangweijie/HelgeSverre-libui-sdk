@@ -1640,3 +1640,9 @@ Stack trace:
 #1 D:\git\php\HelgeSverre-libui-sdk\examples\test-system-info.php(35): Yangweijie\Ui2\System\SystemInfo->isArm64()
 #2 {main}
   thrown in D:\git\php\HelgeSverre-libui-sdk\vendor\utopia-php\system\src\System\System.php on line 172
+[28-Jun-2026 09:09:53 UTC] PHP Fatal error:  Uncaught Error: Call to undefined method Libui\App::afterInit() in D:\git\php\HelgeSverre-libui-sdk\examples\all-components.php:487
+Stack trace:
+#0 {main}
+  thrown in D:\git\php\HelgeSverre-libui-sdk\examples\all-components.php on line 487
+[28-Jun-2026 09:16:12 UTC] PHP Parse error:  syntax error, unexpected token "=", expecting end of file in Command line code on line 1
+[28-Jun-2026 09:17:48 UTC] PHP Parse error:  syntax error, unexpected single-quoted string "windows/PebView\|windows/x86_6...", expecting "," or ";" in Command line code on line 1
