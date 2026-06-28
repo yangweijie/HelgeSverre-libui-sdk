@@ -6,6 +6,11 @@ export default defineUserConfig({
   base: '/HelgeSverre-libui-sdk/',
 
   locales: {
+    '/': {
+      lang: 'en-US',
+      title: 'ui2',
+      description: 'A thin convenience layer over helgesverre/libui — native desktop GUI for PHP',
+    },
     '/en/': {
       lang: 'en-US',
       title: 'ui2',
