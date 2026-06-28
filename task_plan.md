@@ -142,3 +142,12 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 - `Control::__destruct()` — 仅对 toplevel 控件调用 `destroy()`
 - `App::run()` — 在 `Ffi::uninit()` 前显式 destroy 所有 Window
 - Files: `patches/helgesverre/libui/src/App.php`, `patches/helgesverre/libui/src/Control.php`
+
+### Phase 19: CircleProgressBar Area 尺寸调试 ✅
+- 6 次尝试解决 macOS Tab 切换后 Area 尺寸异常
+- 最终方案：滚动 Area + 定时器重绘 + 固定 ringSize 居中
+- Files: `src/Widgets/CircleProgressBar.php`, `examples/all-components.php`
+
+### Phase 20: all-components.php Tab 顺序 + Fields 独立示例 ✅
+- Fields tab 移至独立 `test-fields.php`，Custom tab 调为第一个
+- Files: `examples/all-components.php`, `examples/test-fields.php`

@@ -36,10 +36,10 @@ class CircleProgressBar extends Composite
     private readonly Area $area;
     private readonly CircleProgressDelegate $delegate;
 
-    public function __construct(int $initialProgress = 0)
+    public function __construct(int $initialProgress = 0, int $size = 200)
     {
-        $this->delegate = new CircleProgressDelegate($initialProgress);
-        $this->area = new Area($this->delegate);
+        $this->delegate = new CircleProgressDelegate($initialProgress, $size);
+        $this->area = Area::scrolling($this->delegate, $size, $size);
     }
 
     public function root(): Control
@@ -115,45 +115,47 @@ class CircleProgressBar extends Composite
  */
 final class CircleProgressDelegate extends AreaDelegate
 {
-    /** Default progress bar colour (macOS accent blue). */
-    private const DEFAULT_COLOR = [0.04, 0.52, 1.0, 1.0]; // #0A84FF
-
-    /** Background track colour (light gray). */
-    private const TRACK_COLOR = [0.88, 0.88, 0.88, 1.0]; // #E0E0E0
-
-    /** Text colour (dark gray). */
+    private const DEFAULT_COLOR = [0.04, 0.52, 1.0, 1.0];
+    private const TRACK_COLOR = [0.88, 0.88, 0.88, 1.0];
     private const TEXT_COLOR = [0.2, 0.2, 0.2, 1.0];
 
     public int $progress;
     public Color $color;
     public float $thickness = 12.0;
+    private int $ringSize;
 
-    public function __construct(int $initialProgress)
+    public function __construct(int $initialProgress, int $ringSize = 200)
     {
         $this->progress = max(0, min(100, $initialProgress));
         $this->color = Color::rgba(...self::DEFAULT_COLOR);
+        $this->ringSize = $ringSize;
     }
 
     public function draw(DrawContext $ctx, AreaDrawParams $params): void
     {
         $w = $params->areaWidth;
         $h = $params->areaHeight;
+
+        // When viewport is 0×0 (after tab switch), use content size as fallback.
+        // When viewport is correct, center the ring in it.
+        if ($w < $this->ringSize || $h < $this->ringSize) {
+            $w = $this->ringSize;
+            $h = $this->ringSize;
+        }
+
         $cx = $w / 2;
         $cy = $h / 2;
 
-        // Minimum ring envelope: the ring needs at least (thickness + 8) diameter
-        // to be visible. When the area is larger, the ring scales up to fill it.
         $minDiameter = $this->thickness * 2 + 8;
-        $diameter = max($minDiameter, min($w, $h) - 8);
+        $diameter = max($minDiameter, $this->ringSize - 8);
         $radius = $diameter / 2 - $this->thickness / 2;
 
         if ($radius <= 0) {
             return;
         }
 
-        $startAngle = -M_PI / 2; // 12 o'clock
+        $startAngle = -M_PI / 2;
 
-        // --- Background track (full ring) ---
         $trackStroke = new StrokeParams(
             thickness: $this->thickness,
             cap: \Libui\Generated\Enum\DrawLineCap::Round,
@@ -165,7 +167,6 @@ final class CircleProgressDelegate extends AreaDelegate
             static fn ($p) => $p->arc($cx, $cy, $radius, 0.0, 2 * M_PI),
         );
 
-        // --- Progress arc ---
         $sweep = ($this->progress / 100.0) * 2 * M_PI;
         if ($sweep > 0) {
             $progressStroke = new StrokeParams(
@@ -180,25 +181,16 @@ final class CircleProgressDelegate extends AreaDelegate
             );
         }
 
-        // --- Center text (percentage) ---
         $text = $this->progress . '%';
         $innerDiameter = $diameter - $this->thickness;
-
-        // Font size scales with the ring: min 14pt for small rings, ~10% of inner diameter for large ones.
         $fontSize = max(14.0, $innerDiameter * 0.10);
 
         $font = new FontDescriptor('Arial', $fontSize);
         $str = new AttributedString();
-        $str->append(
-            $text,
-            Attribute::fromColor(Color::rgba(...self::TEXT_COLOR)),
-            Attribute::size($fontSize),
-        );
+        $str->append($text, Attribute::fromColor(Color::rgba(...self::TEXT_COLOR)), Attribute::size($fontSize));
 
-        // Measure actual text extents, then center manually.
         $layout = new TextLayout($str, $font, $innerDiameter * 2, DrawTextAlign::Left);
         [$textW, $textH] = $layout->extents();
-
         $ctx->text($layout, $cx - $textW / 2, $cy - $textH / 2);
         $layout->free();
     }

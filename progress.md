@@ -189,3 +189,25 @@
 - **修复 1**：`Control.php` 添加 `__destruct()` — 仅对 toplevel 控件调用 `destroy()`（子控件由父容器管理）
 - **修复 2**：`App.php` 在 `Ffi::uninit()` 之前显式 `destroy()` 所有注册的 Window → libui 递归销毁子控件 → leak check 通过
 - Files: `patches/helgesverre/libui/src/App.php`（新建）, `patches/helgesverre/libui/src/Control.php`
+
+### Phase 19: ✅ CircleProgressBar Area 尺寸调试
+- **问题**：macOS 上 CircleProgressBar 在 Tab 切换后尺寸异常（消失/偏移/重叠）
+- **尝试 1**：非滚动 Area + `Build::stretchy()` → Area 撑满整个 Tab 内容区，圆环偏大
+- **尝试 2**：非滚动 Area + 固定 ringSize 200×200 居中 → Tab 切换后 viewport 高度变为 0，圆环消失
+- **尝试 3**：滚动 Area (`Area::scrolling`) + 固定内容尺寸 → 内容居中但 viewport 显示左上角
+- **尝试 4**：非滚动 Area + `Tab::onSelected()` 强制 `queueRedrawAll()` → 绘制回调不触发
+- **尝试 5**：`Ffi::timer(50)` 延迟重绘 → viewport 仍为 0×0
+- **尝试 6**：`uiAreaSetSize()` 强制尺寸 → 报错 `You cannot call uiAreaSetSize() on a non-scrolling uiArea`
+- **最终方案**：滚动 Area + `queueRedrawAll()` 定时器，draw 方法用固定 ringSize 居中（content 坐标系）
+- **关键发现**：
+  - `uiAreaSetSize()` 只能用于滚动 Area
+  - `queueRedrawAll()` 在 macOS Tab 切换后不触发绘制回调，需 `Ffi::timer()` 延迟
+  - Tab 的 `onSelected()` 回调签名是 `(Tab $tab)` 不是 `(int $index)`
+  - macOS 上 Tab 切换后非滚动 Area 的 viewport 高度变为 0
+- Files: `src/Widgets/CircleProgressBar.php`, `examples/all-components.php`
+
+### Phase 20: ✅ all-components.php Tab 顺序 + Fields 独立示例
+- **问题**：Fields tab 内容过窄导致窗口缩小，切换 tab 后无法恢复
+- **修复**：将 Fields tab 从 all-components.php 移除，创建独立 `test-fields.php`
+- **附带**：Custom tab 调整为第一个，CircleProgressBar 按钮恢复到布局中
+- Files: `examples/all-components.php`, `examples/test-fields.php`（新建）

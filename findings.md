@@ -415,3 +415,49 @@ try {
 - **`App::run()` 的 `finally` 是唯一可靠的清理时机** — PHP GC 太晚
 - **toplevel + 非 toplevel 的 `__destruct` 策略不同** — toplevel 可以直接 destroy，子控件不能
 - **两层防护确保不漏** — App 显式销毁 + Control `__destruct` 兜底
+
+## CircleProgressBar Area 尺寸问题
+
+### 问题
+macOS 上 CircleProgressBar（Area 自绘组件）在 Tab 切换/窗口缩放后尺寸异常。
+
+### 关键发现
+
+| Area 类型 | viewport 报告 | `queueRedrawAll()` | `uiAreaSetSize()` | Tab 切换后行为 |
+|-----------|--------------|--------------------|--------------------|--------------|
+| 非滚动 | 正确 (744×254) | 不触发绘制回调 | 报错 `cannot call on non-scrolling` | viewport 变为 744×0 |
+| 滚动 | 0×0（内容坐标系） | 不触发绘制回调 | 可以调用 | 内容尺寸固定 (200×200) |
+
+### 核心矛盾
+- **非滚动 Area**：viewport 尺寸正确（744×254），但 Tab 切换后高度变为 0
+- **滚动 Area**：内容尺寸固定（200×200），但 `$params->areaWidth/Height` 报告 0×0
+
+### 解决方案
+使用滚动 Area + `Ffi::timer()` 延迟重绘 + draw 方法用固定 ringSize 居中：
+```php
+// 构造：固定内容尺寸
+$this->area = Area::scrolling($this->delegate, $size, $size);
+
+// draw：用 ringSize 居中，不依赖 viewport
+$cx = $this->ringSize / 2;
+$cy = $this->ringSize / 2;
+```
+
+### `queueRedrawAll()` 在 macOS Tab 切换后不工作
+- 调用 `queueRedrawAll()` 后绘制回调不触发
+- 需要 `Ffi::timer(50, ...)` 延迟到下一个事件循环 tick
+- 即使如此，viewport 可能仍为 0×0
+
+### Tab `onSelected()` 回调签名
+```php
+// ❌ 错误
+$tab->onSelected(function (int $index) { ... });
+// ✅ 正确 — 参数是 Tab 对象
+$tab->onSelected(function (Tab $tab) {
+    $index = $tab->selected();
+});
+```
+
+### ToggleSwitch/StatusIndicator 为何没问题
+- 小尺寸（40×22 / 14×14），放在 hbox 中，布局系统能正确分配空间
+- CircleProgressBar 大尺寸（200×200），放在 vbox 中，布局系统在 Tab 切换后无法恢复尺寸

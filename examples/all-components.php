@@ -34,19 +34,7 @@ use Yangweijie\Ui2\Dialogs\DialogConfirm;
 use Yangweijie\Ui2\Dialogs\DialogPrompt;
 use Yangweijie\Ui2\Dialogs\MessageBox;
 
-use Yangweijie\Ui2\Fields\CheckboxField;
-use Yangweijie\Ui2\Fields\ComboBoxField;
-use Yangweijie\Ui2\Fields\DatePickerField;
-use Yangweijie\Ui2\Fields\EditableComboBoxField;
-use Yangweijie\Ui2\Fields\FilePickerField;
-use Yangweijie\Ui2\Fields\NumberField;
-use Yangweijie\Ui2\Fields\PasswordField;
-use Yangweijie\Ui2\Fields\ProgressBarField;
-use Yangweijie\Ui2\Fields\RadioGroup;
-use Yangweijie\Ui2\Fields\SearchField;
 use Yangweijie\Ui2\Fields\SeparatorLine;
-use Yangweijie\Ui2\Fields\SliderField;
-use Yangweijie\Ui2\Fields\TextAreaField;
 use Yangweijie\Ui2\Fields\TextField;
 
 use Yangweijie\Ui2\Pickers\ColorPickerDialog;
@@ -70,119 +58,7 @@ $outputLabel = new Label(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
-// TAB 1 — Fields
-// ═════════════════════════════════════════════════════════════════════════════
-
-$textField = new TextField("Name:", "John Doe");
-$searchField = new SearchField("Search:", "");
-$passwordField = new PasswordField("Password:", "");
-$numberField = new NumberField("Quantity:", 0, 100, 5);
-$sliderField = new SliderField("Volume:", 0, 100);
-$checkboxField = new CheckboxField("Enable feature");
-$radioGroup = new RadioGroup("Theme:");
-$comboBoxField = new ComboBoxField("Font Size:");
-$editableComboBoxField = new EditableComboBoxField("City:");
-$datePickerField = DatePickerField::dateOnly("Date:");
-$textAreaField = new TextAreaField("Description:", "");
-$progressBarField = new ProgressBarField("Progress:");
-
-$radioGroup->addOptions(["Light", "Dark", "Auto"]);
-$comboBoxField->addOptions(["12px", "14px", "16px", "18px", "24px"]);
-$editableComboBoxField->addOptions([
-    "Beijing",
-    "Shanghai",
-    "Shenzhen",
-    "Guangzhou",
-]);
-
-// FilePickerField needs a Window — entries added after window creation below
-$filePickerField = null;
-
-$fieldFormEntries = [
-    "Text" => $textField,
-    "Search" => $searchField,
-    "Password" => $passwordField,
-    "Number" => $numberField,
-    "Slider" => $sliderField,
-    "Checkbox" => $checkboxField,
-    "Radio" => $radioGroup,
-    "Combo" => $comboBoxField,
-    "Editable" => $editableComboBoxField,
-    "Date" => $datePickerField,
-    "Text Area" => $textAreaField,
-    "Progress" => $progressBarField,
-];
-
-$fieldsGroup = Build::form($fieldFormEntries);
-
-$onChange = function (mixed $val) use ($outputLabel): void {
-    $outputLabel->setText(
-        "Changed: " .
-            (is_bool($val) ? ($val ? "true" : "false") : (string) $val),
-    );
-};
-$textField->on("change", $onChange);
-$searchField->on("change", $onChange);
-$numberField->on("change", $onChange);
-$sliderField->on("change", $onChange);
-$checkboxField->on("change", $onChange);
-$passwordField->on("change", fn() => $outputLabel->setText("Password changed"));
-$radioGroup->on(
-    "change",
-    fn(int $idx) => $outputLabel->setText("Theme index: {$idx}"),
-);
-$comboBoxField->on(
-    "change",
-    fn(int $idx) => $outputLabel->setText("Font size index: {$idx}"),
-);
-$editableComboBoxField->on(
-    "change",
-    fn(string $val) => $outputLabel->setText("City: {$val}"),
-);
-$datePickerField->on(
-    "change",
-    fn(\DateTimeImmutable $dt) => $outputLabel->setText(
-        "Date: {$dt->format("Y-m-d")}",
-    ),
-);
-$textAreaField->on("change", fn() => $outputLabel->setText("Notes updated"));
-
-$readAllBtn = new Button("Read All Fields");
-$readAllBtn->onClicked(function () use (
-    $datePickerField,
-    $textAreaField,
-    $textField,
-    $numberField,
-    $sliderField,
-    $outputLabel,
-): void {
-    $lines = [
-        "Text: " . $textField->value(),
-        "Number: " . $numberField->value(),
-        "Slider: " . $sliderField->value(),
-        "Date: " . $datePickerField->value()->format("Y-m-d"),
-        "Notes: " . mb_substr($textAreaField->value(), 0, 30),
-    ];
-    $outputLabel->setText(implode(" | ", $lines));
-});
-$startProgressBtn = new Button("Start Progress");
-$startProgressBtn->onClicked(function () use (
-    $progressBarField,
-    $outputLabel,
-): void {
-    $progressBarField->indeterminate();
-    $outputLabel->setText("Progress: indeterminate");
-});
-
-$buttonsBox = Build::hbox($readAllBtn, $startProgressBtn);
-
-$separator1 = new SeparatorLine();
-$separator2 = new SeparatorLine();
-
-$fieldsBox = Build::vbox($fieldsGroup, $buttonsBox);
-
-// ═════════════════════════════════════════════════════════════════════════════
-// TAB 2 — Custom Widgets (ToggleSwitch, StatusIndicator, CircleProgressBar)
+// TAB 1 — Custom Widgets (ToggleSwitch, StatusIndicator, CircleProgressBar)
 // ═════════════════════════════════════════════════════════════════════════════
 
 $toggle = new ToggleSwitch(false);
@@ -287,7 +163,10 @@ $toastBtn = new Button("Send Toast")->onClicked(function () use (
 
 $groupCircle = Group::titled(
     "CircleProgressBar — custom-drawn ring progress:",
-    Build::vbox(Build::stretchy($circleBar->root())),
+    Build::vbox(
+        $circleBar->root(),
+        Build::hbox($circleBtnMinus, $circleBtnPlus, $circleBtnReset),
+    ),
 );
 
 $toastSpacer = new Label("");
@@ -296,7 +175,7 @@ $toggleControls = Build::vbox(
     $groupStatus,
     $toggleStatusBtn,
     $separator3->root(),
-    Build::stretchy($groupCircle),
+    $groupCircle,
     $separator4->root(),
     $customToastLabel,
     Build::hbox($toastBtn, Build::stretchy($toastSpacer)),
@@ -558,19 +437,22 @@ $webviewControls = Build::vbox(
 // ═════════════════════════════════════════════════════════════════════════════
 
 $tab = new Tab();
-$tab->appendMargined("Fields", $fieldsBox);
 $tab->appendMargined("Custom", $toggleControls);
 $tab->appendMargined("Dialogs", $dialogControls);
 $tab->appendMargined("Pickers", $pickerControls);
 $tab->appendMargined("Table", $tableControls);
 $tab->appendMargined("WebView", $webviewControls);
 
+// Force CircleProgressBar redraw when Custom tab is selected
+$tab->onSelected(function (Tab $tab) use ($circleBar): void {
+    \Libui\Ffi::timer(50, function () use ($circleBar): bool {
+        $circleBar->root()->queueRedrawAll();
+        return false;
+    });
+});
+
 // Window takes the tab layout + output label at bottom
 $mainWindow = new Window("All Components — ui2 Demo", 800, 600, true);
-
-// FilePickerField needs a Window reference — set up now
-$filePickerField = new FilePickerField($mainWindow, "Browse…");
-$fieldsGroup->append("File", $filePickerField);
 
 $mainWindow->setChild(Build::vbox($tab, $outputLabel));
 
