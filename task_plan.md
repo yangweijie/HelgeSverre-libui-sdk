@@ -125,3 +125,10 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 - **Loop::stop() 在回调中无效**：`uiQuit()` 投递 WM_QUIT 但回调未返回，事件循环无法处理 → 改用 `Ffi::timer(0, ...)` 延迟退出
 - **Cmd 在 Windows = MOD_WIN**：与系统快捷键冲突 → 改用 `Ctrl+Shift` 组合
 - Files: `bridge/hotkey.dll`, `bridge/hotkey_win.c`, `examples/test-global-hotkey.php`
+### Phase 15: DialogConfirm/DialogPrompt 动态尺寸 ✅
+- 修复 `ask()` 写死 360×140/160 → `calcSize()` 根据 message 长度动态计算
+- Files: `src/Dialogs/DialogConfirm.php`, `src/Dialogs/DialogPrompt.php`
+
+### Phase 16: CircleProgressBar macOS 文字居中 ✅
+- 修复 macOS CoreText 下 `DrawTextAlign::Center` 偏移 → `extents()` 手动居中
+- Files: `src/Widgets/CircleProgressBar.php`

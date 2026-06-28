@@ -303,3 +303,46 @@ App::new()->run();     // 3. App::run() 内部也会调 Ffi::init()（幂等）
 - `RegisterHotKey` 注册的是线程级热键，`WM_HOTKEY` 投递到注册线程的消息队列
 - 隐藏 `HWND_MESSAGE` 窗口用于接收 `WM_HOTKEY`（C 代码中 `PeekMessage(g_hwnd, WM_HOTKEY, WM_HOTKEY, PM_REMOVE)`）
 - 如果热键已被系统或其他应用占用，`RegisterHotKey` 失败返回 0
+
+## Dialog 动态尺寸计算
+
+### calcSize() 模式
+```php
+$charW = 7;  // 默认字体每字符约 7px
+$chrome = 104; // 标题栏(28) + label padding(16) + button bar(36) + margins(24)
+$lines = max(1, ceil(mb_strlen($message) * $charW / 280));
+$height = $chrome + max(20, $lines * 20);
+$width = max(240, 280);
+if ($parent !== null) {
+    [$pw] = $parent->getContentSize();
+    $width = max(200, min($width, (int)($pw * 0.8)));
+}
+```
+
+### 要点
+- 280px 宽度 / 7px 每字符 ≈ 40 字符每行
+- DialogPrompt 比 DialogConfirm 多一个 Entry(28px) + 额外 padding，chrome=140
+- 有 parent 时 cap 在 80% 父窗口宽度，避免弹窗超出
+
+## CircleProgressBar macOS 文字居中
+
+### 问题
+`TextLayout($str, $font, $width, DrawTextAlign::Center)` 在 macOS 上文字偏左。Windows 正常。
+
+### 根因
+macOS CoreText 渲染的文字实际宽度大于 layout box 的逻辑宽度，`DrawTextAlign::Center` 在偏大的 box 内居中，导致视觉偏移。
+
+### 解决方案
+用 `extents()` 测量实际文字尺寸，手动居中：
+```php
+$layout = new TextLayout($str, $font, $innerDiameter * 2, DrawTextAlign::Left);
+[$textW, $textH] = $layout->extents();
+$ctx->text($layout, $cx - $textW / 2, $cy - $textH / 2);
+$layout->free();
+```
+
+### 关键发现
+- `DrawTextAlign::Center` 在 macOS 不可靠 — 文字偏移
+- `extents()` 返回真实渲染尺寸（用 Left + 宽 layout 测量）
+- `TextLayout::extents()` 在极大宽度（1e6）下不准确 — 用 2× innerDiameter 足够
+- 垂直居中用 `$cy - $textH / 2` 而非 `$cy - $fontSize / 2`（fontSize 不等于实际渲染高度）

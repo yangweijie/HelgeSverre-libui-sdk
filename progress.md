@@ -163,3 +163,15 @@
   - 热键从 `Cmd+Shift+H/Q` 改为 `Ctrl+Shift+H/Q`（避免 Windows 键冲突）
   - 退出改用 `Ffi::timer(0, fn() => Ffi::quit())` 延迟到下一个事件循环 tick
 - Files: `bridge/hotkey.dll`（编译）, `bridge/hotkey_win.c`, `examples/test-global-hotkey.php`
+### Phase 15: ✅ DialogConfirm/DialogPrompt 动态尺寸
+- **问题**：`ask()` 窗口宽高写死 360×140/160，短消息留白过多
+- **修复**：新增 `calcSize()` 方法，根据 message 长度动态计算宽高
+  - 宽度：min 240px，有 parent 时不超过父窗口 80%
+  - 高度：chrome + label 行数 × 20px
+- Files: `src/Dialogs/DialogConfirm.php`, `src/Dialogs/DialogPrompt.php`
+
+### Phase 16: ✅ CircleProgressBar macOS 文字居中修复
+- **问题**：macOS 上百分比文字偏左，不在圆环中心
+- **根因**：`TextLayout` + `DrawTextAlign::Center` 在 macOS CoreText 下渲染偏移
+- **修复**：用 `extents()` 测量实际文字宽高，手动 `(cx - textW/2, cy - textH/2)` 居中
+- Files: `src/Widgets/CircleProgressBar.php``

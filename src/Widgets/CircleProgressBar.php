@@ -187,7 +187,6 @@ final class CircleProgressDelegate extends AreaDelegate
         // Font size scales with the ring: min 14pt for small rings, ~10% of inner diameter for large ones.
         $fontSize = max(14.0, $innerDiameter * 0.10);
 
-        // Build attributed string with explicit size (same pattern as monitor.php label())
         $font = new FontDescriptor('Arial', $fontSize);
         $str = new AttributedString();
         $str->append(
@@ -196,9 +195,11 @@ final class CircleProgressDelegate extends AreaDelegate
             Attribute::size($fontSize),
         );
 
-        // Center-align within innerDiameter box, positioned so the box is centered in the ring
-        $layout = new TextLayout($str, $font, $innerDiameter, DrawTextAlign::Center);
-        $ctx->text($layout, $cx - $innerDiameter / 2, $cy - $fontSize / 2);
+        // Measure actual text extents, then center manually.
+        $layout = new TextLayout($str, $font, $innerDiameter * 2, DrawTextAlign::Left);
+        [$textW, $textH] = $layout->extents();
+
+        $ctx->text($layout, $cx - $textW / 2, $cy - $textH / 2);
         $layout->free();
     }
 }

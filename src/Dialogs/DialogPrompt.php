@@ -51,7 +51,9 @@ final class DialogPrompt
 
         $label = new Label($message);
 
-        $window = Build::window($title, 360, 160,
+        [$winW, $winH] = self::calcSize($message, $parent);
+
+        $window = Build::window($title, $winW, $winH,
             Build::vbox(
                 $label,
                 Build::stretchy($entry),
@@ -95,5 +97,34 @@ final class DialogPrompt
         $window->destroy();
 
         return $result;
+    }
+
+    /**
+     * Calculate dialog window dimensions based on message length.
+     *
+     * @return array{int, int} [width, height]
+     */
+    private static function calcSize(string $message, ?Window $parent): array
+    {
+        $charW = 7;
+        // title(28) + label(20) + entry(28) + button bar(36) + margins(28)
+        $chrome = 140;
+        $minW = 240;
+
+        $lines = mb_strlen($message) > 0
+            ? max(1, (int) ceil(mb_strlen($message) * $charW / 280))
+            : 1;
+
+        $labelH = max(20, $lines * 20);
+        $height = $chrome + $labelH;
+
+        $width = max($minW, 280);
+
+        if ($parent !== null) {
+            [$pw] = $parent->getContentSize();
+            $width = max(200, min($width, (int) ($pw * 0.8)));
+        }
+
+        return [$width, $height];
     }
 }
