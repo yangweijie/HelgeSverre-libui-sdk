@@ -256,3 +256,29 @@
   - `docs/en/README.md`（VuePress 文档首页）：frontmatter footer 后添加 `<video>` 标签
   - 相对路径正确处理：根目录 `_narration/` 与 `docs/en/` 的层级差异
 - Files: `composition.html`, `_narration/ui2-intro.mp4`, `README.md`, `docs/en/README.md`
+
+### Phase 25: ✅ Skill 文档化 — 分层结构
+- **需求**：将本项目知识打包成 OpenCode skill（分层结构，非单文件）
+- **输出结构**：
+
+```
+.opencode/skills/ui2-sdk/
+├── SKILL.md
+└── docs/
+    ├── architecture.md        # Composite Pattern, Patch System, FFI, WebView Arch
+    ├── widgets.md             # 33 widgets catalog (Fields, Pickers, Dialogs, Custom, Layout)
+    ├── patches.md             # Patch System, Append-Only, current patches
+    ├── webview.md             # WebView, TreeView, CodeEditor, JS↔PHP bridge
+    ├── fields-pickers-dialogs.md  # 18 fields, 4 pickers, 3 dialogs
+    ├── custom-widgets.md      # CircleProgressBar, ToggleSwitch, StatusIndicator, SvgView
+    ├── system.md              # Tray, GlobalHotkey, SystemInfo, ProcessUtil
+    ├── development.md         # Build, test, debug workflows
+    └── troubleshooting.md     # Common issues and solutions
+```
+
+- **Composer 分发命令**：`composer install:opencode`
+  - 目标项目：`composer require yangweijie/ui2 && composer install:opencode`
+  - 脚本位置：`scripts/install-opencode.php`（处理 vendor/ → 项目根路径）
+  - 逻辑：将 `.opencode` 递归复制到当前工作目录（项目根）
+  - 安全：目标已存在时退出（不覆盖）
+- Files: `.opencode/skills/ui2-sdk/SKILL.md`, `.opencode/skills/ui2-sdk/docs/*.md`, `scripts/install-opencode.php`, `composer.json`

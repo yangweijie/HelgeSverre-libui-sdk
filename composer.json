@@ -30,21 +30,24 @@
       "email": "917647288@qq.com"
     }
   ],
-  "scripts": {
-    "post-autoload-dump": [
-      "@php patch.php"
-    ],
-    "build:pebview": [
-      "@php -r \"(PHP_OS_FAMILY === 'Darwin') ? passthru('bash vendor/kingbes/pebview/source/macos.sh') : ((PHP_OS_FAMILY === 'Linux') ? passthru('bash vendor/kingbes/pebview/source/linux.sh') : passthru('cmd /c vendor\\kingbes\\pebview\\source\\build.cmd'));\""
-    ],
-    "build:bridge": [
-      "@php -r \"(PHP_OS_FAMILY === 'Darwin') ? passthru('clang -shared -fobjc-arc bridge/webview_bridge.m vendor/kingbes/pebview/lib/macos/arm64/PebView.dylib -Wl,-rpath,\\$(pwd)/vendor/kingbes/pebview/lib/macos/arm64 -framework Cocoa -o bridge/webview_bridge.dylib') : ((PHP_OS_FAMILY === 'Linux') ? passthru('gcc -shared -fPIC bridge/webview_bridge_linux.c -o bridge/webview_bridge.so $(pkg-config --cflags --libs gtk+-3.0)') : passthru('gcc -shared bridge/webview_bridge_win.c -o bridge/webview_bridge.dll -luser32'));\""
-    ],
-    "build": [
-      "@composer build:pebview",
-      "@composer build:bridge"
-    ]
-  },
+"scripts": {
+        "post-autoload-dump": [
+            "@php patch.php"
+        ],
+        "build:pebview": [
+            "@php -r \"(PHP_OS_FAMILY === 'Darwin') ? passthru('bash vendor/kingbes/pebview/source/macos.sh') : ((PHP_OS_FAMILY === 'Linux') ? passthru('bash vendor/kingbes/pebview/source/linux.sh') : passthru('cmd /c vendor\\kingbes\\pebview\\source\\build.cmd'));\""
+        ],
+        "build:bridge": [
+            "@php -r \"(PHP_OS_FAMILY === 'Darwin') ? passthru('clang -shared -fobjc-arc bridge/webview_bridge.m vendor/kingbes/pebview/lib/macos/arm64/PebView.dylib -Wl,-rpath,\\$(pwd)/vendor/kingbes/pebview/lib/macos/arm64 -framework Cocoa -o bridge/webview_bridge.dylib') : ((PHP_OS_FAMILY === 'Linux') ? passthru('gcc -shared -fPIC bridge/webview_bridge_linux.c -o bridge/webview_bridge.so $(pkg-config --cflags --libs gtk+-3.0)') : passthru('gcc -shared bridge/webview_bridge_win.c -o bridge/webview_bridge.dll -luser32'));\""
+        ],
+        "build": [
+            "@composer build:pebview",
+            "@composer build:bridge"
+        ],
+        "install:opencode": [
+            "@php scripts/install-opencode.php"
+        ]
+    },
   "minimum-stability": "dev",
   "config": {
     "allow-plugins": {
