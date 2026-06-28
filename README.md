@@ -267,7 +267,7 @@ Instead of forking the upstream library, this project overrides specific files v
 | `Tab.php` | Accepts `Composite` children in `append()`/`appendMargined()` |
 | `Menu.php` | Fluent builder API (`create()->item()->separator()->quitItem()`); improved `MenuOrderException` |
 | `MenuItem.php` | `onClick()` replaces handler (no C trampoline stacking); `removeOnClick()`; per-call & global error handlers |
-| `Window.php` | `centered()` positioning; `centeredOn()` parent-relative centering; `getContentSize()`/`getPosition()`; `onClose()`; `run()` single-window loop; menu lock tracking |
+| `Window.php` | `centered()` positioning; `centeredOn()` parent-relative centering; `getContentSize()`/`getPosition()`; `onClose()`; `run()` single-window loop; menu lock tracking; `setWindowIcon()` cross-platform dock/taskbar icon |
 | `Exception/MenuOrderException.php` | Carries the Window title that locked menus |
 | `Draw/DrawContext.php` | `fillRect`/`strokeRect`/`fillCircle`/`strokeCircle`/`*Arc`/`*RoundedRect`/`*Polygon`/`strokeLine`/`line`/`dot`; `withSave()`; `drawString()` |
 | `Draw/Path.php` | `wedge()`/`polygon()`/`ellipse()`/`roundedRect()`/`quadTo()`/`bezierThrough()`; `line()`/`circle()`/`arc()` shorthands |
@@ -370,11 +370,43 @@ The `all-components.php` example demonstrates every widget in this package acros
 
 - Always call `Libui\Ffi::init()` before any widget constructor (it is idempotent).
 - `Window::run()` = show + event loop + cleanup. For multi-window apps use `Libui\App::run()`.
+- **`Window::setWindowIcon(string $iconPath)`** — set dock/taskbar icon. macOS→bridge dylib (`NSApp setApplicationIconImage:`); Linux/Windows→PebView `set_icon()`.
+- **`App::afterInit(\Closure $callback)`** — queue a callback that runs right after `Ffi::init()` but before the event loop. Useful for setting dock icon at startup.
 - Event callbacks return `void`; exceptions are caught and printed to `STDERR`. Always use try/catch in callbacks.
 - Closures passed to libui C callbacks are retained by the framework — you do not need to keep references.
 - `Window::run()` calls `Ffi::uninit()` in a `finally` block — code after `run()` in the same script runs in a torn-down state. Use the `$afterClose` callback for cleanup.
 - `fn () => echo …` is a syntax error in PHP — use `print` or a `function () { … }` body.
 - **WebView widgets are not** `Composite` objects. They create borderless child windows at absolute coordinates. They cannot be placed inside `Box`, `Form`, or `Tab` layouts. Use `autoResize()` to keep them positioned correctly when the parent window resizes.
+
+## App icon
+
+Set the dock/taskbar icon from a PNG file at any time:
+
+```php
+use Libui\Window;
+
+$window->setWindowIcon(__DIR__ . '/assets/app-icon.png');
+```
+
+To set the icon immediately at startup (before the event loop draws the window), use `App::afterInit()`:
+
+```php
+use Libui\App;
+use Libui\Ffi;
+use Libui\Window;
+
+Ffi::init();
+
+$window = new Window('My App', 600, 400);
+
+App::afterInit(function () use ($window): void {
+    $window->setWindowIcon(__DIR__ . '/assets/app-icon.png');
+});
+
+$window->run();
+```
+
+macOS uses `NSApp setApplicationIconImage:` via the bridge dylib; Linux and Windows use PebView's `set_icon()`.
 
 ## License
 
