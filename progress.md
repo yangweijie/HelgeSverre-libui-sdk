@@ -174,4 +174,11 @@
 - **问题**：macOS 上百分比文字偏左，不在圆环中心
 - **根因**：`TextLayout` + `DrawTextAlign::Center` 在 macOS CoreText 下渲染偏移
 - **修复**：用 `extents()` 测量实际文字宽高，手动 `(cx - textW/2, cy - textH/2)` 居中
-- Files: `src/Widgets/CircleProgressBar.php``
+- Files: `src/Widgets/CircleProgressBar.php`
+
+### Phase 17: ✅ macOS 内存泄漏排查 + all-components.php 重构
+- **问题**：退出时 libui 报泄漏 3 个 uiButton + 3 个 uiSeparator
+- **根因**：inline 临时对象被 PHP GC 回收后，底层 C 控件成为孤儿
+- **尝试 1（已回滚）**：给 `Control` 添加 `__destruct()` → `You cannot destroy a uiControl while it still has a parent`
+- **最终修复**：移除 `__destruct()`，所有 inline 临时对象提取为命名变量，防止 GC 在事件循环期间过早回收
+- Files: `examples/all-components.php``

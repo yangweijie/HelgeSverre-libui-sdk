@@ -346,3 +346,27 @@ $layout->free();
 - `extents()` 返回真实渲染尺寸（用 Left + 宽 layout 测量）
 - `TextLayout::extents()` 在极大宽度（1e6）下不准确 — 用 2× innerDiameter 足够
 - 垂直居中用 `$cy - $textH / 2` 而非 `$cy - $fontSize / 2`（fontSize 不等于实际渲染高度）
+
+## libui 内存泄漏排查
+
+### 问题
+退出时 `uiprivUninitAlloc()` 报告泄漏 3 个 uiButton + 3 个 uiSeparator。
+
+### 根因
+inline 临时对象（如 `new Button('X')` 直接传入 `Build::hbox()`）被 PHP GC 回收后，底层 C 控件成为孤儿。libui 在 `App::run()` 结束后检测到未销毁的控件。
+
+### 尝试 1：`Control::__destruct()` — 失败
+给 Control 类添加 `__destruct()` 调用 `uiControlDestroy()`。结果报错：
+```
+You cannot destroy a uiControl while it still has a parent.
+```
+**原因**：libui 管理父子所有权。子控件在容器（Box/Tab/Window）内时，不能单独调用 `uiControlDestroy()`。只有容器能销毁其子控件。
+
+### 最终修复
+移除 `__destruct()`，将所有 inline 临时对象提取为命名变量。命名变量使 PHP 对象存活到脚本结束，此时 libui 的清理机制（Window → Box → children 递归销毁）正常运行。
+
+### 关键发现
+- **libui 不允许销毁仍有父控件的子控件** — `uiControlDestroy()` 会报错
+- **libui 的 Window 销毁会递归销毁所有子控件** — 不需要手动逐个销毁
+- **PHP GC 回收 wrapper 对象不会触发 C 控件销毁** — 没有 `__destruct` 时 C 控件变孤儿
+- **命名变量是防止 GC 过早回收的最简单方案** — 保持所有 UI 对象在作用域内直到脚本结束

@@ -132,3 +132,8 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 ### Phase 16: CircleProgressBar macOS 文字居中 ✅
 - 修复 macOS CoreText 下 `DrawTextAlign::Center` 偏移 → `extents()` 手动居中
 - Files: `src/Widgets/CircleProgressBar.php`
+
+### Phase 17: macOS 内存泄漏排查 + all-components.php 重构 ✅
+- 尝试 `Control::__destruct()` → 回滚（libui 禁止销毁仍有父控件的子控件）
+- 最终方案：所有 inline 临时对象提取为命名变量，防止 GC 过早回收
+- Files: `examples/all-components.php`

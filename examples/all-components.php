@@ -147,32 +147,34 @@ $datePickerField->on(
 );
 $textAreaField->on("change", fn() => $outputLabel->setText("Notes updated"));
 
-$buttonsBox = Build::hbox(
-    new Button("Read All Fields")->onClicked(function () use (
-        $datePickerField,
-        $textAreaField,
-        $textField,
-        $numberField,
-        $sliderField,
-        $outputLabel,
-    ): void {
-        $lines = [
-            "Text: " . $textField->value(),
-            "Number: " . $numberField->value(),
-            "Slider: " . $sliderField->value(),
-            "Date: " . $datePickerField->value()->format("Y-m-d"),
-            "Notes: " . mb_substr($textAreaField->value(), 0, 30),
-        ];
-        $outputLabel->setText(implode(" | ", $lines));
-    }),
-    new Button("Start Progress")->onClicked(function () use (
-        $progressBarField,
-        $outputLabel,
-    ): void {
-        $progressBarField->indeterminate();
-        $outputLabel->setText("Progress: indeterminate");
-    }),
-);
+$readAllBtn = new Button("Read All Fields");
+$readAllBtn->onClicked(function () use (
+    $datePickerField,
+    $textAreaField,
+    $textField,
+    $numberField,
+    $sliderField,
+    $outputLabel,
+): void {
+    $lines = [
+        "Text: " . $textField->value(),
+        "Number: " . $numberField->value(),
+        "Slider: " . $sliderField->value(),
+        "Date: " . $datePickerField->value()->format("Y-m-d"),
+        "Notes: " . mb_substr($textAreaField->value(), 0, 30),
+    ];
+    $outputLabel->setText(implode(" | ", $lines));
+});
+$startProgressBtn = new Button("Start Progress");
+$startProgressBtn->onClicked(function () use (
+    $progressBarField,
+    $outputLabel,
+): void {
+    $progressBarField->indeterminate();
+    $outputLabel->setText("Progress: indeterminate");
+});
+
+$buttonsBox = Build::hbox($readAllBtn, $startProgressBtn);
 
 $separator1 = new SeparatorLine();
 $separator2 = new SeparatorLine();
@@ -193,27 +195,35 @@ $statusGreen = new StatusIndicator(Color::rgb(0x22c55e));
 $statusRed = new StatusIndicator(Color::rgb(0xef4444));
 $statusYellow = new StatusIndicator(Color::rgb(0xeab308));
 
+$toggleLabel = new Label("Enable feature:");
+$toggleSpacer = new Label("");
 $groupToggleSwitch = Group::titled(
     "Toggle Switch",
     Build::hbox(
-        new Label("Enable feature:"),
+        $toggleLabel,
         Build::stretchy($toggle->root()),
-        Build::stretchy(new Label("")),
+        Build::stretchy($toggleSpacer),
     ),
 );
 
+$statusOnlineLabel = new Label("Online:");
+$statusOfflineLabel = new Label("Offline:");
+$statusWarningLabel = new Label("Warning:");
+$statusSep1 = new Label("   ");
+$statusSep2 = new Label("   ");
+$statusSpacer = new Label("");
 $groupStatus = Group::titled(
     "Status Indicators",
     Build::hbox(
-        new Label("Online:"),
+        $statusOnlineLabel,
         Build::stretchy($statusGreen->root()),
-        new Label("   "),
-        new Label("Offline:"),
+        $statusSep1,
+        $statusOfflineLabel,
         Build::stretchy($statusRed->root()),
-        new Label("   "),
-        new Label("Warning:"),
+        $statusSep2,
+        $statusWarningLabel,
         Build::stretchy($statusYellow->root()),
-        Build::stretchy(new Label("")),
+        Build::stretchy($statusSpacer),
     ),
 );
 
@@ -280,6 +290,7 @@ $groupCircle = Group::titled(
     Build::vbox(Build::stretchy($circleBar->root())),
 );
 
+$toastSpacer = new Label("");
 $toggleControls = Build::vbox(
     $groupToggleSwitch,
     $groupStatus,
@@ -288,7 +299,7 @@ $toggleControls = Build::vbox(
     Build::stretchy($groupCircle),
     $separator4->root(),
     $customToastLabel,
-    Build::hbox($toastBtn, Build::stretchy(new Label(""))),
+    Build::hbox($toastBtn, Build::stretchy($toastSpacer)),
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -299,80 +310,49 @@ $separator5 = new SeparatorLine();
 $separator6 = new SeparatorLine();
 $separator7 = new SeparatorLine();
 
+$dialogMsgLabel = new Label("MessageBox — native info/warning/error dialogs:");
+$dialogInfoBtn = new Button("Info");
+$dialogInfoBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    MessageBox::info($mainWindow, "Info", "This is an information dialog.");
+    $outputLabel->setText("Info dialog closed");
+});
+$dialogWarnBtn = new Button("Warning");
+$dialogWarnBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    MessageBox::warning($mainWindow, "Warning", "This is a warning dialog.");
+    $outputLabel->setText("Warning dialog closed");
+});
+$dialogErrBtn = new Button("Error");
+$dialogErrBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    MessageBox::error($mainWindow, "Error", "This is an error dialog.");
+    $outputLabel->setText("Error dialog closed");
+});
+$dialogSpacer1 = new Label("");
+$dialogConfirmLabel = new Label("DialogConfirm — return true/false:");
+$dialogConfirmBtn = new Button("Confirm Delete");
+$dialogConfirmBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    $confirmed = DialogConfirm::ask($mainWindow, "Delete", "Delete this item?");
+    $outputLabel->setText($confirmed ? "User confirmed deletion" : "User cancelled deletion");
+});
+$dialogSpacer2 = new Label("");
+$dialogPromptLabel = new Label("DialogPrompt — return ?string:");
+$dialogNameBtn = new Button("Enter Name");
+$dialogNameBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    $name = DialogPrompt::ask($mainWindow, "Name", "Enter your name:", "Guest");
+    $outputLabel->setText($name !== null ? "Hello, {$name}!" : "Prompt cancelled");
+});
+$dialogSpacer3 = new Label("");
+$dialogEndSpacer = new Label("");
+
 $dialogControls = Build::vbox(
-    new Label("MessageBox — native info/warning/error dialogs:"),
-    Build::hbox(
-        new Button("Info")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            MessageBox::info(
-                $mainWindow,
-                "Info",
-                "This is an information dialog.",
-            );
-            $outputLabel->setText("Info dialog closed");
-        }),
-        new Button("Warning")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            MessageBox::warning(
-                $mainWindow,
-                "Warning",
-                "This is a warning dialog.",
-            );
-            $outputLabel->setText("Warning dialog closed");
-        }),
-        new Button("Error")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            MessageBox::error($mainWindow, "Error", "This is an error dialog.");
-            $outputLabel->setText("Error dialog closed");
-        }),
-        Build::stretchy(new Label("")),
-    ),
+    $dialogMsgLabel,
+    Build::hbox($dialogInfoBtn, $dialogWarnBtn, $dialogErrBtn, Build::stretchy($dialogSpacer1)),
     $separator5->root(),
-    new Label("DialogConfirm — return true/false:"),
-    Build::hbox(
-        new Button("Confirm Delete")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            $confirmed = DialogConfirm::ask(
-                $mainWindow,
-                "Delete",
-                "Delete this item?",
-            );
-            $outputLabel->setText(
-                $confirmed
-                    ? "User confirmed deletion"
-                    : "User cancelled deletion",
-            );
-        }),
-        Build::stretchy(new Label("")),
-    ),
+    $dialogConfirmLabel,
+    Build::hbox($dialogConfirmBtn, Build::stretchy($dialogSpacer2)),
     $separator6->root(),
-    new Label("DialogPrompt — return ?string:"),
-    Build::hbox(
-        new Button("Enter Name")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            $name = DialogPrompt::ask(
-                $mainWindow,
-                "Name",
-                "Enter your name:",
-                "Guest",
-            );
-            $outputLabel->setText(
-                $name !== null ? "Hello, {$name}!" : "Prompt cancelled",
-            );
-        }),
-        Build::stretchy(new Label("")),
-    ),
-    Build::stretchy(new Label("")),
+    $dialogPromptLabel,
+    Build::hbox($dialogNameBtn, Build::stretchy($dialogSpacer3)),
+    Build::stretchy($dialogEndSpacer),
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -384,104 +364,77 @@ $fontPreview = new Label("(click Pick Font)");
 $datePreview = new Label("(click Pick Date)");
 $timePreview = new Label("(click Pick Time)");
 
+$pickerColorLabel = new Label("Pick a color from the native dialog:");
+$pickerColorBtn = new Button("Pick Color");
+$pickerColorBtn->onClicked(function () use (&$mainWindow, $colorSwatch, $outputLabel): void {
+    $color = ColorPickerDialog::pick($mainWindow);
+    if ($color !== null) {
+        $colorSwatch->setText("R={$color->r} G={$color->g} B={$color->b}");
+        $outputLabel->setText("Color selected");
+    } else {
+        $outputLabel->setText("Color picker cancelled");
+    }
+});
+$pickerColorSpacer = new Label("");
+
+$pickerFontLabel = new Label("Pick a font from the native dialog:");
+$pickerFontBtn = new Button("Pick Font");
+$pickerFontBtn->onClicked(function () use (&$mainWindow, $fontPreview, $outputLabel): void {
+    $font = FontPickerDialog::pick($mainWindow);
+    if ($font !== null) {
+        $fontPreview->setText($font->family() . ", " . $font->size() . "pt");
+        $outputLabel->setText("Font selected");
+    } else {
+        $fontPreview->setText("cancelled");
+    }
+});
+$pickerFontSpacer = new Label("");
+
+$pickerDateLabel = new Label("Pick a date:");
+$pickerDateBtn = new Button("Pick Date");
+$pickerDateBtn->onClicked(function () use (&$mainWindow, $datePreview, $outputLabel): void {
+    $date = DatePickerDialog::pick($mainWindow);
+    if ($date !== null) {
+        $datePreview->setText($date->format("Y-m-d"));
+        $outputLabel->setText("Date selected");
+    } else {
+        $outputLabel->setText("Date picker cancelled");
+    }
+});
+$pickerDateSpacer = new Label("");
+
+$pickerTimeLabel = new Label("Pick a time:");
+$pickerTimeBtn = new Button("Pick Time");
+$pickerTimeBtn->onClicked(function () use (&$mainWindow, $timePreview, $outputLabel): void {
+    $time = TimePickerDialog::pick($mainWindow);
+    if ($time !== null) {
+        $timePreview->setText($time->format("H:i"));
+        $outputLabel->setText("Time selected");
+    } else {
+        $outputLabel->setText("Time picker cancelled");
+    }
+});
+$pickerTimeSpacer = new Label("");
+$pickerEndSpacer = new Label("");
+
 $pickerControls = Build::vbox(
-    Group::titled(
-        "Color Picker",
-        Build::vbox(
-            new Label("Pick a color from the native dialog:"),
-            Build::hbox(
-                new Button("Pick Color")->onClicked(function () use (
-                    &$mainWindow,
-                    $colorSwatch,
-                    $outputLabel,
-                ): void {
-                    $color = ColorPickerDialog::pick($mainWindow);
-                    if ($color !== null) {
-                        $colorSwatch->setText(
-                            "R={$color->r} G={$color->g} B={$color->b}",
-                        );
-                        $outputLabel->setText("Color selected");
-                    } else {
-                        $outputLabel->setText("Color picker cancelled");
-                    }
-                }),
-                $colorSwatch,
-                Build::stretchy(new Label("")),
-            ),
-        ),
-    ),
-    Group::titled(
-        "Font Picker",
-        Build::vbox(
-            new Label("Pick a font from the native dialog:"),
-            Build::hbox(
-                new Button("Pick Font")->onClicked(function () use (
-                    &$mainWindow,
-                    $fontPreview,
-                    $outputLabel,
-                ): void {
-                    $font = FontPickerDialog::pick($mainWindow);
-                    if ($font !== null) {
-                        $fontPreview->setText(
-                            $font->family() . ", " . $font->size() . "pt",
-                        );
-                        $outputLabel->setText("Font selected");
-                    } else {
-                        $fontPreview->setText("cancelled");
-                    }
-                }),
-                $fontPreview,
-                Build::stretchy(new Label("")),
-            ),
-        ),
-    ),
-    Group::titled(
-        "Date Picker",
-        Build::vbox(
-            new Label("Pick a date:"),
-            Build::hbox(
-                new Button("Pick Date")->onClicked(function () use (
-                    &$mainWindow,
-                    $datePreview,
-                    $outputLabel,
-                ): void {
-                    $date = DatePickerDialog::pick($mainWindow);
-                    if ($date !== null) {
-                        $datePreview->setText($date->format("Y-m-d"));
-                        $outputLabel->setText("Date selected");
-                    } else {
-                        $outputLabel->setText("Date picker cancelled");
-                    }
-                }),
-                $datePreview,
-                Build::stretchy(new Label("")),
-            ),
-        ),
-    ),
-    Group::titled(
-        "Time Picker",
-        Build::vbox(
-            new Label("Pick a time:"),
-            Build::hbox(
-                new Button("Pick Time")->onClicked(function () use (
-                    &$mainWindow,
-                    $timePreview,
-                    $outputLabel,
-                ): void {
-                    $time = TimePickerDialog::pick($mainWindow);
-                    if ($time !== null) {
-                        $timePreview->setText($time->format("H:i"));
-                        $outputLabel->setText("Time selected");
-                    } else {
-                        $outputLabel->setText("Time picker cancelled");
-                    }
-                }),
-                $timePreview,
-                Build::stretchy(new Label("")),
-            ),
-        ),
-    ),
-    Build::stretchy(new Label("")),
+    Group::titled("Color Picker", Build::vbox(
+        $pickerColorLabel,
+        Build::hbox($pickerColorBtn, $colorSwatch, Build::stretchy($pickerColorSpacer)),
+    )),
+    Group::titled("Font Picker", Build::vbox(
+        $pickerFontLabel,
+        Build::hbox($pickerFontBtn, $fontPreview, Build::stretchy($pickerFontSpacer)),
+    )),
+    Group::titled("Date Picker", Build::vbox(
+        $pickerDateLabel,
+        Build::hbox($pickerDateBtn, $datePreview, Build::stretchy($pickerDateSpacer)),
+    )),
+    Group::titled("Time Picker", Build::vbox(
+        $pickerTimeLabel,
+        Build::hbox($pickerTimeBtn, $timePreview, Build::stretchy($pickerTimeSpacer)),
+    )),
+    Build::stretchy($pickerEndSpacer),
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -526,16 +479,13 @@ $removeRowBtn = new Button("Remove Last")->onClicked(function () use (
     }
 });
 
+$tableSpacer = new Label("");
 $tableControls = Build::vbox(
     Group::titled(
         "Data Table (Age/Score editable — click headers to sort)",
         Build::vbox(
             $table->root(),
-            Build::hbox(
-                $addRowBtn,
-                $removeRowBtn,
-                Build::stretchy(new Label("")),
-            ),
+            Build::hbox($addRowBtn, $removeRowBtn, Build::stretchy($tableSpacer)),
         ),
     ),
 );
@@ -547,94 +497,60 @@ $tableControls = Build::vbox(
 $separator8 = new SeparatorLine();
 $separator9 = new SeparatorLine();
 
+$webviewTreeLabel = new Label("TreeView — collapsible file tree (opens in overlay child window):");
+$webviewTreeBtn = new Button("Open File Tree");
+$webviewTreeBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    if ($mainWindow === null) {
+        return;
+    }
+    $tree = new TreeView($mainWindow, 300, 0, 480, 500, [
+        ["label" => "src", "icon" => "folder", "children" => [
+            ["label" => "index.php", "icon" => "code"],
+            ["label" => "style.css", "icon" => "file"],
+            ["label" => "app.js", "icon" => "code"],
+            ["label" => "images", "icon" => "folder", "children" => [
+                ["label" => "logo.png", "icon" => "image"],
+                ["label" => "bg.jpg", "icon" => "image"],
+            ]],
+        ]],
+        ["label" => "vendor", "icon" => "folder", "children" => [
+            ["label" => "autoload.php", "icon" => "code"],
+        ]],
+        ["label" => "composer.json", "icon" => "file"],
+        ["label" => "README.md", "icon" => "file"],
+    ]);
+    $tree->onNodeClick(fn(string $path, array $node) => $outputLabel->setText("Tree clicked: {$path}"));
+    $outputLabel->setText("File tree opened (right side of window)");
+});
+$webviewTreeSpacer = new Label("");
+
+$webviewEditorLabel = new Label("CodeEditor — highlight.js code editor (opens in overlay child window):");
+$webviewEditorBtn = new Button("Open Code Editor");
+$webviewEditorBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    if ($mainWindow === null) {
+        return;
+    }
+    $editor = new CodeEditor($mainWindow, 20, 20, 760, 500, "php", false,
+        "<?php\n\necho 'Hello, World!';\n\n\$data = ['foo' => 'bar'];\nforeach (\$data as \$k => \$v) {\n    print \"\$k: \$v\\n\";\n}\n",
+    );
+    $editor->onChange(fn(string $code) => $outputLabel->setText("Editor: " . mb_substr($code, 0, 40) . "..."));
+    $outputLabel->setText("Code editor opened");
+});
+$webviewEditorSpacer = new Label("");
+$webviewNote1 = new Label("Note: WebView-based widgets open borderless child windows that float");
+$webviewNote2 = new Label("over the libui layout. They can be repositioned with autoResize().");
+$webviewEndSpacer = new Label("");
+
 $webviewControls = Build::vbox(
-    new Label(
-        "TreeView — collapsible file tree (opens in overlay child window):",
-    ),
-    Build::hbox(
-        new Button("Open File Tree")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            if ($mainWindow === null) {
-                return;
-            }
-            $tree = new TreeView($mainWindow, 300, 0, 480, 500, [
-                [
-                    "label" => "src",
-                    "icon" => "folder",
-                    "children" => [
-                        ["label" => "index.php", "icon" => "code"],
-                        ["label" => "style.css", "icon" => "file"],
-                        ["label" => "app.js", "icon" => "code"],
-                        [
-                            "label" => "images",
-                            "icon" => "folder",
-                            "children" => [
-                                ["label" => "logo.png", "icon" => "image"],
-                                ["label" => "bg.jpg", "icon" => "image"],
-                            ],
-                        ],
-                    ],
-                ],
-                [
-                    "label" => "vendor",
-                    "icon" => "folder",
-                    "children" => [
-                        ["label" => "autoload.php", "icon" => "code"],
-                    ],
-                ],
-                ["label" => "composer.json", "icon" => "file"],
-                ["label" => "README.md", "icon" => "file"],
-            ]);
-            $tree->onNodeClick(
-                fn(string $path, array $node) => $outputLabel->setText(
-                    "Tree clicked: {$path}",
-                ),
-            );
-            $outputLabel->setText("File tree opened (right side of window)");
-        }),
-        Build::stretchy(new Label("")),
-    ),
+    $webviewTreeLabel,
+    Build::hbox($webviewTreeBtn, Build::stretchy($webviewTreeSpacer)),
     $separator8->root(),
-    new Label(
-        "CodeEditor — highlight.js code editor (opens in overlay child window):",
-    ),
-    Build::hbox(
-        new Button("Open Code Editor")->onClicked(function () use (
-            &$mainWindow,
-            $outputLabel,
-        ): void {
-            if ($mainWindow === null) {
-                return;
-            }
-            $editor = new CodeEditor(
-                $mainWindow,
-                20,
-                20,
-                760,
-                500,
-                "php",
-                false,
-                "<?php\n\necho 'Hello, World!';\n\n\$data = ['foo' => 'bar'];\nforeach (\$data as \$k => \$v) {\n    print \"\$k: \$v\\n\";\n}\n",
-            );
-            $editor->onChange(
-                fn(string $code) => $outputLabel->setText(
-                    "Editor: " . mb_substr($code, 0, 40) . "...",
-                ),
-            );
-            $outputLabel->setText("Code editor opened");
-        }),
-        Build::stretchy(new Label("")),
-    ),
+    $webviewEditorLabel,
+    Build::hbox($webviewEditorBtn, Build::stretchy($webviewEditorSpacer)),
     $separator9->root(),
-    new Label(
-        "Note: WebView-based widgets open borderless child windows that float",
-    ),
-    new Label(
-        "over the libui layout. They can be repositioned with autoResize().",
-    ),
-    Build::stretchy(new Label("")),
+    $webviewNote1,
+    $webviewNote2,
+    Build::stretchy($webviewEndSpacer),
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
