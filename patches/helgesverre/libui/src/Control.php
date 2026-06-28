@@ -201,4 +201,26 @@ abstract class Control
     {
         return Ffi::get()->uiControlToplevel($this->asControl()) !== 0;
     }
+
+    /**
+     * Destroy toplevel controls (e.g. Window) when the PHP object is garbage-collected.
+     *
+     * Only toplevel controls are destroyed — child controls are owned by their
+     * parent container and will be destroyed when the parent is destroyed.
+     * Calling uiControlDestroy() on a child that still has a parent throws.
+     */
+    public function __destruct()
+    {
+        if (!Ffi::isInitialized() || !isset($this->handle)) {
+            return;
+        }
+
+        try {
+            if ($this->toplevel()) {
+                $this->destroy();
+            }
+        } catch (\Throwable) {
+            // Silently ignore — control may already be destroyed.
+        }
+    }
 }

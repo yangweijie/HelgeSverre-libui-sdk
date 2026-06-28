@@ -137,3 +137,8 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 - 尝试 `Control::__destruct()` → 回滚（libui 禁止销毁仍有父控件的子控件）
 - 最终方案：所有 inline 临时对象提取为命名变量，防止 GC 过早回收
 - Files: `examples/all-components.php`
+
+### Phase 18: App.php + Control.php 补丁 — 真正修复内存泄漏 ✅
+- `Control::__destruct()` — 仅对 toplevel 控件调用 `destroy()`
+- `App::run()` — 在 `Ffi::uninit()` 前显式 destroy 所有 Window
+- Files: `patches/helgesverre/libui/src/App.php`, `patches/helgesverre/libui/src/Control.php`

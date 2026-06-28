@@ -370,3 +370,48 @@ You cannot destroy a uiControl while it still has a parent.
 - **libui 的 Window 销毁会递归销毁所有子控件** — 不需要手动逐个销毁
 - **PHP GC 回收 wrapper 对象不会触发 C 控件销毁** — 没有 `__destruct` 时 C 控件变孤儿
 - **命名变量是防止 GC 过早回收的最简单方案** — 保持所有 UI 对象在作用域内直到脚本结束
+
+## 内存泄漏最终修复（Phase 18）
+
+### 问题延续
+Phase 17 命名变量修复后，`uiWindow` + `uiLabel` 仍然泄漏。
+
+### 根因
+`App::run()` 的 `finally` 块中，`Ffi::uninit()` 先执行（设 `initialized=false`），PHP GC 后执行。`Control::__destruct()` 检查 `Ffi::isInitialized()` 为 false → 跳过销毁。
+
+### 修复方案（两层）
+
+**层 1：`Control::__destruct()` — 仅销毁 toplevel 控件**
+```php
+public function __destruct() {
+    if (!Ffi::isInitialized() || !isset($this->handle)) return;
+    try {
+        if ($this->toplevel()) {
+            $this->destroy();  // Window: 安全；子控件: 跳过
+        }
+    } catch (\Throwable) {}
+}
+```
+
+**层 2：`App::run()` — 在 `uninit()` 前显式销毁所有 Window**
+```php
+try {
+    Ffi::main();
+} finally {
+    foreach ($this->windows as $window) {
+        try { $window->destroy(); } catch (\Throwable) {}
+    }
+    Ffi::uninit();
+}
+```
+
+### 执行顺序
+1. `Ffi::main()` 结束 → 进入 `finally`
+2. 遍历 `$this->windows` → `$window->destroy()` → libui 递归销毁子控件
+3. `Ffi::uninit()` → `uiUninit()` → leak check 通过（所有控件已销毁）
+4. PHP GC → `__destruct()` → `isInitialized()=false` → 跳过（已经销毁过了）
+
+### 关键发现
+- **`App::run()` 的 `finally` 是唯一可靠的清理时机** — PHP GC 太晚
+- **toplevel + 非 toplevel 的 `__destruct` 策略不同** — toplevel 可以直接 destroy，子控件不能
+- **两层防护确保不漏** — App 显式销毁 + Control `__destruct` 兜底

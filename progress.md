@@ -181,4 +181,11 @@
 - **根因**：inline 临时对象被 PHP GC 回收后，底层 C 控件成为孤儿
 - **尝试 1（已回滚）**：给 `Control` 添加 `__destruct()` → `You cannot destroy a uiControl while it still has a parent`
 - **最终修复**：移除 `__destruct()`，所有 inline 临时对象提取为命名变量，防止 GC 在事件循环期间过早回收
-- Files: `examples/all-components.php``
+- Files: `examples/all-components.php`
+
+### Phase 18: ✅ App.php + Control.php 补丁 — 真正修复内存泄漏
+- **问题**：Phase 17 后仍有 `uiWindow` + `uiLabel` 泄漏
+- **根因**：`App::run()` 在 `finally` 中先调 `Ffi::uninit()`（设 `initialized=false`），然后 PHP GC 才运行 `__destruct()`。此时 `isInitialized()` 为 false → 跳过销毁
+- **修复 1**：`Control.php` 添加 `__destruct()` — 仅对 toplevel 控件调用 `destroy()`（子控件由父容器管理）
+- **修复 2**：`App.php` 在 `Ffi::uninit()` 之前显式 `destroy()` 所有注册的 Window → libui 递归销毁子控件 → leak check 通过
+- Files: `patches/helgesverre/libui/src/App.php`（新建）, `patches/helgesverre/libui/src/Control.php`
