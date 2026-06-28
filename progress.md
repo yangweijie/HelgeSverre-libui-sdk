@@ -105,6 +105,7 @@
 ### 待办
 - [ ] 确认 CircleProgressBar 字体大小和位置是否合适
 - [ ] 清理 test_*.php 临时文件
+- [ ] 确认 test-global-hotkey.php Ctrl+Shift+Q 退出是否正常
 
 ### Phase 12: ✅ SystemInfo Windows 兼容性修复
 - **问题**：`test-system-info.php` 报错 `'AMD64' enum not found` — `utopia-php/system` 不识别 Windows 架构
@@ -141,3 +142,24 @@
   - C 源码 `window_show()` 改用 `SW_RESTORE` + `SetForegroundWindow()` 代替 `SW_SHOW`
 - **验证**：最小化窗口后，右键托盘 → Show Window → 窗口正确恢复 ✅
 - Files: `src/System/Tray.php`, `vendor/kingbes/pebview/source/window/window_win.c`
+
+### Phase 14: ✅ GlobalHotkey bridge DLL 编译 + quit 修复
+- **问题 1**：`php85 examples/test-global-hotkey.php` 立即退出
+- **根因 1**：
+  - `bridge/hotkey.dll` 不存在（只有 macOS `.dylib` 和 C 源码）
+  - `hotkey_win.c` 缺少 `#include <stdbool.h>`（`bool`/`true`/`false` 未定义）
+  - 测试脚本缺少 `Ffi::init()` 调用
+- **修复 1**：
+  - `hotkey_win.c` 添加 `#include <stdbool.h>`
+  - MinGW 编译：`gcc -shared -o bridge/hotkey.dll bridge/hotkey_win.c -luser32`
+  - `test-global-hotkey.php` 添加 `Ffi::init()` + `use Libui\Ffi`
+- **问题 2**：`Cmd+Shift+Q` 不退出窗口，且之后 `Cmd+Shift+H` 也失效
+- **根因 2**：
+  - `Loop::stop()` → `Ffi::quit()` → `uiQuit()` 在 `Loop::repeat()` 回调内部调用
+  - `uiQuit()` 投递 `WM_QUIT` 但当前回调未返回，事件循环无法处理 → quit 无效
+  - `unregisterAll()` 成功 → 所有热键被注销 → `Cmd+Shift+H` 失效
+  - `Cmd` 在 Windows 上 = `MOD_WIN`（Windows 键），可能与系统快捷键冲突
+- **修复 2**：
+  - 热键从 `Cmd+Shift+H/Q` 改为 `Ctrl+Shift+H/Q`（避免 Windows 键冲突）
+  - 退出改用 `Ffi::timer(0, fn() => Ffi::quit())` 延迟到下一个事件循环 tick
+- Files: `bridge/hotkey.dll`（编译）, `bridge/hotkey_win.c`, `examples/test-global-hotkey.php`

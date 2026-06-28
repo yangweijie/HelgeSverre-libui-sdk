@@ -276,3 +276,30 @@ App::new()->run();     // 3. App::run() 内部也会调 Ffi::init()（幂等）
 - Tray `attach()` 必须在 `App::new()->run()` 之前调用（创建隐藏托盘窗口）
 - 但 `Ffi::init()` 必须在创建任何 Widget 之前调用
 - 正确顺序：`Ffi::init()` → 创建 Window/Label → 创建 Tray → `attach()` → `App::run()`
+
+## GlobalHotkey bridge
+
+### DLL 编译
+- `hotkey.dll` 不在 git 中（只有 macOS `hotkey.dylib`），需手动编译
+- 编译命令：`gcc -shared -o bridge/hotkey.dll bridge/hotkey_win.c -luser32`
+- `hotkey_win.c` 需要 `#include <stdbool.h>`（使用 `bool`/`true`/`false`）
+
+### C API
+- `hotkey_register(const char *key_combo, int id)` → 注册热键，返回 1=成功
+- `hotkey_unregister(int id)` → 注销单个热键
+- `hotkey_unregister_all()` → 注销所有热键
+- `hotkey_poll()` → 从隐藏 HWND_MESSAGE 窗口 peek `WM_HOTKEY`，返回触发的热键 ID
+
+### ⚠️ 关键发现：uiQuit() 不能在 Loop::repeat() 回调中直接调用
+- `Loop::stop()` → `Ffi::quit()` → `uiQuit()` → `PostQuitMessage(0)` 投递 `WM_QUIT`
+- 但在 `Loop::repeat()` 回调内部调用时，回调未返回，事件循环无法处理 `WM_QUIT`
+- **修复**：用 `Ffi::timer(0, fn() => Ffi::quit())` 延迟到下一个事件循环 tick
+
+### Windows 热键修饰符
+- `Cmd`/`Command` 映射到 `MOD_WIN`（Windows 键），可能与系统快捷键冲突
+- Windows 上建议用 `Ctrl+Shift` 代替 `Cmd+Shift`
+
+### RegisterHotKey 行为
+- `RegisterHotKey` 注册的是线程级热键，`WM_HOTKEY` 投递到注册线程的消息队列
+- 隐藏 `HWND_MESSAGE` 窗口用于接收 `WM_HOTKEY`（C 代码中 `PeekMessage(g_hwnd, WM_HOTKEY, WM_HOTKEY, PM_REMOVE)`）
+- 如果热键已被系统或其他应用占用，`RegisterHotKey` 失败返回 0

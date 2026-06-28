@@ -4,7 +4,7 @@
 修复 HelgeSverre-libui-sdk 在 Windows 上的所有兼容性问题：WebView2 不渲染、JS↔PHP 桥接断裂、自绘控件不显示、TableModel 报错。
 
 ## Current Phase
-Phase 13b 完成 ✅ — Tray Show Window 修复
+Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 
 ## Phases
 
@@ -105,6 +105,8 @@ Phase 13b 完成 ✅ — Tray Show Window 修复
 | SystemInfo getCPUCores Windows NT | try-catch + %NUMBER_OF_PROCESSORS% fallback |
 | SystemInfo isArm64/isArmV7 方法不存在 | 改为 arch 字符串直接检查 |
 | Tray Show Window 不恢复 | `uiControlHandle()` 获取真正 HWND + `SW_RESTORE` |
+| GlobalHotkey DLL 未编译 | MinGW 编译 `hotkey_win.c` + `stdbool.h` |
+| GlobalHotkey quit 不生效 | `Ffi::timer(0, ...)` 延迟退出 + `Ctrl+Shift` 避免系统冲突 |
 
 ### Phase 13: Tray 托盘图标修复 ✅
 - **PebView DLL 路径错误**：`windows/x86_64/PebView.dll` → `windows/PebView.dll`
@@ -115,3 +117,11 @@ Phase 13b 完成 ✅ — Tray Show Window 修复
 - **HWND 获取错误**：`$window->handle()` 返回 `uiWindow*` 非 HWND，改用 `uiControlHandle($window->asControl())`
 - **window_show() API**：C 端 `SW_SHOW` → `SW_RESTORE` + `SetForegroundWindow()` 恢复最小化窗口
 - **FFI cdef**：添加 `window_show()` 声明，Tray 新增 `showWindow()` 方法
+
+### Phase 14: GlobalHotkey bridge DLL 编译 + quit 修复 ✅
+- **bridge/hotkey.dll 未编译**：MinGW 编译 `hotkey_win.c` → `hotkey.dll`（`-luser32`）
+- **stdbool.h 缺失**：`hotkey_win.c` 添加 `#include <stdbool.h>`
+- **测试脚本缺少 Ffi::init()**：添加初始化调用
+- **Loop::stop() 在回调中无效**：`uiQuit()` 投递 WM_QUIT 但回调未返回，事件循环无法处理 → 改用 `Ffi::timer(0, ...)` 延迟退出
+- **Cmd 在 Windows = MOD_WIN**：与系统快捷键冲突 → 改用 `Ctrl+Shift` 组合
+- Files: `bridge/hotkey.dll`, `bridge/hotkey_win.c`, `examples/test-global-hotkey.php`
