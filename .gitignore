@@ -8,3 +8,4 @@
 # /bridge/*.so
 # /bridge/*.dll
 /php_errors.log
+/tray_stdout.log

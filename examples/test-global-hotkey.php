@@ -5,10 +5,12 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use Libui\App;
+use Libui\Ffi;
 use Libui\Label;
 use Libui\Window;
-use Libui\Loop;
 use Yangweijie\Ui2\System\GlobalHotkey;
+
+Ffi::init();
 
 /**
  * Global hotkey demo — register system-wide shortcuts.
@@ -16,19 +18,19 @@ use Yangweijie\Ui2\System\GlobalHotkey;
  * Run: php85 examples/test-global-hotkey.php
  *
  * Registered shortcuts:
- *   Cmd+Shift+H  — Shows/Hides the window
- *   Cmd+Shift+Q  — Quits the app
+ *   Ctrl+Shift+H  — Shows/Hides the window
+ *   Ctrl+Shift+Q  — Quits the app
  */
 
 $window = new Window('Global Hotkey Demo', 400, 200, true);
 
 $label = new Label(
     "Global hotkeys registered:" . \PHP_EOL
-    . "  Cmd+Shift+H  — Toggle window visibility" . \PHP_EOL
-    . "  Cmd+Shift+Q  — Quit app" . \PHP_EOL
+    . "  Ctrl+Shift+H  — Toggle window visibility" . \PHP_EOL
+    . "  Ctrl+Shift+Q  — Quit app" . \PHP_EOL
     . \PHP_EOL
     . "These work even when the window is minimized." . \PHP_EOL
-    . "Press Cmd+Shift+H now to hide this window."
+    . "Press Ctrl+Shift+H now to hide this window."
 );
 
 $window->setChild($label);
@@ -38,7 +40,7 @@ $hotkey = new GlobalHotkey();
 $hotkeyRegisterCount = 0;
 
 try {
-    $hotkey->register('Cmd+Shift+H', function () use ($window): void {
+    $hotkey->register('Ctrl+Shift+H', function () use ($window): void {
         if ($window->visible()) {
             $window->hide();
         } else {
@@ -47,9 +49,15 @@ try {
     });
     $hotkeyRegisterCount++;
 
-    $hotkey->register('Cmd+Shift+Q', function () use ($hotkey): void {
+    $hotkey->register('Ctrl+Shift+Q', function () use ($hotkey): void {
         $hotkey->unregisterAll();
-        Loop::stop();
+        // Defer quit to next event loop tick — uiQuit() cannot be called
+        // from inside a Loop::repeat() callback because the WM_QUIT message
+        // won't be processed until the current callback returns.
+        Ffi::timer(0, function (): bool {
+            Ffi::quit();
+            return false;
+        });
     });
     $hotkeyRegisterCount++;
 
