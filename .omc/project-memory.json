@@ -1,0 +1,10 @@
+{
+  "techStack": "PHP 8.5+ FFI, libui-ng native desktop GUI, kingbes/pebview for WebView + Toast. Pest 4 test suite, Mago formatter (upstream). Build: composer install (auto-patches via patch.php), composer build:pebview, composer build:bridge.",
+  "build": "composer install runs patch.php via post-autoload-dump. composer build:pebview compiles PebView.dylib from source (macOS/Linux). composer build:bridge compiles webview_bridge.dylib. WebView bridge needs PebView built first.",
+  "conventions": "Follow existing patterns in src/ — use Composite base class for multi-control widgets. Custom-drawn widgets use Area + DrawContext builder. WebView subtree for browser-based widgets (borderless child window, not Composite). Never edit vendor/ — use patches/. patch.php is append-only, never removes stale files.",
+  "structure": "src/ (Yangweijie\\Ui2 namespace), assets/ (tree-view.html, code-editor.html), patches/ (vendor overrides, mirrored on install), bridge/ (C/ObjC WebView bridge sources), bootstrap.php (Collision error handler, autoloaded). Tests at tests/. Examples at examples/.",
+  "notes": "GC trap: temporary Composite objects get __destruct() at statement end calling uiControlDestroy while libui still holds ref. Always store Composites in named persistent variables. WebView/TreeView/CodeEditor create borderless child windows — cannot be placed in Box/Form/Tab layouts. Use autoResize() for resize tracking. Dialog picker centeredOn(Window $parent) for parent-relative positioning.",
+  "version": "1.0.0",
+  "lastScanned": 1782629108984,
+  "projectRoot": "/Volumes/data/git/php/HelgeSverre-libui-sdk"
+}

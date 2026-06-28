@@ -480,6 +480,42 @@ class WebView
             'Windows' => $base . '/vendor/kingbes/pebview/lib/windows/PebView.dll',
             default  => throw new \RuntimeException('Unsupported platform: ' . \PHP_OS_FAMILY),
         };
+
+        $this->checkLibraries();
+    }
+
+    /**
+     * Check that required native libraries exist and provide helpful error if not.
+     */
+    private function checkLibraries(): void
+    {
+        $missing = [];
+
+        if (!\file_exists($this->pebviewLib)) {
+            $missing[] = "PebView library: {$this->pebviewLib}";
+        }
+
+        if (!\file_exists($this->bridgeLib)) {
+            $missing[] = "WebView bridge: {$this->bridgeLib}";
+        }
+
+        if (!empty($missing)) {
+            $libList = \implode("\n  ", $missing);
+            $buildCmd = match (\PHP_OS_FAMILY) {
+                'Darwin' => 'composer build',
+                'Linux'  => 'composer build',
+                'Windows' => 'composer build',
+                default  => 'composer build',
+            };
+            throw new \RuntimeException(
+                "WebView native libraries not found:\n  {$libList}\n\n"
+                . "Run the following command to build them:\n  {$buildCmd}\n\n"
+                . "Or build manually:\n"
+                . "  macOS: bash vendor/kingbes/pebview/source/macos.sh\n"
+                . "  Linux: bash vendor/kingbes/pebview/source/linux.sh\n"
+                . "  Windows: vendor\\kingbes\\pebview\\source\\build.cmd"
+            );
+        }
     }
 
     /**

@@ -15,8 +15,10 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 | `src/Widgets/` | Custom-drawn: ToggleSwitch, StatusIndicator, CircleProgressBar, Toast, TableView, TreeView, CodeEditor |
 | `src/Layout/` | TabContainer, GroupSection — convenience wrappers |
 | `src/WebView.php` | Embedded browser (WKWebView/WebKitGTK/WebView2) via borderless child window |
-| `patches/` | Files copied into `vendor/` on install (patch system) |
+| `assets/` | HTML/JS assets for WebView-based widgets (tree-view.html, code-editor.html) |
+| `patches/` | Files copied into `vendor/` on install (patch system). **Append-only** — stale patches are never removed. |
 | `bridge/` | C/ObjC source for WebView child-window bridge per platform |
+| `bootstrap.php` | Auto-loaded via `composer.json autoload.files` — registers Collision error handler |
 | `vendor/helgesverre/libui/` | Upstream. **Never edit directly** — use `patches/` |
 | `tests/` | Pest tests |
 | `examples/` | Runnable demos |
@@ -24,6 +26,8 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 ## Patch system
 
 `composer install` runs `patch.php`, which recursively copies `patches/` into `vendor/`. The `patches/` directory mirrors `vendor/` structure. This lets you override upstream files without forking.
+
+**Append-only** — stale patches are never removed. If you delete a file from `patches/`, the previous copy still lives in `vendor/`. Clean it manually.
 
 **Currently patched** (under `patches/helgesverre/libui/src/`):
 
@@ -40,6 +44,27 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 - `Draw/Path.php` — `wedge()`/`polygon()`/`ellipse()`/`roundedRect()`/`quadTo()`/`bezierThrough()`
 - `Draw/Params/Area{Key,Mouse}Event.php` — Semantic query methods
 
+## Build commands
+
+```bash
+composer install              # runs patch.php via post-autoload-dump
+composer build:pebview        # compiles PebView.dylib from source (macOS/Linux)
+composer build:bridge         # compiles webview_bridge.dylib after PebView is ready
+php patch.php                 # manually re-apply patches (vendor-mirrored file copy)
+```
+
+## Widget catalog (src/Widgets/)
+
+| Widget | Approach | Key behaviour |
+|---|---|---|
+| `CircleProgressBar` | `Area` + `DrawContext` builder | `setProgress(int)` — ring arc fill/stroke. NOT a WebView widget. |
+| `Toast` | Static FFI to PebView `Toast.dylib` | `Toast::show(title, message, icon?)` — native OS notification. No instance needed. |
+| `ToggleSwitch` | `Composite` wrapping libui controls | ON/OFF toggle with callback |
+| `StatusIndicator` | `Area` with colored circle draw | On/off/dim states |
+| `TableView` | libui `MultilineEntry` wrapper | Tabular read-only text display |
+| `TreeView` | Extends `WebView` | `setData()`, `expandNode()`, `onNodeClick()` |
+| `CodeEditor` | Extends `WebView` + highlight.js | `setCode()`, `setLanguage()`, `onChange()` |
+
 ## WebView and bridge
 
 `WebView` creates a **borderless child window** at absolute coordinates — it is NOT a `Composite` and cannot go in `Box`/`Form`/`Tab` layouts. Use `autoResize()` to track parent window resizing.
@@ -53,6 +78,8 @@ The `bridge/` directory has platform C source. Compiled binaries are in `bridge/
 - **`Libui\Ffi::init()`** — call before any widget. Idempotent.
 - **Menus before first Window** — enforced at runtime (`MenuOrderException`).
 - **`Window::run()`** = show + event loop + `Ffi::uninit()` in `finally`. Code after `run()` in the same script runs in a torn-down state — use the `$afterClose` callback. For multi-window apps, use `Libui\App::run()` instead (does not tear down FFI).
+- **`Window::setWindowIcon(string $iconPath)`** — set dock/taskbar icon cross-platform. macOS→bridge dylib via `NSApp setApplicationIconImage:`; Linux/Windows→PebView `set_icon()`.
+- **`App::afterInit(\Closure $callback)`** — queue callback to run right after `Ffi::init()` but before event loop. E.g. for setting dock icon at startup.
 - **Event callbacks** return `void`. Exceptions caught and printed to `STDERR`. Use try/catch in callbacks.
 - **Closures retained** by `Ffi::$retained` — no need to keep references yourself.
 - **`fn () => echo …`** is a PHP syntax error — use `print` or `function () {}`.
@@ -102,6 +129,8 @@ composer regen        # Regenerate FFI header + typed classes from ui.h
 - **`fn () => echo …`** is a syntax error in PHP — use `print` or a `function () {}` body.
 - **Do not add linter/formatter config** — upstream uses Mago. Prefer consistency.
 - **Do not assume `phpunit.xml` is absent** — it exists. Pest reads it.
+- **Composite GC trap** — temporary `Composite` objects (e.g. `(new SeparatorLine())->root()`) get `__destruct()` called at statement end via PHP's GC, which calls `uiControlDestroy()` on the underlying C widget while libui still holds a reference. **Always store Composites in named persistent variables.** If you see `uiControlVerifySetParent` errors, this is the cause.
+- **`patches/` is append-only** — removing a file from `patches/` does NOT remove it from `vendor/`. Clean `vendor/` manually.
 
 ## Examples
 

@@ -13,7 +13,9 @@ namespace Libui;
  *      ->onShouldQuit(fn () => $document->isSaved())
  *      ->run();
  *
- * For a single window with no app-level concerns, prefer {@see Window::run()}.
+ * PATCHED: added afterInit() hook that fires after Ffi::init() but before
+ * the event loop starts — the safe place for startup tasks that need libui
+ * to be live (e.g. setting the dock icon).
  */
 final class App
 {
@@ -22,6 +24,9 @@ final class App
 
     /** @var (callable():bool)|null */
     private $shouldQuit = null;
+
+    /** @var list<callable(): void> */
+    private array $initHooks = [];
 
     public static function new(): self
     {
@@ -45,10 +50,27 @@ final class App
         return $this;
     }
 
+    /**
+     * Register a callback to run right after libui initialises but before
+     * the event loop starts — the ideal spot for startup tasks such as
+     * setting the application dock icon.
+     *
+     * Multiple callbacks can be registered; they run in order.
+     */
+    public function afterInit(callable $cb): static
+    {
+        $this->initHooks[] = $cb;
+        return $this;
+    }
+
     /** Initialise libui, show the windows, run the loop until quit, then uninit. */
     public function run(): void
     {
         Ffi::init();
+
+        foreach ($this->initHooks as $hook) {
+            $hook();
+        }
 
         if ($this->shouldQuit !== null) {
             Ffi::onShouldQuit($this->shouldQuit);

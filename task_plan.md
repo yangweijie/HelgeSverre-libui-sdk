@@ -158,3 +158,8 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 - path 命令：M/L/H/V/C/Q/A/Z（含相对坐标）
 - 关键修复：instanceof 继承顺序、命令数组反转、`<g>` 属性继承
 - Files: `src/Widgets/SvgView.php`, `examples/test-svg.php`
+
+### Phase 22: Composer 构建脚本 + 库缺失提示 ✅
+- `composer.json` 新增 `build`/`build:pebview`/`build:bridge` 脚本
+- `WebView.php` 新增 `checkLibraries()` 缺失提示
+- Files: `composer.json`, `src/WebView.php`

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cd460883b9f806cbcebc4a16dcf04ccb",
+    "content-hash": "056d6c430a6da2ea3d4b1a251cdf403c",
     "packages": [
         {
             "name": "carbonphp/carbon-doctrine-types",
@@ -1958,14 +1958,9 @@
         {
             "name": "nunomaduro/collision",
             "version": "v6.x-dev",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/nunomaduro/collision.git",
-                "reference": "f05978827b9343cba381ca05b8c7deee346b6015"
-            },
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.huaweicloud.com/repository/php/nunomaduro/collision/v6.x-dev/nunomaduro-collision-v6.x-dev.zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/nunomaduro/collision/v6.x-dev/nunomaduro-collision-v6.x-dev.zip",
                 "reference": "f05978827b9343cba381ca05b8c7deee346b6015",
                 "shasum": ""
             },
@@ -2022,20 +2017,10 @@
                 "php",
                 "symfony"
             ],
-            "funding": [
-                {
-                    "url": "https://www.paypal.com/paypalme/enunomaduro",
-                    "type": "custom"
-                },
-                {
-                    "url": "https://github.com/nunomaduro",
-                    "type": "github"
-                },
-                {
-                    "url": "https://www.patreon.com/nunomaduro",
-                    "type": "patreon"
-                }
-            ],
+            "support": {
+                "issues": "https://github.com/nunomaduro/collision/issues",
+                "source": "https://github.com/nunomaduro/collision"
+            },
             "time": "2023-01-03T12:54:54+00:00"
         },
         {
@@ -4111,7 +4096,8 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "helgesverre/libui": 20,
-        "jolicode/jolinotif": 20
+        "jolicode/jolinotif": 20,
+        "nunomaduro/collision": 20
     },
     "prefer-stable": false,
     "prefer-lowest": false,

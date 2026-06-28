@@ -177,6 +177,24 @@ void wvb_move(void *wv, uintptr_t parent_handle,
 }
 
 /**
+ * wvb_set_dock_icon — Set the macOS Dock icon from a file path.
+ *
+ * Accepts any format NSImage supports (png, icns, jpg, ico).
+ * Call this once before or after the window is shown.
+ */
+__attribute__((visibility("default")))
+void wvb_set_dock_icon(const char *iconFilePath) {
+    @autoreleasepool {
+        if (!iconFilePath || !*iconFilePath) return;
+        NSString *path = [NSString stringWithUTF8String:iconFilePath];
+        NSImage *image = [[NSImage alloc] initWithContentsOfFile:path];
+        if (image) {
+            [NSApp setApplicationIconImage:image];
+        }
+    }
+}
+
+/**
  * wvb_destroy — Destroy an embedded webview and clean up the child window.
  *
  * 1. webview_destroy() — WKWebView released, contentView set to nil

@@ -296,6 +296,83 @@ class Window extends Generated\Window
         return $this->setPosition(\max(0, $x), \max(0, $y));
     }
 
+    /**
+     * Set the application dock/taskbar/window icon from a file path.
+     *
+     * Platform behaviour:
+     *   macOS   → Sets the Dock icon (bridge dylib → NSApp setApplicationIconImage:).
+     *   Linux   → Sets the window + taskbar icon (PebView → gtk_window_set_icon).
+     *   Windows → Sets the window + taskbar icon (PebView → WM_SETICON).
+     *
+     * Format requirements:
+     *   macOS   → png, icns, jpg, ico, gif (anything NSImage supports).
+     *   Linux   → png (GdkPixbuf format).
+     *   Windows → ico (Windows icon format).
+     *
+     * @throws \RuntimeException
+     */
+    public function setWindowIcon(string $iconPath): static
+    {
+        if (!\file_exists($iconPath)) {
+            throw new \RuntimeException("Icon file not found: {$iconPath}");
+        }
+
+        match (PHP_OS_FAMILY) {
+            'Darwin'  => $this->setDockIconMacOS($iconPath),
+            'Windows' => $this->setWindowIconPebView($iconPath),
+            'Linux'   => $this->setWindowIconPebView($iconPath),
+            default   => throw new \RuntimeException('Unsupported OS: ' . PHP_OS_FAMILY),
+        };
+
+        return $this;
+    }
+
+    /** macOS: load bridge dylib → wvb_set_dock_icon(). */
+    private function setDockIconMacOS(string $iconPath): void
+    {
+        static $ffi = null;
+        if ($ffi === null) {
+            $bridgePath = \dirname(__DIR__, 4)  // vendor/helgesverre/libui/src → project root
+                . '/bridge/webview_bridge.dylib';
+            if (!\file_exists($bridgePath)) {
+                throw new \RuntimeException("Bridge dylib not found at {$bridgePath}");
+            }
+            $ffi = \FFI::cdef(
+                'void wvb_set_dock_icon(const char *iconFilePath);',
+                $bridgePath,
+            );
+        }
+        $ffi->wvb_set_dock_icon($iconPath);
+    }
+
+    /** Linux/Windows: load PebView → set_icon(windowHandle, path). */
+    private function setWindowIconPebView(string $iconPath): void
+    {
+        static $ffi = null;
+        if ($ffi === null) {
+            $base = \dirname(__DIR__, 4) . '/vendor/kingbes/pebview/lib';
+            $lib = match (PHP_OS_FAMILY) {
+                'Windows' => $base . '/windows/x86_64/PebView.dll',
+                'Linux'   => $base . '/linux/x86_64/PebView.so',
+                default   => null,
+            };
+            if (!$lib || !\file_exists($lib)) {
+                throw new \RuntimeException("PebView library not found at {$lib}");
+            }
+            $ffi = \FFI::cdef(
+                'int set_icon(const void *ptr, const char *iconFilePath);',
+                $lib,
+            );
+        }
+        $handle = Ffi::get()->uiControlHandle($this->asControl());
+        $code = $ffi->set_icon($handle, $iconPath);
+        if ($code !== 0) {
+            throw new \RuntimeException(
+                "set_icon failed with code {$code} (0=OK, 1=WINDOW_NOT_FOUND, 2=ICON_NOT_FOUND)",
+            );
+        }
+    }
+
     /** Top-left corner. */
     public function topLeft(?int $screenWidth = null, ?int $screenHeight = null): static
     {

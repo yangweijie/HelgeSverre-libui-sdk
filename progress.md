@@ -225,3 +225,9 @@
 - **支持的 SVG 元素**：`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polygon>`, `<polyline>`, `<path>`, `<text>`, `<g>`
 - **支持的 path 命令**：M/m, L/l, H/h, V/v, C/c, Q/q, A/a, Z
 - Files: `src/Widgets/SvgView.php`（新建）, `examples/test-svg.php`（新建）
+
+### Phase 22: ✅ Composer 构建脚本 + 库缺失提示
+- **问题**：PebView 编译后库文件不在 git 中，用户运行 WebView 组件时报错不友好
+- **修复 1**：`composer.json` 新增 `build`/`build:pebview`/`build:bridge` 脚本，自动检测平台调用对应编译命令
+- **修复 2**：`WebView.php` 新增 `checkLibraries()` 方法，检测库文件是否存在，缺失时输出完整构建指引
+- Files: `composer.json`, `src/WebView.php`

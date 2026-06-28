@@ -416,6 +416,27 @@ $webviewEditorBtn->onClicked(function () use (&$mainWindow, $outputLabel): void 
     $outputLabel->setText("Code editor opened");
 });
 $webviewEditorSpacer = new Label("");
+
+$separator10 = new \Yangweijie\Ui2\Fields\SeparatorLine();
+$iconLabel = new Label("App Icon — set dock/taskbar icon at runtime:");
+$iconBtn = new Button("Set App Icon");
+$iconBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
+    if ($mainWindow === null) return;
+    $iconPath = __DIR__ . '/../assets/app-icon.png';
+    if (!file_exists($iconPath)) {
+        $outputLabel->setText("Icon not found: {$iconPath}");
+        return;
+    }
+    try {
+        $mainWindow->setWindowIcon($iconPath);
+        $outputLabel->setText("App icon set from {$iconPath}");
+    } catch (\Throwable $e) {
+        $outputLabel->setText("Icon error: " . $e->getMessage());
+    }
+});
+$iconBtnSpacer = new Label("");
+$iconNote = new Label("Supported: macOS (png/icns), Linux (png), Windows (ico)");
+
 $webviewNote1 = new Label("Note: WebView-based widgets open borderless child windows that float");
 $webviewNote2 = new Label("over the libui layout. They can be repositioned with autoResize().");
 $webviewEndSpacer = new Label("");
@@ -427,6 +448,9 @@ $webviewControls = Build::vbox(
     $webviewEditorLabel,
     Build::hbox($webviewEditorBtn, Build::stretchy($webviewEditorSpacer)),
     $separator9->root(),
+    $iconLabel,
+    Build::hbox($iconBtn, Build::stretchy($iconBtnSpacer)),
+    $iconNote,
     $webviewNote1,
     $webviewNote2,
     Build::stretchy($webviewEndSpacer),
@@ -456,4 +480,17 @@ $mainWindow = new Window("All Components — ui2 Demo", 800, 600, true);
 
 $mainWindow->setChild(Build::vbox($tab, $outputLabel));
 
-App::new()->window($mainWindow)->onShouldQuit(fn() => true)->run();
+// Auto-apply app icon at startup (afterInit = after Ffi::init, before event loop)
+$autoIconPath = __DIR__ . '/../assets/app-icon.png';
+$app = App::new()->window($mainWindow)->onShouldQuit(fn() => true);
+if (file_exists($autoIconPath)) {
+    $app->afterInit(function () use (&$mainWindow, $autoIconPath): void {
+        if ($mainWindow === null) return;
+        try {
+            $mainWindow->setWindowIcon($autoIconPath);
+        } catch (\Throwable) {
+            // Non-fatal: icon is cosmetic
+        }
+    });
+}
+$app->run();
