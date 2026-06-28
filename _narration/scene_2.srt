@@ -1,0 +1,8 @@
+1
+00:00:00,050 --> 00:00:05,137
+Yangweijie UI2 wraps libui-ng through PHP's FFI layer.
+
+2
+00:00:05,137 --> 00:00:11,312
+No web server, no HTTP round trips — direct C bindings with zero overhead.
+

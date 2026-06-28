@@ -1,0 +1,12 @@
+1
+00:00:00,050 --> 00:00:01,550
+Write pure PHP.
+
+2
+00:00:01,550 --> 00:00:05,212
+A single file, no build step, no JavaScript.
+
+3
+00:00:05,212 --> 00:00:07,762
+The same Composer workflow you already love.
+

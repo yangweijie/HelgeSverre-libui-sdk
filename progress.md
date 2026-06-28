@@ -244,3 +244,15 @@
   - 重新编译 `PebView.dll`（75KB）
 - **验证**：`test-set-icon.php` 返回 code 0（待用户视觉确认）
 - Files: `vendor/kingbes/pebview/source/seticon/icon.c`, `vendor/kingbes/pebview/lib/windows/PebView.dll`
+
+### Phase 24: ✅ 简介视频制作 + README 嵌入
+- **视频生成**：使用 HyperFrames 制作 46.5 秒介绍视频
+  - 6 场景：Hook → Architecture → Features → DevX → Cross-platform → CTA
+  - 设计风格：Stripe/Linear 白底 #FAFAFA + PHP 蓝 #667AD4 + 深色 #1A1A2E
+  - DevX 场景代码块修复：从单行 span 改为多行缩进 PHP 代码（约 29s 处）
+  - 渲染：puppeteer-core + Chrome for Testing + ffmpeg → `_narration/ui2-intro.mp4` (1.59MB, H.264/AAC)
+- **文档嵌入**：
+  - `README.md`（GitHub 落地页）：标题下添加居中 `<video>` 标签
+  - `docs/en/README.md`（VuePress 文档首页）：frontmatter footer 后添加 `<video>` 标签
+  - 相对路径正确处理：根目录 `_narration/` 与 `docs/en/` 的层级差异
+- Files: `composition.html`, `_narration/ui2-intro.mp4`, `README.md`, `docs/en/README.md`

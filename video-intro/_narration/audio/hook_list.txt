@@ -1,0 +1,4 @@
+file '_narration/audio/hook_c0.mp3'
+file '_narration/audio/hook_c1.mp3'
+file '_narration/audio/hook_c2.mp3'
+file '_narration/audio/hook_c3.mp3'

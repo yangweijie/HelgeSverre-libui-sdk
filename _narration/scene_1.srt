@@ -1,0 +1,12 @@
+1
+00:00:00,050 --> 00:00:02,000
+PHP for desktop apps?
+
+2
+00:00:02,000 --> 00:00:03,562
+Yeah, you heard that right.
+
+3
+00:00:03,562 --> 00:00:07,362
+Build native desktop interfaces with the language you already know.
+

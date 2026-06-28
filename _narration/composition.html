@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>yangweijie/ui2 — Intro</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 1920px; height: 1080px;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+  background: #FAFAFA;
+  color: #1A1A2E;
+}
+
+#stage {
+  position: relative;
+  width: 100%; height: 100%;
+  background: #FAFAFA;
+}
+
+/* === Scene base === */
+.scene {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.scene.active { opacity: 1; }
+.scene.exiting { opacity: 0; }
+
+/* === Scene 1: Hook === */
+#scene-hook {
+  background: linear-gradient(135deg, #667AD4 0%, #8895D6 100%);
+}
+#scene-hook .hook-question {
+  font-size: 140px; font-weight: 700; color: #fff;
+  letter-spacing: -3px; line-height: 1.1;
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#scene-hook .hook-question.show {
+  opacity: 1; transform: translateY(0);
+}
+#scene-hook .hook-question .highlight {
+  background: rgba(255,255,255,0.15);
+  padding: 0 20px; border-radius: 16px;
+}
+#scene-hook .hook-sub {
+  font-size: 32px; font-weight: 400; color: rgba(255,255,255,0.75);
+  margin-top: 24px;
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.5s ease 0.3s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.3s;
+}
+#scene-hook .hook-sub.show {
+  opacity: 1; transform: translateY(0);
+}
+#scene-hook .hook-code-bg {
+  position: absolute; bottom: 60px; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 20px; color: rgba(255,255,255,0.12);
+  white-space: pre; text-align: center;
+  line-height: 1.6;
+}
+
+/* === Scene 2: Architecture === */
+#scene-arch {
+  background: #FAFAFA;
+  padding: 80px;
+}
+#scene-arch .arch-title {
+  font-size: 48px; font-weight: 700; color: #1A1A2E;
+  margin-bottom: 60px;
+  opacity: 0; transform: translateY(-20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+#scene-arch .arch-title.show {
+  opacity: 1; transform: translateY(0);
+}
+.arch-diagram {
+  display: flex; align-items: center; gap: 20px;
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.6s ease 0.3s, transform 0.6s ease 0.3s;
+}
+.arch-diagram.show { opacity: 1; transform: translateY(0); }
+.arch-layer {
+  background: #fff;
+  border: 2px solid #E5E7EB;
+  border-radius: 16px;
+  padding: 30px 40px;
+  text-align: center;
+  min-width: 180px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+.arch-layer .layer-label {
+  font-size: 18px; font-weight: 600; color: #6B7280;
+  margin-bottom: 8px;
+}
+.arch-layer .layer-name {
+  font-size: 24px; font-weight: 700; color: #1A1A2E;
+}
+.arch-layer.code { border-color: #667AD4; }
+.arch-layer.code .layer-name { color: #667AD4; }
+.arch-layer.ffi { border-color: #34D399; }
+.arch-layer.ffi .layer-name { color: #059669; }
+.arch-layer.native { border-color: #F59E0B; }
+.arch-layer.native .layer-name { color: #D97706; }
+.arch-arrow {
+  font-size: 32px; color: #9CA3AF;
+  font-weight: 300;
+}
+
+/* === Scene 3: Features === */
+#scene-features {
+  background: linear-gradient(160deg, #667AD4 0%, #4B5DB5 100%);
+  padding: 80px;
+}
+#scene-features .feat-title {
+  font-size: 48px; font-weight: 700; color: #fff;
+  margin-bottom: 50px;
+  opacity: 0; transform: translateY(-20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+#scene-features .feat-title.show {
+  opacity: 1; transform: translateY(0);
+}
+.feat-grid {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 20px;
+  max-width: 1200px;
+}
+.feat-card {
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 16px;
+  padding: 24px 28px;
+  text-align: center;
+  min-width: 160px;
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.feat-card.show {
+  opacity: 1; transform: translateY(0);
+}
+.feat-card .feat-icon {
+  font-size: 36px; font-weight: 300; color: #fff; margin-bottom: 8px;
+  width: 60px; height: 60px; line-height: 60px;
+  background: rgba(255,255,255,0.12); border-radius: 50%;
+  margin: 0 auto 12px;
+}
+.feat-card .feat-name {
+  font-size: 16px; font-weight: 600; color: #fff;
+}
+.feat-card .feat-desc {
+  font-size: 13px; color: rgba(255,255,255,0.65);
+  margin-top: 4px;
+}
+
+/* === Scene 4: DevX === */
+#scene-devx {
+  background: #FAFAFA;
+  padding: 80px;
+}
+#scene-devx .devx-title {
+  font-size: 48px; font-weight: 700; color: #1A1A2E;
+  margin-bottom: 40px;
+  opacity: 0; transform: translateY(-20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+#scene-devx .devx-title.show {
+  opacity: 1; transform: translateY(0);
+}
+.code-block {
+  background: #1A1A2E;
+  border-radius: 12px;
+  padding: 32px 40px;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 20px;
+  line-height: 1.8;
+  color: #E5E7EB;
+  min-width: 700px;
+  text-align: left;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.5s ease 0.2s, transform 0.5s ease 0.2s;
+}
+.code-block.show { opacity: 1; transform: translateY(0); }
+.code-block .keyword { color: #93C5FD; }
+.code-block .string { color: #6EE7B7; }
+.code-block .function { color: #FCD34D; }
+.code-block .comment { color: #6B7280; font-style: italic; }
+.code-block .type { color: #A78BFA; }
+.code-block .number { color: #FCA5A5; }
+
+/* === Scene 5: Cross-platform === */
+#scene-cross {
+  background: #FAFAFA;
+  padding: 80px;
+}
+#scene-cross .cross-title {
+  font-size: 48px; font-weight: 700; color: #1A1A2E;
+  margin-bottom: 60px;
+  opacity: 0; transform: translateY(-20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+#scene-cross .cross-title.show {
+  opacity: 1; transform: translateY(0);
+}
+.platform-row {
+  display: flex; gap: 60px; align-items: center;
+}
+.platform-item {
+  text-align: center;
+  opacity: 0; transform: translateY(40px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.platform-item.show { opacity: 1; transform: translateY(0); }
+.platform-item .p-icon {
+  width: 120px; height: 120px; line-height: 120px;
+  background: #fff;
+  border: 2px solid #E5E7EB;
+  border-radius: 24px;
+  font-size: 56px; font-weight: 600;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+.platform-item .p-name {
+  font-size: 20px; font-weight: 600; color: #1A1A2E;
+}
+.platform-item .p-check {
+  font-size: 14px; color: #10B981;
+  margin-top: 4px;
+}
+.platform-item.macos .p-icon { border-color: #9CA3AF; color: #6B7280; }
+.platform-item.linux .p-icon { border-color: #667AD4; color: #667AD4; }
+.platform-item.windows .p-icon { border-color: #3B82F6; color: #3B82F6; }
+
+/* === Scene 6: CTA === */
+#scene-cta {
+  background: linear-gradient(135deg, #667AD4 0%, #4B5DB5 100%);
+}
+#scene-cta .cta-logo {
+  font-size: 72px; font-weight: 800; color: #fff;
+  letter-spacing: -2px;
+  opacity: 0; transform: scale(0.9);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#scene-cta .cta-logo.show {
+  opacity: 1; transform: scale(1);
+}
+#scene-cta .cta-tagline {
+  font-size: 28px; font-weight: 400; color: rgba(255,255,255,0.7);
+  margin-top: 20px;
+  opacity: 0; transform: translateY(15px);
+  transition: opacity 0.5s ease 0.2s, transform 0.5s ease 0.2s;
+}
+#scene-cta .cta-tagline.show {
+  opacity: 1; transform: translateY(0);
+}
+#scene-cta .cta-gh {
+  position: absolute; bottom: 80px;
+  font-size: 20px; color: rgba(255,255,255,0.4);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  opacity: 0;
+  transition: opacity 0.5s ease 0.4s;
+}
+#scene-cta .cta-gh.show { opacity: 1; }
+
+/* === Subtitles === */
+#subtitles {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: 28px;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  padding: 12px 32px;
+  border-radius: 12px;
+  max-width: 1000px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 100;
+  line-height: 1.4;
+}
+#subtitles.visible { opacity: 1; }
+#subtitles.dark { color: #1A1A2E; background: rgba(255,255,255,0.85); }
+
+/* === Progress bar === */
+#progress {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 4px;
+  background: #667AD4;
+  z-index: 200;
+  transition: width 0.1s linear;
+}
+
+/* === Background grid decoration === */
+.bg-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- Background grid (visible on light scenes) -->
+  <div class="bg-grid" id="bgGrid"></div>
+
+  <!-- === Scene 1: Hook === -->
+  <div class="scene" id="scene-hook" data-scene="hook">
+    <div class="hook-question" id="hookQ1">
+      PHP<span style="color:rgba(255,255,255,0.5)">?</span>
+    </div>
+    <div class="hook-sub" id="hookSub">Build native desktop apps. In PHP.</div>
+    <div class="hook-code-bg">&lt;?php<br>// app.php → native window<br>echo "Hello, Desktop!";</div>
+  </div>
+
+  <!-- === Scene 2: Architecture === -->
+  <div class="scene" id="scene-arch" data-scene="arch">
+    <div class="arch-title" id="archTitle">How it works</div>
+    <div class="arch-diagram" id="archDiagram">
+      <div class="arch-layer code">
+        <div class="layer-label">Your Code</div>
+        <div class="layer-name">PHP 8.5+</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-layer ffi">
+        <div class="layer-label">Bridge</div>
+        <div class="layer-name">FFI</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-layer native">
+        <div class="layer-label">Rendering</div>
+        <div class="layer-name">libui-ng</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-layer" style="border-color:#1A1A2E;">
+        <div class="layer-label">Output</div>
+        <div class="layer-name" style="color:#1A1A2E;">Native UI</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === Scene 3: Features === -->
+  <div class="scene" id="scene-features" data-scene="features">
+    <div class="feat-title" id="featTitle">Everything you need</div>
+    <div class="feat-grid" id="featGrid">
+      <div class="feat-card" data-idx="0"><div class="feat-icon">⌨</div><div class="feat-name">Fields</div><div class="feat-desc">Text, number, checkboxes</div></div>
+      <div class="feat-card" data-idx="1"><div class="feat-icon">🗔</div><div class="feat-name">Dialogs</div><div class="feat-desc">Message box, confirm, prompt</div></div>
+      <div class="feat-card" data-idx="2"><div class="feat-icon">🎨</div><div class="feat-name">Pickers</div><div class="feat-desc">Color, font, date, time</div></div>
+      <div class="feat-card" data-idx="3"><div class="feat-icon">⚡</div><div class="feat-name">Widgets</div><div class="feat-desc">Toggle, progress, status</div></div>
+      <div class="feat-card" data-idx="4"><div class="feat-icon">🌐</div><div class="feat-name">WebView</div><div class="feat-desc">Embedded browser</div></div>
+      <div class="feat-card" data-idx="5"><div class="feat-icon">📐</div><div class="feat-name">Layout</div><div class="feat-desc">Tab, grid, group, form</div></div>
+    </div>
+  </div>
+
+<!-- === Scene 4: DevX === -->
+  <div class="scene" id="scene-devx" data-scene="devx">
+    <div class="devx-title" id="devxTitle">Write PHP. Ship desktop.</div>
+    <div class="code-block" id="codeBlock">
+    <p>
+    <span class="comment">// app.php — full native desktop app</span>
+    <br>
+    <span class="keyword"><?php</span>
+    <br>
+    <span class="function">require</span> <span class="string">'vendor/autoload.php'</span>;
+    <br>
+    <span class="function">use</span> Yangweijie\Ui2\Fields\TextField;
+    <br>
+    <span class="function">use</span> Yangweijie\Ui2\Dialogs\MessageBox;
+    <br>
+$window = Window::new(<span class="string">"My App"</span>, <span class="number">800</span>, <span class="number">600</span>)->centered()->setWindowIcon(<span class="string">"icon.png"</span>);
+<br>
+$field = <span class="keyword">new</span> TextField(<span class="string">"Name"</span>);
+<br>
+$field->onChange(<span class="function">fn</span>($v) => MessageBox::show(<span class="string">"Hello, $v!"</span>));
+<br>
+$window->run();
+    <p>
+    </div>
+  </div>
+  </div>
+
+  <!-- === Scene 5: Cross-platform === -->
+  <div class="scene" id="scene-cross" data-scene="cross-platform">
+    <div class="cross-title" id="crossTitle">One codebase, everywhere</div>
+    <div class="platform-row" id="platformRow">
+      <div class="platform-item macos" data-idx="0">
+        <div class="p-icon"></div>
+        <div class="p-name">macOS</div>
+        <div class="p-check">✓ Native look</div>
+      </div>
+      <div class="platform-item linux" data-idx="1">
+        <div class="p-icon">&lt;/&gt;</div>
+        <div class="p-name">Linux</div>
+        <div class="p-check">✓ GTK native</div>
+      </div>
+      <div class="platform-item windows" data-idx="2">
+        <div class="p-icon">⊞</div>
+        <div class="p-name">Windows</div>
+        <div class="p-check">✓ Win32 native</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === Scene 6: CTA === -->
+  <div class="scene" id="scene-cta" data-scene="cta">
+    <div class="cta-logo" id="ctaLogo">yangweijie/ui2</div>
+    <div class="cta-tagline" id="ctaTagline">Desktop PHP, shipped.</div>
+    <div class="cta-gh" id="ctaGh">github.com/yangweijie/HelgeSverre-libui-sdk</div>
+  </div>
+
+  <!-- === Subtitles === -->
+  <div id="subtitles"></div>
+
+  <!-- === Progress bar === -->
+  <div id="progress" style="width:0%"></div>
+</div>
+
+<script>
+// Timeline data (from TTS timing)
+const TIMELINE = {
+  totalDuration: 46.173,
+  scenes: [
+    {id:"hook", start:0, end:7.362},
+    {id:"arch", start:7.362, end:18.674},
+    {id:"features", start:18.674, end:28.199},
+    {id:"devx", start:28.199, end:35.961},
+    {id:"cross-platform", start:35.961, end:42.598},
+    {id:"cta", start:42.598, end:46.173}
+  ],
+  words: [
+    {t:0.05, d:1.95, txt:"PHP for desktop apps?", s:"hook"},
+    {t:2.0, d:1.562, txt:"Yeah, you heard that right.", s:"hook"},
+    {t:3.562, d:3.8, txt:"Build native desktop interfaces with the language you already know.", s:"hook"},
+    {t:7.412, d:5.087, txt:"Yangweijie UI2 wraps libui-ng through PHP's FFI layer.", s:"arch"},
+    {t:12.499, d:6.175, txt:"No web server, no HTTP round trips — direct C bindings with zero overhead.", s:"arch"},
+    {t:18.724, d:5.8, txt:"Fields, dialogs, color pickers, custom widgets like toggles and progress rings.", s:"features"},
+    {t:24.524, d:3.675, txt:"Even an embedded WebView for rich HTML content.", s:"features"},
+    {t:28.249, d:1.5, txt:"Write pure PHP.", s:"devx"},
+    {t:29.749, d:3.662, txt:"A single file, no build step, no JavaScript.", s:"devx"},
+    {t:33.411, d:2.55, txt:"The same Composer workflow you already love.", s:"devx"},
+    {t:36.011, d:1.175, txt:"One codebase.", s:"cross-platform"},
+    {t:37.186, d:2.575, txt:"macOS, Linux, Windows.", s:"cross-platform"},
+    {t:39.761, d:2.837, txt:"Native look and feel on every platform.", s:"cross-platform"},
+    {t:42.648, d:1.537, txt:"Yangweijie UI2.", s:"cta"},
+    {t:44.185, d:1.988, txt:"Desktop PHP, shipped.", s:"cta"}
+  ]
+};
+
+const totalDuration = TIMELINE.totalDuration;
+const scenes = document.querySelectorAll('.scene');
+const subtitlesEl = document.getElementById('subtitles');
+const progressEl = document.getElementById('progress');
+const sceneMap = {};
+
+scenes.forEach(s => {
+  const id = s.dataset.scene;
+  sceneMap[id] = s;
+});
+
+// Scene-specific element references
+const hookQ1 = document.getElementById('hookQ1');
+const hookSub = document.getElementById('hookSub');
+const archTitle = document.getElementById('archTitle');
+const archDiagram = document.getElementById('archDiagram');
+const featTitle = document.getElementById('featTitle');
+const featCards = document.querySelectorAll('#featGrid .feat-card');
+const devxTitle = document.getElementById('devxTitle');
+const codeBlock = document.getElementById('codeBlock');
+const crossTitle = document.getElementById('crossTitle');
+const platformItems = document.querySelectorAll('#platformRow .platform-item');
+const ctaLogo = document.getElementById('ctaLogo');
+const ctaTagline = document.getElementById('ctaTagline');
+const ctaGh = document.getElementById('ctaGh');
+
+let currentSubtitle = null;
+let subtitleTimeout = null;
+
+function updateSubtitle(text, isDarkScene) {
+  if (!text) {
+    subtitlesEl.classList.remove('visible', 'dark');
+    currentSubtitle = null;
+    return;
+  }
+  subtitlesEl.textContent = text;
+  subtitlesEl.classList.add('visible');
+  if (isDarkScene) subtitlesEl.classList.add('dark');
+  else subtitlesEl.classList.remove('dark');
+}
+
+function updateScene(t) {
+  // Find active scene
+  let activeId = null;
+  for (const s of TIMELINE.scenes) {
+    if (t >= s.start && t < s.end) { activeId = s.id; break; }
+  }
+  if (!activeId) { activeId = TIMELINE.scenes[TIMELINE.scenes.length-1].id; }
+
+  // Activate/deactivate scenes
+  scenes.forEach(scene => {
+    const id = scene.dataset.scene;
+    if (id === activeId) {
+      scene.classList.add('active');
+      scene.classList.remove('exiting');
+    } else {
+      scene.classList.remove('active');
+      scene.classList.add('exiting');
+    }
+  });
+
+  // Scene-specific animation triggers
+  const scene = TIMELINE.scenes.find(s => s.id === activeId);
+  if (!scene) return;
+  const elapsed = t - scene.start;
+  const sceneDur = scene.end - scene.start;
+
+  // Bg grid visibility (hide on dark scenes)
+  const bgGrid = document.getElementById('bgGrid');
+  if (['hook', 'features', 'cta'].includes(activeId)) {
+    bgGrid.style.display = 'none';
+  } else {
+    bgGrid.style.display = 'block';
+  }
+
+  switch (activeId) {
+    case 'hook':
+      if (elapsed > 0.2) hookQ1.classList.add('show');
+      if (elapsed > 2.5) hookSub.classList.add('show');
+      break;
+    case 'arch':
+      if (elapsed > 0.3) archTitle.classList.add('show');
+      if (elapsed > 1.2) archDiagram.classList.add('show');
+      break;
+    case 'features':
+      if (elapsed > 0.3) featTitle.classList.add('show');
+      featCards.forEach((card, i) => {
+        const delay = 0.5 + i * 0.12;
+        if (elapsed > delay) card.classList.add('show');
+      });
+      break;
+    case 'devx':
+      if (elapsed > 0.3) devxTitle.classList.add('show');
+      if (elapsed > 0.8) codeBlock.classList.add('show');
+      break;
+    case 'cross-platform':
+      if (elapsed > 0.3) crossTitle.classList.add('show');
+      platformItems.forEach((item, i) => {
+        const delay = 0.6 + i * 0.15;
+        if (elapsed > delay) item.classList.add('show');
+      });
+      break;
+    case 'cta':
+      if (elapsed > 0.2) ctaLogo.classList.add('show');
+      if (elapsed > 0.8) ctaTagline.classList.add('show');
+      if (elapsed > 1.5) ctaGh.classList.add('show');
+      break;
+  }
+
+  // Subtitles
+  const isDark = ['hook', 'features', 'cta'].includes(activeId);
+  let foundWord = null;
+  for (const w of TIMELINE.words) {
+    if (t >= w.t && t < w.t + w.d) { foundWord = w; break; }
+  }
+  if (foundWord) {
+    updateSubtitle(foundWord.txt, isDark);
+  } else {
+    updateSubtitle(null, isDark);
+  }
+
+  // Progress
+  const pct = Math.min(100, (t / totalDuration) * 100);
+  progressEl.style.width = pct + '%';
+}
+
+// External time control (for frame-by-frame capture)
+let _lastT = -1;
+
+function setTime(t) {
+  if (t === _lastT) return;
+  _lastT = t;
+  t = Math.min(t, totalDuration);
+  updateScene(t);
+}
+
+// Expose to outside
+window.setTime = setTime;
+window.__totalDuration = totalDuration;
+</script>
+</body>
+</html>

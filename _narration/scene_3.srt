@@ -1,0 +1,8 @@
+1
+00:00:00,050 --> 00:00:05,850
+Fields, dialogs, color pickers, custom widgets like toggles and progress rings.
+
+2
+00:00:05,850 --> 00:00:09,525
+Even an embedded WebView for rich HTML content.
+

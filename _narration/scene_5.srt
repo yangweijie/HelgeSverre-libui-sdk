@@ -1,0 +1,12 @@
+1
+00:00:00,050 --> 00:00:01,225
+One codebase.
+
+2
+00:00:01,225 --> 00:00:03,800
+macOS, Linux, Windows.
+
+3
+00:00:03,800 --> 00:00:06,637
+Native look and feel on every platform.
+

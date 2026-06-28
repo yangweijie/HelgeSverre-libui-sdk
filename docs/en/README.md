@@ -41,3 +41,7 @@ features:
 
 footer: MIT Licensed
 ---
+
+<div align="center">
+  <video src="../../_narration/ui2-intro.mp4" width="800" controls style="margin-top: 2rem;"></video>
+</div>
