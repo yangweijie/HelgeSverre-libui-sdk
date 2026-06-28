@@ -211,3 +211,17 @@
 - **修复**：将 Fields tab 从 all-components.php 移除，创建独立 `test-fields.php`
 - **附带**：Custom tab 调整为第一个，CircleProgressBar 按钮恢复到布局中
 - Files: `examples/all-components.php`, `examples/test-fields.php`（新建）
+
+### Phase 21: ✅ SvgView 组件 — SVG 显示功能
+- **问题**：需要在 libui 中显示 SVG 文件，用于后续 UI 美化
+- **方案**：创建 `SvgView` 组件，基于 libui Area + DrawContext 绘制 SVG
+- **安装依赖**：`kaareln/php-svg-path-data` 解析 SVG path `d` 属性
+- **关键发现**：
+  - 滚动 Area 的 viewport 报告 0×0，draw 坐标在 content 空间
+  - `instanceof` 继承关系导致错误匹配（`Line extends Move`，`RelativeLine extends RelativeMove`）
+  - SVG path data 库的迭代器返回命令顺序是**反的**，必须 `array_reverse()`
+  - `<g>` 组的 fill/stroke 属性需传递给子元素（`parseElements()` 增加继承参数）
+  - `<text>` 元素需要用 `drawString()` 而非 `fill()`/`stroke()`
+- **支持的 SVG 元素**：`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polygon>`, `<polyline>`, `<path>`, `<text>`, `<g>`
+- **支持的 path 命令**：M/m, L/l, H/h, V/v, C/c, Q/q, A/a, Z
+- Files: `src/Widgets/SvgView.php`（新建）, `examples/test-svg.php`（新建）

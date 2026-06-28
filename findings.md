@@ -461,3 +461,56 @@ $tab->onSelected(function (Tab $tab) {
 ### ToggleSwitch/StatusIndicator 为何没问题
 - 小尺寸（40×22 / 14×14），放在 hbox 中，布局系统能正确分配空间
 - CircleProgressBar 大尺寸（200×200），放在 vbox 中，布局系统在 Tab 切换后无法恢复尺寸
+
+## SvgView 组件 — SVG 显示
+
+### 依赖
+- `kaareln/php-svg-path-data` v1.x — 解析 SVG path `d` 属性为 OO 命令
+
+### 关键发现
+
+#### 1. `instanceof` 继承陷阱
+```php
+// ❌ Line extends Move → instanceof Line 匹配了 Move 分支
+if ($cmd instanceof Move) { ... }        // catches Line too!
+elseif ($cmd instanceof Line) { ... }    // never reached
+
+// ✅ 必须 Line 在 Move 之前
+if ($cmd instanceof Line) { ... }
+elseif ($cmd instanceof Move) { ... }
+```
+同理：`RelativeLine extends RelativeMove`，`HorizontalLine extends AbstractPathDataCommand`
+
+#### 2. SVG path data 库迭代器返回命令顺序是反的
+`SVGPathData::fromString('M 10 10 L 50 50')` 返回 `[Line, Move]`（尾→头）
+```php
+// 必须反转
+$commands = iterator_to_array($svgPath);
+$commands = array_reverse($commands);
+```
+
+#### 3. `<g>` 组属性继承
+`parseGroup()` 需要将 fill/stroke 传递给 `parseElements()`：
+```php
+private function parseElements(\SimpleXMLElement $xml, ?string $inheritedFill = null, ...): void
+{
+    $fill = isset($attrs['fill']) ? (string) $attrs['fill'] : $inheritedFill;
+    // ...
+}
+```
+
+#### 4. `<text>` 元素用 `drawString()` 而非 `fill()`/`stroke()`
+```php
+$ctx->drawString($text, $font, $color, $x, $y);
+// drawString 需要 Color 对象，不是 Brush
+```
+
+#### 5. `<path>` 中的弧线命令
+- `ArcCurve`/`RelativeArcCurve` 需要 SVG Arc → Cubic Bézier 转换
+- libui 的 `Path::arc()` 接受圆心+角度，SVG 用端点+半径
+- 已实现完整的 SVG 规范弧线转换算法
+
+### libui Area 在 macOS 上的限制
+- 滚动 Area 的 `$params->areaWidth/Height` 在 draw 回调中报告 0×0
+- draw 坐标在 content 空间，不是 viewport 空间
+- 适合固定尺寸绘图（如 SVG），不适合需要动态 viewport 的场景

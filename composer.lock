@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b1573542c8372625fa58fd94abcbfed6",
+    "content-hash": "cd460883b9f806cbcebc4a16dcf04ccb",
     "packages": [
         {
             "name": "carbonphp/carbon-doctrine-types",
@@ -613,6 +613,51 @@
                 "windows"
             ],
             "time": "2023-12-03T12:46:03+00:00"
+        },
+        {
+            "name": "kaareln/php-svg-path-data",
+            "version": "1.0.4",
+            "dist": {
+                "type": "zip",
+                "url": "https://mirrors.cloud.tencent.com/repository/composer/kaareln/php-svg-path-data/1.0.4/kaareln-php-svg-path-data-1.0.4.zip",
+                "reference": "23985bf76020262169b4e1d984ac9a036f4f80ae",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1.0"
+            },
+            "require-dev": {
+                "meyfa/phpunit-assert-gd": "^v3.0.0",
+                "phpmd/phpmd": "^2.13.0",
+                "phpunit/phpunit": "^9.5.26"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Kaareln\\SVGPathData\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Michal Furtak",
+                    "email": "mfurtak0794@gmail.com"
+                }
+            ],
+            "description": "Add SVG Path Data with object oriented structure",
+            "homepage": "https://github.com/kaareln/php-svg-path-data",
+            "keywords": [
+                "PHP SVG",
+                "SVG Path",
+                "svg"
+            ],
+            "support": {
+                "issues": "https://github.com/kaareln/php-svg-path-data/issues",
+                "source": "https://github.com/kaareln/php-svg-path-data/tree/1.0.4"
+            },
+            "time": "2023-03-27T14:20:13+00:00"
         },
         {
             "name": "kingbes/pebview",
@@ -4072,5 +4117,5 @@
     "prefer-lowest": false,
     "platform": {},
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

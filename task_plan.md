@@ -151,3 +151,10 @@ Phase 14 完成 ✅ — GlobalHotkey bridge DLL 编译 + quit 修复
 ### Phase 20: all-components.php Tab 顺序 + Fields 独立示例 ✅
 - Fields tab 移至独立 `test-fields.php`，Custom tab 调为第一个
 - Files: `examples/all-components.php`, `examples/test-fields.php`
+
+### Phase 21: SvgView 组件 — SVG 显示功能 ✅
+- 基于 libui Area + DrawContext + kaareln/php-svg-path-data 实现
+- 支持 rect/circle/ellipse/line/polygon/polyline/path/text/g 元素
+- path 命令：M/L/H/V/C/Q/A/Z（含相对坐标）
+- 关键修复：instanceof 继承顺序、命令数组反转、`<g>` 属性继承
+- Files: `src/Widgets/SvgView.php`, `examples/test-svg.php`
