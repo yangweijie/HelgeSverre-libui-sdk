@@ -545,6 +545,174 @@ SendMessageW(window, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
 free(iconPath);
 ```
 
+## Tetris Game — Area 自绘游戏模式
+
+### 核心架构
+```
+App::new()
+  ├─ Ffi::init() (自动)
+  ├─ Window (BOARD_W + SIDEBAR_W + gap, BOARD_H + chrome)
+  │   └─ Build::hbox(
+  │       Build::stretchy($gameArea),     // Area 游戏板 10×20
+  │       $sidebar                         // vbox: 标题+分数+预览
+  │   )
+  └─ run()
+```
+
+### 关键 API 使用
+
+#### Area + AreaDelegate
+```php
+$delegate = new class extends AreaDelegate {
+    public function draw(AreaDrawParams $params): void { /* 游戏板绘制 */ }
+    public function key(AreaKeyEvent $event): bool {
+        match ($event->extKey) {
+            ExtKey::Up => rotate(),       // 8
+            ExtKey::Down => softDrop(),   // 9
+            ExtKey::Left => moveLeft(),   // 10
+            ExtKey::Right => moveRight(), // 11
+        };
+        return true;  // 消费事件
+    }
+};
+$area = new Area($delegate);
+```
+
+#### 定时器 (游戏循环)
+```php
+use Libui\Ffi;
+Ffi::timer($intervalMs, function() use ($state) {
+    if ($state->gameOver) return false; // 停止定时器
+    $state->gravityTick();
+    $state->area->queueRedrawAll();
+    return true; // 继续
+});
+```
+
+#### DrawContext 游戏绘制
+```php
+// 背景填充
+$ctx->fillRect(0, 0, $w, $h, Brush::color(Color::rgb(20, 20, 30)));
+// 网格线
+$ctx->strokeRect($x, $y, CELL, CELL, Brush::rgba(255,255,255,0.08), StrokeParams::solid(0.5));
+// 带 3D 斜坡的方块
+$ctx->withSave(function($ctx) use ($x, $y, $color) {
+    $ctx->fillRect($x+1, $y+1, CELL-2, CELL-2, Brush::color(Color::rgb(...$color)));
+    // bevel highlight (上/左)
+    $ctx->fillRect($x+1, $y+1, CELL-2, 2, Brush::rgba(255,255,255,0.3));
+    $ctx->fillRect($x+1, $y+1, 2, CELL-2, Brush::rgba(255,255,255,0.3));
+    // bevel shadow (下/右)
+    $ctx->fillRect($x+1, $y+CELL-3, CELL-2, 2, Brush::rgba(0,0,0,0.3));
+    $ctx->fillRect($x+CELL-3, $y+1, 2, CELL-2, Brush::rgba(0,0,0,0.3));
+});
+// 文字 (分数/覆盖层)
+$ctx->drawString("SCORE", $font, Color::rgb(255,255,255), $x, $y, $w, DrawTextAlign::Center);
+```
+
+#### Group 标题边框
+```php
+$previewGroup = Group::titled('NEXT', $previewArea);
+Build::stretchy($previewGroup)  // ✅ Group 是 Control 类型
+```
+
+### 关键发现
+
+#### 1. `Build::stretchy()` 只接受 Control，不接受 Composite
+```php
+// ❌ 错误 — Composite 不能被 Build::stretchy() 接收
+$box->appendStretchy(new GroupSection(...));
+
+// ✅ 正确 — 原生 Control 类型
+$box->appendStretchy(Group::titled('NEXT', $area));
+```
+
+#### 2. drawString 文字居中需要正确的 layout box
+```php
+// ❌ 偏左 — layout box 不是整个画布
+$ctx->drawString("GAME OVER", $font, $c, 10.0, $y, BOARD_W - 20, DrawTextAlign::Center);
+
+// ✅ 正确 — layout box = 画布宽度，x=0
+$ctx->drawString("GAME OVER", $font, $c, 0.0, $y, BOARD_W, DrawTextAlign::Center);
+```
+
+#### 3. macOS 窗口 chrome 占用约 50px 标题栏高度
+- 实际游戏区域需要 `BOARD_H + 90` 才能完整显示 10×20 棋盘
+- `BOARD_H + 30` 时底部一行被裁剪
+
+#### 4. 预览区域客户端尺寸
+- `$params->areaWidth`/`areaHeight` 随 Group 和窗口大小动态变化
+- 需要动态计算 preview cell size：`min(20.0, (aw - 12.0) / max(cols, rows))`
+
+#### 5. Ffi::timer 生命周期
+- 返回 `true` → 继续循环
+- 返回 `false` → 停止
+- 无返回 → 继续循环（同 true）
+- timer 在事件循环中触发，draw 回调在 timer 外同步执行
+
+#### 6. 暂停/恢复状态机
+```php
+$state->paused = true;  // draw() 中跳过 game state 更新，绘制 PAUSED 覆盖层
+$state->paused = false; // draw() 恢复正常绘制
+$state->gameOver = true; // draw() 绘制 GAME OVER 覆盖层，timer 返回 false
+```
+
+### DrawTextAlign::Center 文本对齐
+- drawString 的 (x, width) 定义 layout box
+- `DrawTextAlign::Center` 在 layout box 内居中文本
+- layout box 左侧 = x，右侧 = x + width
+- x=0, width=BOARD_W 时在整个画布宽度内居中
+
+### Area 键盘事件 (ExtKey)
+| 名称 | 值 | 用途 |
+|------|-----|------|
+| ExtKey::Up | 8 | 旋转 |
+| ExtKey::Down | 9 | 软降 |
+| ExtKey::Left | 10 | 左移 |
+| ExtKey::Right | 11 | 右移 |
+
+### 布局实践
+```php
+// ✅ 侧栏 (vbox) + 游戏板 (hbox)
+Build::hbox(
+    Build::stretchy($gameArea),       // 游戏板占满左侧空间
+    $scoreLabel,                      // 分数标签
+    $levelLabel,                      // 等级标签
+    $linesLabel,                      // 行数标签
+    Group::titled('NEXT', $previewArea), // 预览区域（带标题边框）
+);
+```
+
+### 已知限制
+- macOS 上 `DrawTextAlign::Center` 的文字垂直位置可能偏差 1-2px
+- 无音效支持（libui 无音频 API）
+- 单线程事件循环，高帧率渲染受限
+
+## macOS hugTrailing 修复（libui-ng box.m）
+
+### 问题
+macOS 上 `hugTrailing` 在 vbox 中不生效 — 即使有 stretchy 子元素，容器末尾仍然 hugging。
+
+### 根因
+libui-ng `darwin/box.m` 中：
+```objc
+// hbox — 正确：有 stretchy 子元素时禁止 hugging
+- (BOOL)hugTrailing { return [self nStretchy] == 0; }
+
+// vbox — 错误：始终返回 YES（允许 hugging），无视 stretchy 子元素
+- (BOOL)hugTrailing { return YES; }
+```
+
+### 修复
+```objc
+- (BOOL)hugTrailing { return [self nStretchy] == 0; }
+```
+
+### 构建注意事项
+- 必须从 HelgeSverre/libui 使用的上游 commit 构建（43ba1ef），不能用 kingbes/libui-ng 最新版（API 不兼容）
+- 构建参数：`meson setup build --buildtype=release --default-library=shared -Darm64=true`
+- 验证方式：`nm` 对比原 dylib 的导出函数，确认 0 missing 0 extra
+- 部署位置：`vendor/helgesverre/libui/lib/darwin/libui.dylib`
+
 ### HWND 获取方式（与 Tray 相同）
 - `$window->handle()` 返回 `uiWindow*`（libui 内部结构体指针），**不是** Win32 HWND
 - **正确方式**：`Ffi::get()->uiControlHandle($window->asControl())` 返回 `uintptr_t`

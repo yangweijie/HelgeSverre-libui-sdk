@@ -282,3 +282,64 @@
   - 逻辑：将 `.opencode` 递归复制到当前工作目录（项目根）
   - 安全：目标已存在时退出（不覆盖）
 - Files: `.opencode/skills/ui2-sdk/SKILL.md`, `.opencode/skills/ui2-sdk/docs/*.md`, `scripts/install-opencode.php`, `composer.json`
+
+### Phase 26: ✅ libui.dylib macOS 重建 (hugTrailing 修复)
+- **问题**：hugTrailing 在 macOS 上不生效 — stretchy 子元素存在时容器仍在末尾 stretch
+- **根因**：上游 kingbes/libui-ng 的 box.m hbox 已修复（`return [self nStretchy] == 0`），但 vbox 仍 `return YES`（硬编码允许 hugging）
+- **修复**：vbox 改为 `return [self nStretchy] == 0;` — 有 stretchy 子元素时禁止 hugging
+- **构建**：从 HelgeSverre/libui 使用的上游 commit (43ba1ef) 重建
+  - `meson setup build --buildtype=release --default-library=shared -Darm64=true`
+  - `meson compile -C build`
+- **验证**：`nm` 对比 315 个导出函数与原 dylib 完全一致（0 missing, 0 extra）
+- **部署**：替换 `vendor/helgesverre/libui/lib/darwin/libui.dylib`（旧备份保留）
+- Files: `/tmp/libui-ng/darwin/box.m`（patch 位置）, `vendor/helgesverre/libui/lib/darwin/libui.dylib`
+
+### Phase 27: ✅ examples/control-gallery.php
+- **需求**：参考 libphp/examples/control_gallery.php 创建控制画廊示例
+- **布局**：左右 hbox 分栏
+  - 左侧 Group "Basic Controls": Button, Checkbox, Label, DateTimePicker×3, FontButton, ColorButton, Separator
+  - 右侧 vbox: Numbers Group(Spinbox, Slider, ProgressBar), Lists Group(Combobox, EditableCombobox, RadioButtons), Tab(Page1 MultilineEntry, Page2, Page3)
+- **窗口**：600×500, 无菜单栏, `App::new()` 模式
+- **验证**：`php85 -l` 语法检查通过
+- Files: `examples/control-gallery.php`
+
+### Phase 28: ✅ examples/grid.php
+- **需求**：参考 libphp/examples/grid.php 创建 Grid 布局示例
+- **布局**：3×3 Grid
+  - Row0: hexpand+Fill / hexpand+Center / hexpand+End
+  - Row1: xspan=2+Start / Fill
+  - Row2: xspan=3+Fill
+- **窗口**：480×320, `setMargined(true)`
+- **验证**：`php85 -l` 语法检查通过
+- Files: `examples/grid.php`
+
+## Session: 2026-06-30 — Tetris Game
+
+### Phase 29: ✅ examples/tetris.php
+- **需求**：基于 libui Area 自绘控件实现完整的俄罗斯方块游戏
+- **技术栈**：Area + AreaDelegate (draw/key) + Ffi::timer (重力) + Group + FontDescriptor + Brush/Color/StrokeParams
+- **游戏特性**：
+  - 7 种标准方块 (I/O/T/S/Z/J/L) 各 4 个旋转状态
+  - SRS wall kick (Super Rotation System)
+  - 幽灵方块 (ghost piece) 预览落点
+  - 3D bevel 单元格效果 (highlight/shadows)
+  - 软降 (+1分/格) / 硬降 (+2分/格)
+  - 计分: 100/300/500/800 × level (单行/双行/三行/四行)
+  - 等级系统: 每 10 行升级，重力从 800ms 渐快到 100ms
+  - 下一块预览 (Group titled 'NEXT')
+  - Pause/Resume (Escape) / Restart (R)
+  - Game Over 半透明覆盖层
+- **修复记录**：
+  1. `$params->width` → `$params->areaWidth` (已打补丁的 libui 字段名)
+  2. `Libui\Draw\FontDescriptor` → `Libui\Text\FontDescriptor`
+  3. 窗口高度 BOARD_H+30 → BOARD_H+90 (macOS 标题栏 ~50px)
+  4. 侧栏宽度 160 → 200
+  5. 预览区用 `Group::titled('NEXT', ...)` 代替裸 Area
+  6. 预览 cell 尺寸动态计算 `min(20.0, (aw-12.0)/max(cols,rows))`
+  7. GAME OVER drawString x=10→0, width=BOARD_W-20→BOARD_W
+- **关键发现**：
+  - `Build::stretchy()` 只接受 `Control`，不接受 `Composite`  — Group 是 Control 但 GroupSection 不是
+  - `Ffi::timer()` 返回 `true` 继续循环，返回 `false` 停止
+  - drawString 居中需要 layout box 覆盖整个画布 (x=0, width=BOARD_W)
+- **验证**：`/opt/homebrew/bin/php85 examples/tetris.php` — 零错误运行，仅 vendor deprecation 噪音
+- Files: `examples/tetris.php`
