@@ -79,7 +79,8 @@ final class App
         foreach ($this->windows as $index => $window) {
             // Closing the primary (first) window quits the app; others just close.
             if ($index === 0) {
-                $window->onClosing(static function () {
+                $window->onClosing(static function () use ($window) {
+                    $window->markExternallyClosed();
                     Ffi::quit();
                     return true;
                 });
@@ -90,9 +91,11 @@ final class App
         try {
             Ffi::main();
         } finally {
-            // Destroy all windows before uninit() so libui's leak check passes.
-            // Without this, PHP GC collects the Window wrappers after uninit(),
-            // at which point FFI is dead and uiprivUninitAlloc() reports leaks.
+            // Force PHP GC to run __destruct() on all libui wrapper objects
+            // (fonts, text layouts, paths, brushes…) BEFORE uiUninit() checks
+            // for leaks. Without this, uiprivUninitAlloc aborts.
+            gc_collect_cycles();
+
             foreach ($this->windows as $window) {
                 try {
                     $window->destroy();
@@ -100,6 +103,9 @@ final class App
                     // Window may already be destroyed by the close handler.
                 }
             }
+
+            gc_collect_cycles();
+
             Ffi::uninit();
         }
     }

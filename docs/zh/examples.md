@@ -60,3 +60,84 @@ php examples/tetris.php
 | `test-debug-bridge.php` | 桥接调试 |
 | `test-set-icon.php` | 应用图标设置 |
 | `tetris.php` | 完整俄罗斯方块游戏 — Area 自绘、键盘输入、重力定时器、阴影方块、计分系统 |
+
+## 打包为独立二进制程序
+
+将您的 ui2 应用打包为独立的可执行文件（目标机器无需安装 PHP）：
+
+### 前置条件
+
+**macOS / Linux：**
+```bash
+# 1. 安装 static-php-cli 并构建 micro.sfx
+composer install:spc
+
+# 2. 确认 micro.sfx 已构建
+ls ~/.spc/micro.sfx
+```
+
+**Windows：**
+```batch
+:: 安装 static-php-cli 并构建 micro.sfx
+scripts\install-spc.bat
+
+:: 确认
+dir %USERPROFILE%\.spc\micro.sfx
+```
+
+> 下载 `static-php-cli` 并构建一个静态 PHP 解释器（`micro.sfx`），包含 FFI、PHAR 和 mbstring 扩展。一次性设置，编译 PHP 源码约需 10-30 分钟。
+>
+> **Windows 注意事项**：编译 PHP 源码需要 Visual Studio 2022（工作负载："使用 C++ 的桌面开发"）。需要 Windows 10 Build 17063+（内置 `curl.exe`）。
+
+### 构建
+
+```bash
+# 构建 PHAR 归档（适用于任何项目）
+composer build:phar -- examples/tetris.php --output=tetris.phar
+
+# 构建独立二进制程序（需要 micro.sfx）
+composer build:binary -- examples/tetris.php --name=Tetris --icon=icon.png
+
+# 运行二进制程序
+./dist/Tetris
+```
+
+构建流程：
+1. **PHAR** — 打包应用代码、vendor 依赖和原生 `libui` 共享库
+2. **二进制** — 将 `micro.sfx` + PHAR 拼接为单一可执行文件
+3. **图标** — macOS：生成含 `AppIcon.icns` 的 `.app` 包；Linux：`.desktop` + PNG；Windows：通过 `rcedit` 注入 `.ico`
+
+### 在依赖项目中使用
+
+```bash
+# 在依赖 yangweijie/ui2 的项目中：
+php vendor/yangweijie/ui2/scripts/build-phar.php my-app.php --output=my-app.phar
+php vendor/yangweijie/ui2/scripts/build-binary.php --phar=my-app.phar --name=MyApp
+```
+
+> **工作原理**：PHAR stub 在启动时将 `libui-ng` 共享库解压到临时目录（FFI 的 `dlopen()` 需要真实文件系统路径）。超过 7 天的旧解压文件会被自动清理。
+
+### 原生库解压机制
+
+运行时，打包后的二进制程序会：
+1. 将 `libui` 共享库（`.dylib`/`.so`/`.dll`）解压到 `sys_get_temp_dir()`
+2. 设置 `LIBUI_LIB` 环境变量，让 `Ffi::get()` 能定位到
+3. 运行应用 — FFI 从真实文件系统加载原生库
+4. 自动清理 7 天前的旧解压文件
+
+### Composer 命令
+
+| 命令 | 说明 |
+|------|------|
+| `composer build:phar -- <入口文件> [选项]` | 从 PHP 入口文件构建 PHAR |
+| `composer build:binary -- <入口文件> [选项]` | 构建独立二进制程序 |
+| `composer install:spc` | 安装 static-php-cli 并构建 micro.sfx |
+
+### 脚本参考
+
+| 脚本 | 说明 |
+|------|------|
+| `scripts/build-phar.php` | PHAR 归档构建器（打包应用 + vendor + 原生库） |
+| `scripts/build-binary.php` | 二进制编排器（PHAR → micro.sfx → 图标 → .app/.exe） |
+| `scripts/install-spc.sh` | static-php-cli 安装器 + micro.sfx 构建器 (macOS/Linux) |
+| `scripts/install-spc.bat` | static-php-cli 安装器 + micro.sfx 构建器 (Windows) |

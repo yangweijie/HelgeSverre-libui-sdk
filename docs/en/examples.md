@@ -60,3 +60,84 @@ Additional test scripts in `examples/` for individual features:
 | `test-debug-bridge.php` | Bridge debugging |
 | `test-set-icon.php` | App icon setting |
 | `tetris.php` | Full Tetris game — Area custom drawing, keyboard input, gravity timer, ghost piece, score system |
+
+## Packaging as Standalone Binary
+
+Package your ui2 app into a standalone executable (no PHP required on the target machine):
+
+### Prerequisites
+
+**macOS / Linux:**
+```bash
+# 1. Install static-php-cli and build micro.sfx
+composer install:spc
+
+# 2. Verify the micro.sfx was built
+ls ~/.spc/micro.sfx
+```
+
+**Windows:**
+```batch
+:: Install static-php-cli and build micro.sfx
+scripts\install-spc.bat
+
+:: Verify
+dir %USERPROFILE%\.spc\micro.sfx
+```
+
+> Downloads `static-php-cli` and builds a static PHP interpreter (`micro.sfx`) with FFI, PHAR, and mbstring extensions. This is a one-time setup that takes 10-30 minutes (compiles PHP from source).
+>
+> **Windows note**: Requires Visual Studio 2022 with "Desktop development with C++" workload for PHP source compilation. Windows 10 Build 17063+ (for `curl.exe`) required.
+
+### Build
+
+```bash
+# Build a PHAR archive (any project)
+composer build:phar -- examples/tetris.php --output=tetris.phar
+
+# Build a standalone binary (requires micro.sfx)
+composer build:binary -- examples/tetris.php --name=Tetris --icon=icon.png
+
+# Run the binary
+./dist/Tetris
+```
+
+The build pipeline:
+1. **PHAR** — bundles your app code, vendor dependencies, and native `libui` shared libraries
+2. **Binary** — concatenates `micro.sfx` + PHAR into a single executable
+3. **Icon** — macOS: generates `.app` bundle with `AppIcon.icns`; Linux: `.desktop` + PNG; Windows: `.ico` via `rcedit`
+
+### From a dependent project
+
+```bash
+# In your project that requires yangweijie/ui2:
+php vendor/yangweijie/ui2/scripts/build-phar.php my-app.php --output=my-app.phar
+php vendor/yangweijie/ui2/scripts/build-binary.php --phar=my-app.phar --name=MyApp
+```
+
+> **How it works**: The PHAR stub extracts `libui-ng` shared libraries to a temp directory at startup (FFI's `dlopen()` requires real filesystem paths). Old extractions are cleaned up after 7 days.
+
+### Native Library Extraction
+
+At runtime, the packaged binary:
+1. Extracts `libui` shared libraries (`.dylib`/`.so`/`.dll`) to `sys_get_temp_dir()`
+2. Sets the `LIBUI_LIB` environment variable so `Ffi::get()` finds them
+3. Runs your app — FFI loads the native library from the real filesystem
+4. Cleans up extractions older than 7 days
+
+### Composer Commands
+
+| Command | Description |
+|---------|-------------|
+| `composer build:phar -- <entry> [options]` | Build a PHAR from a PHP entry file |
+| `composer build:binary -- <entry> [options]` | Build a standalone binary |
+| `composer install:spc` | Install static-php-cli and build micro.sfx |
+
+### Scripts Reference
+
+| Script | Description |
+|--------|-------------|
+| `scripts/build-phar.php` | PHAR archive builder (bundles app + vendor + native libs) |
+| `scripts/build-binary.php` | Binary orchestrator (PHAR → micro.sfx → icon → .app/.exe) |
+| `scripts/install-spc.sh` | static-php-cli installer + micro.sfx builder (macOS/Linux) |
+| `scripts/install-spc.bat` | static-php-cli installer + micro.sfx builder (Windows) |

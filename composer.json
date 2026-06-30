@@ -46,6 +46,15 @@
         ],
         "install:opencode": [
             "@php scripts/install-opencode.php"
+        ],
+        "build:phar": [
+            "@php scripts/build-phar.php"
+        ],
+        "build:binary": [
+            "@php scripts/build-binary.php"
+        ],
+        "install:spc": [
+            "@php -r \"if (PHP_OS_FAMILY === 'Windows') { passthru(__DIR__ . '/scripts/install-spc.bat'); } else { passthru('bash ' . __DIR__ . '/scripts/install-spc.sh'); }\""
         ]
     },
   "minimum-stability": "dev",

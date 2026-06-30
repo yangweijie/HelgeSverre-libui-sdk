@@ -19,8 +19,25 @@ class Window extends Generated\Window
     /** The title of whichever Window was constructed first (used by MenuOrderException). */
     private static ?string $firstWindowTitle = null;
 
-    /** @var (callable():void)|null */
-    private $onClose = null;
+/** @var (callable():void)|null */
+private $onClose = null;
+
+/** True once libui's close handler has already destroyed this window. */
+private bool $externallyClosed = false;
+
+/** Mark the window as already closed by the user (close button / Cmd+Q).
+ *  Keep the C handle alive so that App::run()'s destroy loop can still call
+ *  uiControlDestroy() on it — libui does NOT auto-destroy on close. */
+public function markExternallyClosed(): void
+{
+    $this->externallyClosed = true;
+}
+
+/** Check whether libui has already destroyed this window. */
+public function isExternallyClosed(): bool
+{
+    return $this->externallyClosed;
+}
 
     /** Content size requested at construction; the fallback for {@see getContentSize()}. */
     private int $width = 640;

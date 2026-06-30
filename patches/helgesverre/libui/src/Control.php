@@ -169,6 +169,9 @@ abstract class Control
      */
     public function destroy(): void
     {
+        if (!isset($this->handle)) {
+            return;
+        }
         Ffi::get()->uiControlDestroy($this->asControl());
     }
 
@@ -212,6 +215,13 @@ abstract class Control
     public function __destruct()
     {
         if (!Ffi::isInitialized() || !isset($this->handle)) {
+            return;
+        }
+
+        // Window was already marked as externally closed — the destroy loop
+        // in App::run() will call uiControlDestroy() on it. Skip to avoid
+        // double-free.
+        if ($this instanceof Window && $this->isExternallyClosed()) {
             return;
         }
 

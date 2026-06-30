@@ -291,5 +291,13 @@ final class DrawContext
         $string->append($text, Attribute::fromColor(Color::from($color)));
         $layout = new TextLayout($string, $font, $width ?? 1.0e6, $align);
         $this->text($layout, $x, $y);
+
+        // Explicitly free libui resources immediately after drawing.
+        // Relying on __destruct() alone is unsafe: PHP's GC may not run before
+        // uiUninit()'s leak checker fires, causing SIGTRAP on app shutdown.
+        // This is especially critical inside FFI callbacks (Area draw handlers)
+        // where GC timing is less predictable.
+        $layout->free();
+        $string->free();
     }
 }

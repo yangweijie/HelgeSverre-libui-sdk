@@ -56,7 +56,69 @@
 - [x] `docs/zh/examples.md` — Same in Chinese
 - **Status:** complete
 
-## Errors Encountered
+### Phase 29c: Tetris.app 闪退与内存泄漏分析
+- [x] 分析启动闪退 "Cannot redeclare class Libui\Ffi" — PHP 8.5 `use FFI;` 语义变化
+- [x] 分析关闭时 SIGTRAP — libui 内存泄漏检测 (drawString 泄漏 + GC 不充分)
+- [x] 分析 tokenizer 缺失 — 错误处理器崩溃掩盖原始错误
+- [x] 修复 1：`Ffi.php` 移除 `use FFI;`，改用 `\FFI` 全限定名
+- [x] 修复 2：`DrawContext.php` drawString 显式 `free()` 释放 TextLayout/AttributedString
+- [x] 修复 3：`Ffi.php` uninit() 三次 `gc_collect_cycles()` 确保 wrapper 对象回收
+- [x] 验证：PHAR 模式 + 二进制模式启动正常，关闭无 SIGTRAP
+- [x] 待执行：`install-spc.sh` 添加 `tokenizer,filter` 并重建 micro.sfx
+- [x] 建议添加：tetris.php `onClosing` 清理 $state 引用
+- [x] 补丁审查：App.php 两次 GC 均必要（移除测试泄漏 uiLabel）
+- [x] 修复 4：`Window.php` markExternallyClosed 不再 unset handle，`Control.php` __destruct 加守卫
+- [x] 验证：移除 tetris.php onClosing 辅助代码后仍零泄漏
+- [x] 清理：删除 `$nextLabel`、局部 label 变量、冗余 `Ffi::init()`
+- [x] 清理：移除非必需的 `patches/composer/ClassLoader.php`
+- **Status:** complete
+
+### Phase 6: PHAR 打包系统设计
+- [x] 调研 PHP → 二进制方案（BPC/FrankenPHP/static-php-cli/PHP embed SAPI）
+- [x] 选定 phpmicro + PHAR SFX 方案（21MB micro.sfx，跨平台支持）
+- [x] 解决 FFI dlopen 不支持 phar:// 的问题：PHAR stub 解压原生库到 /tmp
+- [x] 确定打包 pipeline：entry → PHAR → micro.sfx concatenation → 平台打包
+- **Status:** complete
+
+### Phase 7: 脚本实现
+- [x] `scripts/build-phar.php` — 只打包 require 运行时依赖（29/60+ packages），平台特定原生库过滤
+- [x] `scripts/build-binary.php` — 全流程编排：PHAR build → locate micro.sfx → cat binary → 平台打包
+- [x] `scripts/install-spc.sh` — SPC v3 安装 + micro.sfx 构建（含 China 网络适配）
+- [x] `composer.json` — 添加 `build:phar`, `build:binary`, `install:spc` 命令
+- **Status:** complete
+
+### Phase 8: 文档
+- [x] `docs/en/examples.md` — 添加 "Packaging as Standalone Binary" 章节
+- [x] `docs/zh/examples.md` — 添加 "打包为独立二进制" 章节
+- [x] 覆盖：依赖项目使用方式、原生库提取机制、命令参考
+- **Status:** complete
+
+# Errors Encountered
+
+### Phase 29c (Tetris 闪退分析)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| "Cannot redeclare class Libui\Ffi" (PHP 8.5) | `use FFI;` 与 `class Ffi` 冲突 | 移除 `use FFI;`，改用 `\FFI` 全限定名 |
+| SIGTRAP on close (内存泄漏检测) | drawString 创建 TextLayout/AttributedString 未释放 | 显式 `$layout->free()` + `$string->free()` |
+| SIGTRAP on close (GC 不充分) | micro.sfx 单次 GC 不够 | 三次 `gc_collect_cycles()` 确保 wrapper 回收 |
+| "Call to undefined function token_get_all()" | micro.sfx 缺 tokenizer 扩展 | install-spc.sh 添加 `tokenizer,filter`，已重建 micro.sfx |
+
+### Phase 7 (PHAR 打包)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| PHAR build 51 分钟超时 | addFile() 逐文件调用 | 改用 `buildFromIterator(ArrayIterator)` **5.5s/3587 文件** |
+| buildFromIterator 存储文件路径而非内容 | 早期 key/value 反转 bug | 用关联数组 `$files[phar_path] = fs_path` + `buildFromIterator($it, $base)` 正确传递 |
+
+### Phase 7 (SPC 构建)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| SPC download URL 404 `spc-darwin-aarch64` | URL path wrong | OS 映射：`darwin → macos`，添加 `/nightly/` 路径 |
+| Composer 包名错误 | `static-php/static-php-cli` | 改为 `crazywhalecc/static-php-cli` |
+| `composer create-project` 到 `.` 失败 (非空目录) | 用子目录 | `./build-src` 子目录 |
+| GitHub git clone phpmicro 超时 (China) | 多次尝试 | ghproxy + chsrc set git + `--dl-custom-git` |
+| PHP configure: "Nothing to build" | WORKING_DIR 指向 ~/.spc | 设置 `WORKING_DIR/SOURCE_PATH/DOWNLOAD_PATH` 三个 env var |
+| SPC 不自动复制 php-micro 到 sapi/micro/ | 不复制 | `cp -r source/php-micro source/php-src/sapi/micro` |
+| SPC v3 语法错误 (`--with-php-version`) | v2 语法 | 改为 v3: `spc build "exts" --build-micro` |
 | Phase | Error | Attempt | Resolution |
 |-------|-------|---------|------------|
 | 5 | `$params->width` undefined | 1 | Use `$params->areaWidth` (libui patched field name) |

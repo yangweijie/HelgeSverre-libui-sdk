@@ -350,3 +350,130 @@
   - `docs/en/examples.md` — run 命令列表添加 tetris.php，新增完整说明章节（Area/AreaDelegate、Loop::repeat、DrawContext、ExtKey、overlays API 要点 + 操作指引），测试文件表格添加条目
   - `docs/zh/examples.md` — 同上中文版
 - Files: `docs/en/examples.md`, `docs/zh/examples.md`
+
+---
+
+## Session: 2026-06-30 — 打包系统 (Packaging System)
+
+### Phase 30: ✅ Tetris 二进制完整流程验证
+- **需求**：让第三方项目只需 `composer require yangweijie/ui2` 后，能将自己打包为跨平台二进制文件
+- **关键发现**：
+  - FFI `dlopen()` 不支持 `phar://` 流 → PHAR stub 必须解压原生库到 /tmp
+  - `buildFromIterator()` 比逐文件 `addFile()` 快 **100 倍**（5.5s vs 51min）
+  - `Build::stretchy()` 只接受 `Control`，不接受 `Composite` — Group 是 Control 但 GroupSection 不是
+- **构建结果**：
+  - `dist/Tetris.phar` — 16.2 MB (1954 files, runtime deps only)
+  - `dist/Tetris` — 37.8 MB raw binary
+  - `dist/Tetris.app` — 36 MB macOS .app bundle (Contents/MacOS/Tetris)
+- **Files created**：`scripts/build-phar.php`, `scripts/build-binary.php`, `scripts/install-spc.sh`
+- **Files modified**：`composer.json`, `docs/en/examples.md`, `docs/zh/examples.md`
+
+### Phase 31: ✅ 打包后运行错误修复 — Ffi.php 补丁修复
+
+- **问题**：`dist/Tetris.phar` 运行时报 `Cannot redeclare class Libui\Ffi (previously declared as local import)`，依次暴露 5 个级联 bug
+- **Bug 1 — `use FFI;` 与 `class Ffi` 冲突 (PHP 8.5)**：
+  - **根因**：PHP 8.5 将 `use` 视为"本地导入声明"；同一命名空间 `Libui` 下 `use FFI;` 后 `class Ffi` 因大小写不敏感冲突
+  - **修复**：移除 `use FFI;`（所有引用已用 `\FFI` 全限定名）
+- **Bug 2 — `readHeader()` 找错文件名**：
+  - **根因**：`readHeader()` 搜索 `Native/libui.h`，实际文件为 `Native/libui.gen.h`
+  - **修复**：`libui.h` → `libui.gen.h`（两处）
+- **Bug 3 — `libPath()` 目录层级错误**：
+  - **根因**：`dirname($ref->getFileName(), 3)` 从 `src/Ffi.php` 上跳 3 级到 `vendor/helgesverre/`，但库路径在 `vendor/helgesverre/libui/lib/`
+  - **修复**：`dirname(..., 3)` → `dirname(..., 2)`
+- **Bug 4 — `uiInit()` 传值而非传指针**：
+  - **根因**：`$ffi->uiInit($opts)` 传入 `uiInitOptions` 结构体值，函数需要 `uiInitOptions*` 指针
+  - **修复**：`$ffi->uiInit(\FFI::addr($opts))`
+- **Bug 5 — 缺少 5 个上游方法**：
+  - **根因**：补丁 Ffi.php 删除了 `root()`、`control()`、`new()`、`ownedString()`、`borrowedString()` — Generated/ 代码依赖的 essential 方法
+  - **修复**：从上游源补充所有缺失方法
+- **验证**：
+  - 非 PHAR 模式：tetris.php、all-components.php、test-fields.php 零错误运行 ✅
+  - PHAR 模式：`dist/Tetris.phar` 零错误运行（仅 Deprecated 警告）✅
+- Files: `patches/helgesverre/libui/src/Ffi.php`
+
+### Phase 32: ✅ 关闭时 libui 泄漏检测 SIGTRAP 修复
+
+- **问题**：`uiUninit()` 触发 libui 泄漏检测 `uiprivUninitAlloc` → SIGTRAP crash
+- **根因**：用户关闭窗口时，onClosing 返回 true 后 libui 调用 `uiControlDestroy()` 释放了 C 窗口和全部子控件，但 PHP `Window` 对象的 `$handle` 仍然指向已释放的内存
+  1. `App::run()` finally 块因 `isExternallyClosed()` 跳过 destroy
+  2. GC 在 `Ffi::uninit()` 之后才跑 `__destruct()` → 此时 `isInitialized()` 为 false → 跳过所有销毁 → 泄漏检测 crash
+- **修复 1 — `Window::markExternallyClosed()`**：设置标志后同时 `unset($this->handle)`，使 `__destruct()` 的 `!isset($this->handle)` 检查生效，跳过双重释放
+- **修复 2 — `App::run()`**：移除 `isExternallyClosed()` 检查，总是尝试 destroy（handle 已 null 的 window 自动跳过）
+- **修复 3 — `Control::destroy()`**：添加 `!isset($this->handle)` 守卫，防止在 null handle 上调用 `uiControlDestroy()`
+- **验证**：
+  - `vendor/bin/pest` ✅ 全量通过
+  - `dist/Tetris.phar` ✅ 零 Fatal/Error
+- Files: `patches/helgesverre/libui/src/Window.php`, `patches/helgesverre/libui/src/App.php`, `patches/helgesverre/libui/src/Control.php`
+
+---
+
+## Session: 2026-07-01 — Tetris.app 闪退与内存泄漏分析
+
+### Phase 29c: ✅ Tetris.app 闪退分析报告
+- **需求**：分析 `dist/Tetris.app` 的三个独立问题：启动闪退、错误处理器崩溃、关闭时 SIGTRAP
+- **问题 1 — 启动闪退 "Cannot redeclare class Libui\Ffi"**：
+  - **根因**：PHP 8.5 将 `use` 视为"本地导入声明"；`use FFI;` 后 `class Ffi` 因大小写不敏感冲突
+  - **修复**（已完成）：移除 `use FFI;`，改用 `\FFI` 全限定名
+  - **验证**：PHAR 模式 + 二进制模式均正常启动 ✅
+- **问题 2 — tokenizer 缺失 — 错误处理器崩溃**：
+  - **根因**：`install-spc.sh` 构建 micro.sfx 时扩展列表缺少 `tokenizer`；Collision Highlighter 调用 `token_get_all()` 未定义 → 错误处理器自身崩溃，掩盖原始错误
+  - **修复**（已完成）：扩展列表添加 `tokenizer,filter`，重建 micro.sfx
+- **问题 3 — 关闭时 SIGTRAP — 内存泄漏检测**：
+  - **根因**：drawString 创建临时 TextLayout/AttributedString 依赖 `__destruct()` 释放；FFI 回调内 GC 时机不可预测 → `uiUninit()` 前未释放 → SIGTRAP
+  - **修复**（已完成）：显式 `$layout->free()` + `$string->free()`；三次 `gc_collect_cycles()`
+  - **验证**：连续 2 次关闭无 crash report ✅
+- **附加建议**：tetris.php 添加 `onClosing` 清理 $state widget 引用（辅助修复）
+- Files: `tetris-crash-analysis.md`（分析报告）, `patches/helgesverre/libui/src/Ffi.php`, `patches/helgesverre/libui/src/Draw/DrawContext.php`, `scripts/install-spc.sh`
+
+### Phase 29d: ✅ tetris.php onClosing 清理
+- **需求**：在窗口关闭时取消定时器、清除 $state 中的 widget 引用，辅助 GC 回收
+- **修复**：`$window->onClosing()` 回调中取消 Loop 定时器 + 将所有 widget 属性设为 null
+- **验证**：`php85 -l` 语法检查通过
+- Files: `examples/tetris.php`
+
+### Phase 29e: ✅ micro.sfx 重建 (tokenizer + filter)
+- **需求**：重建 micro.sfx 以包含 tokenizer 和 filter 扩展，解决错误处理器崩溃问题
+- **执行**：
+  - `~/.spc/spc build "ffi,phar,mbstring,json,ctype,posix,fileinfo,tokenizer,filter" --build-micro --no-download`
+  - 构建耗时 164s，输出 21.6MB micro.sfx
+  - 替换 `~/.spc/micro.sfx` 旧文件
+  - 重建 Tetris.app (37.9MB)
+- **验证**：`tokenizer:YES`, `filter:YES` 确认加载
+- **结果**：所有 3 个问题均已修复 ✅
+- Files: `buildroot/bin/micro.sfx`, `~/.spc/micro.sfx`, `dist/Tetris.app`
+
+### Phase 29f: ✅ 补丁审查 + uiLabel 泄漏修复
+- **审查**：评估所有补丁对内存泄漏修复的必要性
+  - DrawContext.php `free()` — 必须，主要泄漏源
+  - Ffi.php 清理顺序 + 三次 GC — 必须，核心修复
+  - App.php gc + destroy + gc — 必须，移除第一次 GC 测试泄漏 uiLabel
+  - Window.php markExternallyClosed — 必须，但原实现有 bug
+  - Control.php __destruct — 防御性兜底
+- **发现 bug**：`markExternallyClosed()` 调用 `unset($this->handle)` 导致 App::run() 的 destroy 循环跳过 Window，libui 从未调用 `uiControlDestroy()` 释放 Window 及子控件
+- **修复**：
+  - `Window::markExternallyClosed()` — 不再 unset handle，保留给 destroy 循环
+  - `Control::__destruct()` — 新增 `isExternallyClosed()` 守卫，防止 GC 后双重释放
+- **验证**：PHAR + Tetris.app 均零泄漏，无 crash report
+- Files: `patches/helgesverre/libui/src/Window.php`, `patches/helgesverre/libui/src/Control.php`
+
+### Phase 29g: ✅ 移除 tetris.php onClosing 辅助代码验证
+- **目的**：验证 onClosing 清理 `$state` widget 引用是否必要
+- **操作**：移除 `$window->onClosing()` 回调（定时器取消 + widget 引用清除）
+- **结果**：PHAR + Tetris.app 均零泄漏，无新 crash report
+- **结论**：onClosing 清理是辅助性的，真正的修复在 Window.php/Control.php
+- Files: `examples/tetris.php`
+
+### Phase 29h: ✅ tetris.php 清理冗余代码
+- **操作**：
+  - 删除未使用的 `$nextLabel` 变量
+  - 删除局部变量 `$scoreLabel`/`$levelLabel`/`$linesLabel`，直接赋值到 `$state`
+  - sidebar 改用 `$state->scoreLabel` 等引用
+  - 删除未使用的 `use Libui\Ffi` import 和 `Ffi::init()` 调用
+- **验证**：`php85 -l` 语法通过，PHAR + Tetris.app 零泄漏
+- Files: `examples/tetris.php`
+
+### Phase 29i: ✅ 移除 ClassLoader 补丁
+- **操作**：删除 `patches/composer/ClassLoader.php`（PHP 8.5 micro.sfx 兼容性补丁）
+- **验证**：PHAR + Tetris.app 均正常，零泄漏
+- **结论**：该补丁非必需，`class_exists` 检查在实测中未触发
+- Files: `patches/composer/ClassLoader.php`（已删除）

@@ -23,7 +23,6 @@ use Libui\Area;
 use Libui\AreaDelegate;
 use Libui\Build;
 use Libui\Color;
-use Libui\Ffi;
 use Libui\Label;
 use Libui\Window;
 use Libui\Draw\DrawContext;
@@ -335,16 +334,9 @@ $restart = function () use ($state, &$tick, &$lockPiece): void {
 // UI — Labels
 // ═════════════════════════════════════════════════════════════════════════════
 
-Ffi::init();
-
-$scoreLabel = new Label('Score: 0');
-$levelLabel = new Label('Level: 1');
-$linesLabel = new Label('Lines: 0');
-$nextLabel  = new Label('Next:');
-
-$state->scoreLabel = $scoreLabel;
-$state->levelLabel = $levelLabel;
-$state->linesLabel = $linesLabel;
+$state->scoreLabel = new Label('Score: 0');
+$state->levelLabel = new Label('Level: 1');
+$state->linesLabel = new Label('Lines: 0');
 
 // ═════════════════════════════════════════════════════════════════════════════
 // UI — Game-Board Area Delegate
@@ -665,9 +657,9 @@ $GLOBALS['_restart']  = $restart;
 $sidebar = Build::vbox(
     new Label('TETRIS'),
     new Label(''),
-    $scoreLabel,
-    $levelLabel,
-    $linesLabel,
+    $state->scoreLabel,
+    $state->levelLabel,
+    $state->linesLabel,
     new Label(''),
     Build::stretchy(Group::titled('NEXT', $previewArea)),
 );

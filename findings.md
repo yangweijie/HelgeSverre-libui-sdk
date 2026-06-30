@@ -416,6 +416,40 @@ try {
 - **toplevel + 非 toplevel 的 `__destruct` 策略不同** — toplevel 可以直接 destroy，子控件不能
 - **两层防护确保不漏** — App 显式销毁 + Control `__destruct` 兜底
 
+## markExternallyClosed 与 uiLabel 泄漏（Phase 29f）
+
+### 问题
+修复 Phase 32 后仍有 `uiLabel` 泄漏。移除 App.php 第一次 `gc_collect_cycles()` 后泄漏更明显。
+
+### 根因
+`Window::markExternallyClosed()` 调用 `unset($this->handle)`，导致 App::run() 的 destroy 循环因 `!isset($this->handle)` 跳过 Window。libui **不会**在 onClosing 返回 true 时自动调用 `uiControlDestroy()`——它只是隐藏窗口。因此 Window 及其所有子控件（labels、areas）的 C handle 从未被释放。
+
+### 修复
+```php
+// Window.php — 不再 unset handle
+public function markExternallyClosed(): void
+{
+    $this->externallyClosed = true;
+    // handle 保留给 App::run() 的 destroy 循环使用
+}
+
+// Control.php — __destruct 加守卫防双重释放
+public function __destruct()
+{
+    if (!Ffi::isInitialized() || !isset($this->handle)) return;
+    if ($this instanceof Window && $this->isExternallyClosed()) return;
+    try {
+        if ($this->toplevel()) $this->destroy();
+    } catch (\Throwable) {}
+}
+```
+
+### 关键发现
+- **libui onClosing 返回 true 只隐藏窗口，不 destroy** — 必须手动调用 `uiControlDestroy()`
+- **`unset($this->handle)` 会阻断 destroy 循环** — 保留 handle 让 destroy 循环统一释放
+- **`isExternallyClosed()` 守卫防止 GC 后双重释放** — __destruct 跳过已标记的 Window
+- **App.php 的两次 `gc_collect_cycles()` 均必要** — 移除第一次会导致 uiLabel 泄漏
+
 ## CircleProgressBar Area 尺寸问题
 
 ### 问题
@@ -713,6 +747,84 @@ libui-ng `darwin/box.m` 中：
 - 验证方式：`nm` 对比原 dylib 的导出函数，确认 0 missing 0 extra
 - 部署位置：`vendor/helgesverre/libui/lib/darwin/libui.dylib`
 
+## Tetris.app 闪退与内存泄漏分析
+
+### 问题 1：启动闪退 — "Cannot redeclare class Libui\Ffi"
+
+#### 根因
+PHP 8.5 将 `use` 视为"本地导入声明"（local import declaration），PHP 类名大小写不敏感。`Ffi.php` 中 `use FFI;` 后声明 `class Ffi` → 冲突。
+
+PHP 8.5 源码 `Zend/zend_compile.c:9274-9280`：
+```c
+if (FC(imports)) {
+    zend_string *import_name =
+        zend_hash_find_ptr_lc(FC(imports), unqualified_name);
+    if (import_name && !zend_string_equals_ci(lcname, import_name)) {
+        zend_error_noreturn(E_COMPILE_ERROR,
+            "Cannot redeclare class %s (previously declared as local import)",
+            ZSTR_VAL(name));
+    }
+}
+```
+
+#### 修复
+移除 `use FFI;`，所有 FFI 引用改用 `\FFI` 全限定名。
+
+### 问题 2：tokenizer 扩展缺失 — 错误处理器崩溃
+
+#### 根因
+`scripts/install-spc.sh` 构建 micro.sfx 时扩展列表缺少 `tokenizer`。当 PHP 运行时发生错误时，`NunoMaduro\Collision\Highlighter` 试图用 `token_get_all()` 高亮源码 → 未定义 → 错误处理器自身崩溃，掩盖原始错误。
+
+micro.sfx 实际加载的扩展（18 个）vs 系统 php85（66 个），tokenizer 是关键缺失。
+
+#### 修复
+`install-spc.sh` 扩展列表添加 `tokenizer,filter`，重建 micro.sfx。
+
+### 问题 3：关闭窗口时 SIGTRAP — libui 内存泄漏检测
+
+#### 根因
+libui 通过 `uiprivAlloc()` / `uiprivFree()` 跟踪所有内部内存分配。`uiUninit()` 时调用 `uiprivUninitAlloc()`，如果仍有未释放的内存则 SIGTRAP。
+
+#### 泄漏源 A：drawString 中的 TextLayout / AttributedString（主要泄漏源）
+`DrawContext::drawString()` 每次调用创建临时 `AttributedString` + `TextLayout`，依赖 `__destruct()` 释放。在 FFI 回调（Area draw handler）内，PHP GC 执行时机不可预测，可能导致 `uiUninit()` 前未释放。
+
+Tetris 的 draw 回调每次重绘调用 2-4 次 `drawString()`，游戏运行期间触发多次重绘，累积大量未释放的 libui 内存。
+
+#### 泄漏源 B：全局 $state 持有 widget 引用
+`$state` 全局变量持有 widget 引用，在 `App::run()` 的 finally 块和 `Ffi::uninit()` 中仍然存在，阻止 GC 回收 wrapper 对象。
+
+#### 泄漏源 C：Loop::repeat 定时器
+libui 的 `uiTimer()` 没有 cancel API。`Ffi::uninit()` 中清除 retained closures 后定时器回调不再执行，但 C 端定时器结构可能仍然存在。
+
+#### 修复
+1. **drawString 显式释放**：`$layout->free()` + `$string->free()` 不依赖 `__destruct()`
+2. **三次 GC**：`uninit()` 中三次 `gc_collect_cycles()`（micro.sfx GC 不如 CLI 激进）
+3. **onClosing 清理**（建议）：取消定时器、清除 $state widget 引用
+
+### 修复优先级
+
+| 优先级 | 问题 | 修复 | 状态 |
+|--------|------|------|------|
+| P0 | 启动闪退 (use FFI 冲突) | 移除 `use FFI;` | ✅ 已修复 |
+| P1 | drawString 内存泄漏 | 显式 `free()` | ✅ 已修复 |
+| P1 | GC 不充分 (micro.sfx) | 三次 `gc_collect_cycles()` | ✅ 已修复 |
+| P2 | tokenizer 缺失 | 重建 micro.sfx | ✅ 已修复 |
+| P2 | $state 引用泄漏 | onClosing 清理 | ✅ 已修复 |
+
+### 验证结果
+```
+非 PHAR 模式 (php85 tetris.php):  ✅ 启动正常，关闭无 SIGTRAP
+PHAR 模式 (php85 Tetris.phar):    ✅ 启动正常，关闭无 SIGTRAP
+二进制模式 (Tetris.app):          ✅ 启动正常，关闭无 SIGTRAP
+```
+
+### 环境信息
+- PHP 8.5.7 (micro SAPI, SPC 构建)
+- libui-ng (commit 43ba1ef, macOS ARM64)
+- micro.sfx: 21.6 MB (18 个扩展)
+- Tetris.phar: 16.3 MB (1954 文件)
+- Tetris.app: 37.9 MB (micro.sfx + Tetris.phar)
+
 ### HWND 获取方式（与 Tray 相同）
 - `$window->handle()` 返回 `uiWindow*`（libui 内部结构体指针），**不是** Win32 HWND
 - **正确方式**：`Ffi::get()->uiControlHandle($window->asControl())` 返回 `uintptr_t`
@@ -722,3 +834,82 @@ libui-ng `darwin/box.m` 中：
 - `LoadImageW(IMAGE_ICON, LR_LOADFROMFILE)` 需要 `.ico` 格式
 - `.png` 在 Windows 上不可靠（部分系统加载失败）
 - 使用 PowerShell `[System.Drawing.Bitmap]::GetHicon()` + ICO 编码器转换
+
+## 打包系统 — PHAR + phpmicro
+
+### pipeline 架构
+```
+entry.php ──► build-phar.php ──► PHAR (16MB, 1954 files)
+  ├── runtime deps only (29 packages, no dev)
+  ├── platform native libs only (darwin/linux/windows)
+  └─────────── micro.sfx (21MB) ──► cat binary ──► 平台特定包
+                                      ├── macOS: .app bundle (Info.plist + .icns)
+                                      ├── Linux: ELF + .desktop + PNG
+                                      └── Windows: .exe + rcedit .ico
+```
+
+### 关键 API
+
+#### build-phar.php：addDir 性能优化
+```php
+// ❌ 旧 — 逐文件 addFile()，3587 files 需 51 分钟
+foreach ($files as $pharPath => $fsPath) {
+    $phar->addFile($fsPath, $pharPath);  // 极慢
+}
+
+// ✅ 新 — buildFromIterator()，1954 files 仅 5.5s
+$phar->buildFromIterator(new ArrayIterator($filesToAdd), $projectRoot);
+```
+- **bindary**: key = phar 内路径, value = 文件系统路径（本地磁盘绝对路径）
+- **base** = $projectRoot，让关联数组的相对路径被正确解析
+- `buildFromIterator()` 直接读取文件内容，不存储路径字符串
+
+#### PHAR stub：原生库提取
+```php
+Phar::mapPhar();
+$extractDir = sys_get_temp_dir() . '/ui2_' . md5(__FILE__);
+$phar->extractTo($extractDir, 'vendor/helgesverre/libui/lib/');
+putenv("LIBUI_LIB={$libDir}/darwin/libui.dylib");  // FFI dlopen 需要真实路径
+```
+- FFI `dlopen()` 不支持 `phar://` 流，必须解压到真实文件系统
+- `extractTo()` 只解压原生 .dylib/.so/.dll 子目录（< 5MB）
+- 7 天自动清理旧临时提取目录
+
+#### build-binary.php：平台打包
+```php
+// macOS: .app bundle
+sips -z 16 16 icon.png --out icon_16x16.png  # 多尺寸 + iconutil → .icns
+
+// Linux: ELF + desktop 文件
+file $binary  # 确认 ELF 64-bit LSB executable
+
+// Windows: rcedit .ico 注入
+# rcedit.exe $binary --set-icon app.ico
+```
+
+### SPC v3 构建
+
+#### 关键 env vars
+```bash
+export WORKING_DIR="$SPC_DIR"           # 决定 buildroot/ 位置
+export SOURCE_PATH="$SPC_DIR/source"   # 已提取的源码
+export DOWNLOAD_PATH="$SPC_DIR/downloads"  # 下载的 tarballs
+```
+
+#### php-micro 复制步骤（SPC 不自动作）
+```bash
+cp -r "$SOURCE_PATH/php-micro" "$SOURCE_PATH/php-src/sapi/micro"
+```
+
+#### China 网络适配
+```bash
+chsrc set git  # 设置 GitHub 镜像（ghproxy）
+ghproxy git clone https://ghproxy.com/https://github.com/crazywhalecc/static-php-cli.git
+spc build "ffi,phar,mbstring,json,ctype,posix,fileinfo" --build-micro --no-download
+```
+
+### 排除模式（PHAR 内过滤）
+- `bin/`, `tests/`, `docs/`, `example*`, `.github`
+- `*.md`, `LICENSE*`, `composer.json`, `phpunit.xml*`
+- `*.phpt`, `Makefile`, `Dockerfile`
+- 包级：helgesverre/libui 和 kingbes/pebview 的 `lib/` 目录由 `addPlatformNativeLibs()` 个别处理
