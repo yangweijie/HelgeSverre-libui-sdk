@@ -12,6 +12,9 @@
 
 | 文件 | 新增内容 |
 |---|---|
+| `Ffi.php` | `uninit()` 顺序修复：retained closures 在 `uiUninit()` 前清理 + 三次 GC；PHAR `libPath()`/`readHeader()` 支持；debug 模式 |
+| `App.php` | `gc_collect_cycles()` 在 destroy 循环前后；`finally` 块中显式销毁 Window |
+| `Control.php` | `__destruct()` 仅销毁 toplevel 控件；`clearRetainedCallbacks()` |
 | `Box.php` | 接受 `Composite` 子元素；`horizontal()` 静态工厂；`appendStretchy()` |
 | `Form.php` | 接受 `Composite` 子元素；HasValue 字段的 `values()`/`setValues()`；`appendStretchy()` |
 | `Grid.php` | 接受 `Composite` 子元素；`appendAt()` 位置参数；`place()` 快捷方法 |
@@ -19,9 +22,9 @@
 | `Tab.php` | 在 `append()`/`appendMargined()` 中接受 `Composite` 子元素 |
 | `Menu.php` | 流式构建器 API；改进的 `MenuOrderException` |
 | `MenuItem.php` | `onClick()` 替换处理器；`removeOnClick()`；错误处理器 |
-| `Window.php` | `centered()` / `centeredOn()` 定位；`run()` 单窗口循环；`setWindowIcon()` |
+| `Window.php` | `centered()` / `centeredOn()` 定位；`run()` 单窗口循环；`setWindowIcon()`；`markExternallyClosed()` / `isExternallyClosed()` |
 | `Exception/MenuOrderException.php` | 携带锁定菜单的 Window 标题 |
-| `Draw/DrawContext.php` | 流式构建器：`fillRect`、`strokeCircle`、`withSave()`、`drawString()` |
+| `Draw/DrawContext.php` | 流式构建器：`fillRect`、`strokeCircle`、`withSave()`、`drawString()` 显式 `free()` |
 | `Draw/Path.php` | `wedge()`、`polygon()`、`ellipse()`、`roundedRect()`、`quadTo()`、`bezierThrough()` |
 | `Draw/Params/AreaKeyEvent.php` | 语义查询方法 |
 | `Draw/Params/AreaMouseEvent.php` | 语义查询方法 |

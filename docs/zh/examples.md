@@ -85,7 +85,7 @@ scripts\install-spc.bat
 dir %USERPROFILE%\.spc\micro.sfx
 ```
 
-> 下载 `static-php-cli` 并构建一个静态 PHP 解释器（`micro.sfx`），包含 FFI、PHAR 和 mbstring 扩展。一次性设置，编译 PHP 源码约需 10-30 分钟。
+> 下载 `static-php-cli` 并构建一个静态 PHP 解释器（`micro.sfx`），包含 FFI、PHAR、mbstring、tokenizer 和 filter 扩展。一次性设置，编译 PHP 源码约需 10-30 分钟。
 >
 > **Windows 注意事项**：编译 PHP 源码需要 Visual Studio 2022（工作负载："使用 C++ 的桌面开发"）。需要 Windows 10 Build 17063+（内置 `curl.exe`）。
 

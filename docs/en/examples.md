@@ -85,7 +85,7 @@ scripts\install-spc.bat
 dir %USERPROFILE%\.spc\micro.sfx
 ```
 
-> Downloads `static-php-cli` and builds a static PHP interpreter (`micro.sfx`) with FFI, PHAR, and mbstring extensions. This is a one-time setup that takes 10-30 minutes (compiles PHP from source).
+> Downloads `static-php-cli` and builds a static PHP interpreter (`micro.sfx`) with FFI, PHAR, mbstring, tokenizer, and filter extensions. This is a one-time setup that takes 10-30 minutes (compiles PHP from source).
 >
 > **Windows note**: Requires Visual Studio 2022 with "Desktop development with C++" workload for PHP source compilation. Windows 10 Build 17063+ (for `curl.exe`) required.
 
