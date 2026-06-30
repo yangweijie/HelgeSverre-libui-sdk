@@ -51,6 +51,11 @@
 - [x] PHP 8.5 运行无错误, 仅 vendor deprecation 噪音
 - **Status:** complete
 
+### Post-Phase 5: Docs Update
+- [x] `docs/en/examples.md` — Add tetris.php to run list, full description section, test files table
+- [x] `docs/zh/examples.md` — Same in Chinese
+- **Status:** complete
+
 ## Errors Encountered
 | Phase | Error | Attempt | Resolution |
 |-------|-------|---------|------------|

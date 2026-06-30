@@ -343,3 +343,10 @@
   - drawString 居中需要 layout box 覆盖整个画布 (x=0, width=BOARD_W)
 - **验证**：`/opt/homebrew/bin/php85 examples/tetris.php` — 零错误运行，仅 vendor deprecation 噪音
 - Files: `examples/tetris.php`
+
+### Phase 29b: ✅ docs 更新 — Tetris 示例文档
+- **需求**：更新项目文档，添加 Tetris 游戏示例说明
+- **更新文件**：
+  - `docs/en/examples.md` — run 命令列表添加 tetris.php，新增完整说明章节（Area/AreaDelegate、Loop::repeat、DrawContext、ExtKey、overlays API 要点 + 操作指引），测试文件表格添加条目
+  - `docs/zh/examples.md` — 同上中文版
+- Files: `docs/en/examples.md`, `docs/zh/examples.md`
