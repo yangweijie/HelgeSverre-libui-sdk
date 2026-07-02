@@ -477,3 +477,17 @@
 - **验证**：PHAR + Tetris.app 均正常，零泄漏
 - **结论**：该补丁非必需，`class_exists` 检查在实测中未触发
 - Files: `patches/composer/ClassLoader.php`（已删除）
+
+---
+
+## Session: 2026-07-02 — Windows Binary + micro.sfx Fix
+
+### Phase 33: ✅ Windows Tetris.exe GUI 修复 (micro.sfx uiInitOptions)
+
+- **问题**：`dist/Tetris.exe`（phar + micro.sfx 拼接）运行时事件循环正常（进程存活），但无 GUI 窗口
+- **根因**：`Ffi::init()` 创建 `uiInitOptions` 结构体后未设置 `Size` 字段。libui-ng 要求 `opts->Size = sizeof(uiInitOptions)` 否则 `uiInit()` 静默失败。标准 PHP CLI 对此宽容，但 phpmicro (micro.sfx) 下 `uiInit()` 完全跳过初始化，而 `uiMain()` 仍可运行——造成"进程活着但窗口不出现"的假象
+- **修复**：
+  1. `vendor/helgesverre/libui/src/Ffi.php` — 应用 Size 修复 + 检查 uiInit() 返回值
+  2. `patches/helgesverre/libui/src/Ffi.php` — 同上，确保持久化
+- **验证**：Windows API `EnumWindows` 枚举确认存在 "Tetris" 和 "libui utility window" 窗口 ✅
+- Files: `vendor/helgesverre/libui/src/Ffi.php`, `patches/helgesverre/libui/src/Ffi.php`, `scripts/build-phar.php`

@@ -93,6 +93,14 @@
 - [x] 覆盖：依赖项目使用方式、原生库提取机制、命令参考
 - **Status:** complete
 
+### Phase 33: Windows Tetris.exe 窗口不显示修复 (micro.sfx uiInitOptions)
+- [x] Diagnose: Tetris.exe event loop runs but window invisible
+- [x] Isolate cause: uiInitOptions.Size not set → uiInit() silently fails under micro.sfx
+- [x] Fix: Set opts->Size = sizeof(opts), check uiInit() return value
+- [x] Verify: Window "Tetris" and "libui utility window" both appear on Windows
+- [x] Patch both vendor/ and patches/ Ffi.php for persistence
+- **Status:** complete
+
 # Errors Encountered
 
 ### Phase 29c (Tetris 闪退分析)

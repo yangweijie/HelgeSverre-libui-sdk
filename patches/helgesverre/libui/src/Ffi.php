@@ -219,7 +219,14 @@ class Ffi
         $ffi = self::get();
 
         $opts = $ffi->new('uiInitOptions');
-        $ffi->uiInit(\FFI::addr($opts));
+        $opts->Size = \FFI::sizeof($opts);
+
+        $err = $ffi->uiInit(\FFI::addr($opts));
+        if ($err !== null) {
+            $msg = \FFI::string($err);
+            $ffi->uiFreeInitError($err);
+            throw new \RuntimeException("uiInit failed: {$msg}");
+        }
 
         self::$initialized = true;
 

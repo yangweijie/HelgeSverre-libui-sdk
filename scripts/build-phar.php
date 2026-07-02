@@ -160,149 +160,72 @@ try {
 
 fwrite(STDOUT, " Scanning vendor/...\n");
 
-$excludeDirs = [
-    'bin',          // CLI tools (pest, phpunit, etc.)
-    'tests', 'Test',
-    'docs', 'doc', 'documentation',
-    '.github',      // CI/Actions workflows
-    'node_modules',
-    'tmp',
-    'examples',
-];
+$skipDirs = ['bin', 'tests', 'Test', 'docs', 'doc', 'documentation', '.github', 'node_modules', 'tmp', 'examples'];
+$binaryExts = ['exe', 'so', 'dylib', 'a', 'o', 'obj', 'bin', 'dat', 'db'];
 
-$excludeExtPatterns = [
-    '.md', '.MD',
-    '.markdown',
-    '.rst',
-    '.txt',          // except certain txt files... skip this for simplicity
-    '.yml', '.yaml',  // config files
-    '.xml',
-    '.neon',
-    '.dist',
-    '.example',
-    '.json',         // all composer/package json files (keep only autoload)
-    '.lock',
-    '.phpunit',      // phpunit config files
-];
+// ── RecursiveCallbackFilterIterator for vendor/ ──
+// Returns true to KEEP, false to REJECT
 
-$filesToAdd = [];
-$skipped = 0;
-$kept = 0;
+$vendorFilter = function (SplFileInfo $current, mixed $key, RecursiveDirectoryIterator $iterator) use ($vendorDir, $skipDirs, $binaryExts): bool {
+    $relPath = substr($current->getPathname(), strlen($vendorDir) + 1);
 
-// Helper: check if a path component matches any exclude dir
-function isExcludedDir(string $path, array $excludeDirs): bool {
-    $parts = explode('/', $path);
-    foreach ($parts as $part) {
-        foreach ($excludeDirs as $ed) {
-            if ($part === $ed) return true;
-            // Match Test*, tests*, Tests* at path start
-            if (str_starts_with($part, $ed)) return true;
-        }
-    }
-    return false;
-}
-
-$vendorIt = new RecursiveIteratorIterator(
-    new RecursiveDirectoryIterator($vendorDir, RecursiveDirectoryIterator::SKIP_DOTS),
-    RecursiveIteratorIterator::LEAVES_ONLY,
-);
-
-foreach ($vendorIt as $item) {
-    if (!$item->isFile()) continue;
-
-    $fsPath = $item->getPathname();
-    $relative = substr($fsPath, strlen($vendorDir) + 1);
-
-    // Skip excluded directories (check first path component for speed)
-    $firstSlash = strpos($relative, '/');
-    $topDir = $firstSlash === false ? $relative : substr($relative, 0, $firstSlash);
-
-    if (in_array($topDir, ['bin', 'tests', 'docs', '.github', 'node_modules', 'tmp', 'examples'], true)) {
-        $skipped++;
-        continue;
+    // For directories: skip excluded top-level dirs (prevents recursion)
+    if ($current->isDir()) {
+        $first = strstr($relPath, DIRECTORY_SEPARATOR, true);
+        $topDir = $first !== false ? $first : $relPath;
+        return !in_array($topDir, $skipDirs, true) && !str_starts_with($topDir, 'Test');
     }
 
-    // Skip Test* dirs (phpunit, pest, sebastian, etc.)
-    if (str_starts_with($topDir, 'Test') || $topDir === 'Test') {
-        $skipped++;
-        continue;
-    }
+    // For files: apply exclusion rules
+    if (!$current->isFile()) return false;
 
-    // Platform-specific native libs: only include current platform
-    if (str_starts_with($relative, 'helgesverre/libui/lib/')) {
-        $platformDirs = match (PHP_OS_FAMILY) {
-            'Darwin' => ['darwin'],
-            'Linux' => ['linux-x86_64', 'linux-aarch64'],
-            'Windows' => ['windows-x86_64'],
-            default => [],
+    // Platform-specific libui libs: only include current platform
+    if (str_starts_with($relPath, 'helgesverre' . DIRECTORY_SEPARATOR . 'libui' . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR)) {
+        $pd = match (PHP_OS_FAMILY) {
+            'Darwin' => 'darwin',
+            'Linux' => 'linux-x86_64',
+            'Windows' => 'windows-x86_64',
+            default => null,
         };
-        $matched = false;
-        foreach ($platformDirs as $pd) {
-            if (str_starts_with($relative, "helgesverre/libui/lib/{$pd}/")) {
-                $matched = true;
-                break;
-            }
-        }
-        if (!$matched) {
-            $skipped++;
-            continue;
-        }
-        // Also skip .DS_Store and backup files in lib/
-        $libBase = basename($relative);
-        if ($libBase === '.DS_Store' || str_contains($libBase, '.bak') || str_ends_with($libBase, '2.dylib') || str_ends_with($libBase, '3.dylib')) {
-            $skipped++;
-            continue;
-        }
+        if ($pd === null) return false;
+        $prefix = 'helgesverre' . DIRECTORY_SEPARATOR . 'libui' . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . $pd . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($relPath, $prefix)) return false;
+        // Skip backup/versioned dylibs
+        $base = $current->getBasename();
+        if ($base === '.DS_Store' || str_contains($base, '.bak') || str_ends_with($base, '2.dylib') || str_ends_with($base, '3.dylib')) return false;
+        return true;
     }
 
     // Platform-specific pebview libs
-    if (str_starts_with($relative, 'kingbes/pebview/lib/')) {
-        $pebviewDirs = match (PHP_OS_FAMILY) {
-            'Darwin' => ['macos'],
-            'Linux' => ['linux'],
-            'Windows' => ['windows'],
-            default => [],
+    if (str_starts_with($relPath, 'kingbes' . DIRECTORY_SEPARATOR . 'pebview' . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR)) {
+        $pd = match (PHP_OS_FAMILY) {
+            'Darwin' => 'macos',
+            'Linux' => 'linux',
+            'Windows' => 'windows',
+            default => null,
         };
-        $matched = false;
-        foreach ($pebviewDirs as $pd) {
-            if (str_starts_with($relative, "kingbes/pebview/lib/{$pd}/")) {
-                $matched = true;
-                break;
-            }
-        }
-        if (!$matched) {
-            $skipped++;
-            continue;
-        }
-        $libBase = basename($relative);
-        if ($libBase === '.DS_Store') {
-            $skipped++;
-            continue;
-        }
+        if ($pd === null) return false;
+        $prefix = 'kingbes' . DIRECTORY_SEPARATOR . 'pebview' . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . $pd . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($relPath, $prefix)) return false;
+        $base = $current->getBasename();
+        if ($base === '.DS_Store') return false;
+        return true;
     }
 
-    // Exclude large binary/non-PHP files by extension
-    $ext = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
-    $binaryExts = ['exe', 'dll', 'so', 'dylib', 'a', 'o', 'obj', 'bin', 'dat', 'db'];
-    if (in_array($ext, $binaryExts, true)) {
-        // Already filtered lib/ above; skip any other binaries
-        if (!str_starts_with($relative, 'helgesverre/libui/lib/') && !str_starts_with($relative, 'kingbes/pebview/lib/')) {
-            $skipped++;
-            continue;
-        }
-    }
+    // Skip binaries outside lib/
+    $ext = strtolower($current->getExtension());
+    if (in_array($ext, $binaryExts, true) && $ext !== 'dll') return false; // allow .dll in PebView
 
-    $filesToAdd['vendor/' . $relative] = $fsPath;
-    $kept++;
-}
+    return true;
+};
 
-fwrite(STDOUT, " Files to add: {$kept} (skipped {$skipped})\n");
+$vendorInner = new RecursiveDirectoryIterator($vendorDir, RecursiveDirectoryIterator::SKIP_DOTS);
+$vendorFiltered = new RecursiveCallbackFilterIterator($vendorInner, $vendorFilter);
+$vendorIt = new RecursiveIteratorIterator($vendorFiltered, RecursiveIteratorIterator::LEAVES_ONLY);
 
-// ── Phase 2 (fast): bulk-add collected files via buildFromIterator ──
-
-fwrite(STDOUT, " Adding " . count($filesToAdd) . " files...\n");
-$phar->buildFromIterator(new ArrayIterator($filesToAdd), $projectRoot);
-fwrite(STDOUT, " Added " . count($filesToAdd) . " files\n");
+fwrite(STDOUT, " Adding vendor/ files via buildFromIterator...\n");
+$phar->buildFromIterator($vendorIt, $projectRoot);
+fwrite(STDOUT, " Added vendor/ files\n");
 
     // ── Add entry file ──
 

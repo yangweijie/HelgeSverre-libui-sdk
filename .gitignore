@@ -16,3 +16,7 @@
 dist
 buildroot
 log
+downloads/
+build/
+pkgroot/
+*.phar

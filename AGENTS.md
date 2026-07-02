@@ -18,7 +18,9 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 | `assets/` | HTML/JS assets for WebView-based widgets (tree-view.html, code-editor.html) |
 | `patches/` | Files copied into `vendor/` on install (patch system). **Append-only** — stale patches are never removed. |
 | `bridge/` | C/ObjC source for WebView child-window bridge per platform |
+| `scripts/` | Build tools: `build-phar.php` (package app into standalone PHAR/executable) |
 | `bootstrap.php` | Auto-loaded via `composer.json autoload.files` — registers Collision error handler |
+| `dist/` | Build output (gitignored) — generated `.phar` and `.exe` files |
 | `vendor/helgesverre/libui/` | Upstream. **Never edit directly** — use `patches/` |
 | `tests/` | Pest tests |
 | `examples/` | Runnable demos |
@@ -39,6 +41,7 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 - `Menu.php` — Fluent builder: `create()->item()->separator()->quitItem()`
 - `MenuItem.php` — `onClick()` **replaces** handler (no stacking); `removeOnClick()`
 - `Window.php` — `centered()`/`centeredOn()`; `onClose()`; `run()` loop; menu lock tracking
+- `Ffi.php` — `uiInitOptions.Size` set before `uiInit()` (critical for phpmicro compatibility)
 - `Exception/MenuOrderException.php` — carries the Window title that locked menus
 - `Draw/DrawContext.php` — Builder pattern: `fillRect`/`strokeCircle`/`withSave()`/`drawString()`
 - `Draw/Path.php` — `wedge()`/`polygon()`/`ellipse()`/`roundedRect()`/`quadTo()`/`bezierThrough()`
@@ -51,6 +54,7 @@ composer install              # runs patch.php via post-autoload-dump
 composer build:pebview        # compiles PebView.dylib from source (macOS/Linux)
 composer build:bridge         # compiles webview_bridge.dylib after PebView is ready
 php patch.php                 # manually re-apply patches (vendor-mirrored file copy)
+php scripts/build-phar.php    # bundle app into standalone PHAR archive
 ```
 
 ## Widget catalog (src/Widgets/)
@@ -131,6 +135,7 @@ composer regen        # Regenerate FFI header + typed classes from ui.h
 - **Do not assume `phpunit.xml` is absent** — it exists. Pest reads it.
 - **Composite GC trap** — temporary `Composite` objects (e.g. `(new SeparatorLine())->root()`) get `__destruct()` called at statement end via PHP's GC, which calls `uiControlDestroy()` on the underlying C widget while libui still holds a reference. **Always store Composites in named persistent variables.** If you see `uiControlVerifySetParent` errors, this is the cause.
 - **`patches/` is append-only** — removing a file from `patches/` does NOT remove it from `vendor/`. Clean `vendor/` manually.
+- **phpmicro / micro.sfx** — Standalone `.exe` builds require `Ffi.php` patch (`uiInitOptions.Size`). Without it, `uiInit()` silently fails on Windows and the event loop runs but no window appears.
 
 ## Examples
 

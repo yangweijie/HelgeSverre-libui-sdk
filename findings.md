@@ -913,3 +913,43 @@ spc build "ffi,phar,mbstring,json,ctype,posix,fileinfo" --build-micro --no-downl
 - `*.md`, `LICENSE*`, `composer.json`, `phpunit.xml*`
 - `*.phpt`, `Makefile`, `Dockerfile`
 - 包级：helgesverre/libui 和 kingbes/pebview 的 `lib/` 目录由 `addPlatformNativeLibs()` 个别处理
+
+## uiInitOptions.Size Requirement
+
+### 问题
+Windows 上 `dist/Tetris.exe` (phar + micro.sfx) 运行时事件循环正常（进程存活），但无 GUI 窗口。相同 PHAR 用 `php85 dist/tetris.phar` 运行则窗口正常显示。
+
+### 根因
+`Ffi::init()` 调用 `uiInit()` 前必须设置 `uiInitOptions` 的 `Size` 字段：
+```c
+uiInitOptions opts;
+opts.Size = sizeof(uiInitOptions);
+const char *err = uiInit(&opts);
+```
+
+`\FFI::new('uiInitOptions')` 创建的结构体字段默认值为 0。libui-ng 在 `uiInit()` 内部检查 `opts->Size` 是否等于 `sizeof(uiInitOptions)`，若不匹配则静默跳过初始化。
+
+在标准 PHP CLI 下，`uiInit()` 对此行为宽容（可能因为栈内存初始化不同）。但在 phpmicro (micro.sfx) 的 SAPI 环境下，`uiInit()` 静默失败——不报错、不崩溃、不创建窗口，但事件循环 `uiMain()` 仍然正常运行。
+
+### 修复
+```php
+$opts = $ffi->new('uiInitOptions');
+$opts->Size = \FFI::sizeof($opts);
+$err = $ffi->uiInit(\FFI::addr($opts));
+if ($err !== null) {
+    $msg = \FFI::string($err);
+    $ffi->uiFreeInitError($err);
+    throw new \RuntimeException("uiInit failed: {$msg}");
+}
+```
+
+### 关键发现
+- libui-ng 要求 `uiInitOptions.Size` 必须等于 `sizeof(uiInitOptions)` 结构体大小
+- 不设置 Size 时 `uiInit()` 静默失败——无返回值、无异常、无崩溃
+- phpmicro (micro.sfx) 的 SAPI 环境比标准 PHP CLI 更敏感
+- `uiMain()` 在 `uiInit()` 失败后仍然可以运行，造成"进程活着但无窗口"的假象
+- 必须检查 `uiInit()` 返回值——成功返回 `null`，失败返回错误字符串
+- 两份文件都需要修复：`vendor/helgesverre/libui/src/Ffi.php` 和 `patches/helgesverre/libui/src/Ffi.php`
+
+### 验证
+Windows API 枚举确认调用 `EnumWindows` 后可见窗口列表包含 `"Tetris"` 和 `"libui utility window"`，证实 `uiInit()` 已正确执行。

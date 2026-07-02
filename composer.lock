@@ -617,9 +617,14 @@
         {
             "name": "kaareln/php-svg-path-data",
             "version": "1.0.4",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/kaareln/php-svg-path-data.git",
+                "reference": "23985bf76020262169b4e1d984ac9a036f4f80ae"
+            },
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/kaareln/php-svg-path-data/1.0.4/kaareln-php-svg-path-data-1.0.4.zip",
+                "url": "https://mirrors.huaweicloud.com/repository/php/kaareln/php-svg-path-data/1.0.4/kaareln-php-svg-path-data-1.0.4.zip",
                 "reference": "23985bf76020262169b4e1d984ac9a036f4f80ae",
                 "shasum": ""
             },
@@ -653,10 +658,6 @@
                 "SVG Path",
                 "svg"
             ],
-            "support": {
-                "issues": "https://github.com/kaareln/php-svg-path-data/issues",
-                "source": "https://github.com/kaareln/php-svg-path-data/tree/1.0.4"
-            },
             "time": "2023-03-27T14:20:13+00:00"
         },
         {
@@ -1958,9 +1959,14 @@
         {
             "name": "nunomaduro/collision",
             "version": "v6.x-dev",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/nunomaduro/collision.git",
+                "reference": "f05978827b9343cba381ca05b8c7deee346b6015"
+            },
             "dist": {
                 "type": "zip",
-                "url": "https://mirrors.cloud.tencent.com/repository/composer/nunomaduro/collision/v6.x-dev/nunomaduro-collision-v6.x-dev.zip",
+                "url": "https://mirrors.huaweicloud.com/repository/php/nunomaduro/collision/v6.x-dev/nunomaduro-collision-v6.x-dev.zip",
                 "reference": "f05978827b9343cba381ca05b8c7deee346b6015",
                 "shasum": ""
             },
@@ -2017,10 +2023,20 @@
                 "php",
                 "symfony"
             ],
-            "support": {
-                "issues": "https://github.com/nunomaduro/collision/issues",
-                "source": "https://github.com/nunomaduro/collision"
-            },
+            "funding": [
+                {
+                    "url": "https://www.paypal.com/paypalme/enunomaduro",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/nunomaduro",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/nunomaduro",
+                    "type": "patreon"
+                }
+            ],
             "time": "2023-01-03T12:54:54+00:00"
         },
         {
@@ -4103,5 +4119,5 @@
     "prefer-lowest": false,
     "platform": {},
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
