@@ -56,6 +56,11 @@
 - [x] `docs/zh/examples.md` — Same in Chinese
 - **Status:** complete
 
+### Phase 7b: Window::centered() 屏幕尺寸检测失败修复
+- [x] `screenSizeWindows()` 在 Windows 上 PowerShell/wmic 均返回空
+- [x] 添加 Win32 FFI `GetSystemMetrics` 作为首选检测方式
+- **Status:** complete
+
 ### Phase 29c: Tetris.app 闪退与内存泄漏分析
 - [x] 分析启动闪退 "Cannot redeclare class Libui\Ffi" — PHP 8.5 `use FFI;` 语义变化
 - [x] 分析关闭时 SIGTRAP — libui 内存泄漏检测 (drawString 泄漏 + GC 不充分)

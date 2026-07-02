@@ -31,6 +31,11 @@
 - **验证**：all-components.php 和 test-circle-progress.php 均正常显示，无卡死
 - Files: `src/Widgets/CircleProgressBar.php`, `examples/all-components.php`, `examples/test-circle-progress.php`
 
+### Phase 7d: ✅ Window::centered() 屏幕尺寸检测失败修复
+- **根因**：`screenSizeWindows()` 依赖 PowerShell WinForms 和 wmic，两者在某些 Windows 环境下返回空
+- **修复**：添加 Win32 FFI `GetSystemMetrics` 作为首选检测方式（最快、无需子进程）
+- Files: `patches/helgesverre/libui/src/Window.php`
+
 ### 关键测试结果
 | 测试 | 结果 |
 |------|------|

@@ -208,7 +208,25 @@ public function isExternallyClosed(): bool
     /** Windows: PowerShell System.Windows.Forms → wmic. */
     private static function screenSizeWindows(): ?array
     {
-        // 1. PowerShell with WinForms (most reliable)
+        // 1. Win32 API via FFI (fastest, no subprocess)
+        try {
+            $ffi = \FFI::cdef(
+                'typedef unsigned long DWORD;'
+                . 'typedef struct { long left; long top; long right; long bottom; } RECT;'
+                . 'DWORD GetSystemMetrics(int nIndex);',
+                'user32.dll',
+            );
+            // SM_CXSCREEN=0, SM_CYSCREEN=1
+            $w = (int) $ffi->GetSystemMetrics(0);
+            $h = (int) $ffi->GetSystemMetrics(1);
+            if ($w > 0 && $h > 0) {
+                return [$w, $h];
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        // 2. PowerShell with WinForms
         $script = 'Add-Type -AssemblyName System.Windows.Forms;'
             . '[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Size.Width;'
             . '[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Size.Height';
@@ -220,7 +238,7 @@ public function isExternallyClosed(): bool
             }
         }
 
-        // 2. wmic fallback
+        // 3. wmic fallback
         $out = \shell_exec('wmic path Win32_VideoController'
             . ' get CurrentHorizontalResolution,CurrentVerticalResolution 2>NUL');
         if (\is_string($out) && $out !== '' && \preg_match('/(\d+)\s+(\d+)/', $out, $m)) {

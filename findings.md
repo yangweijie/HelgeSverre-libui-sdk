@@ -450,6 +450,24 @@ public function __destruct()
 - **`isExternallyClosed()` 守卫防止 GC 后双重释放** — __destruct 跳过已标记的 Window
 - **App.php 的两次 `gc_collect_cycles()` 均必要** — 移除第一次会导致 uiLabel 泄漏
 
+## Window::centered() 屏幕尺寸检测失败
+
+### 问题
+`Window::centered()` 在 Windows 上抛异常 "cannot detect the screen size"。`screenSizeWindows()` 依赖 PowerShell WinForms 和 wmic，两者均返回空。
+
+### 根因
+- PowerShell 命令在某些 Windows 环境下被阻止或输出格式异常
+- `wmic` 在较新 Windows 版本中已弃用
+- 两个备选方案都失败导致返回 null
+
+### 修复
+添加 Win32 FFI `GetSystemMetrics` 作为首选检测方式（最快、无需子进程）：
+```php
+$ffi = \FFI::cdef('DWORD GetSystemMetrics(int nIndex);', 'user32.dll');
+$w = (int) $ffi->GetSystemMetrics(0); // SM_CXSCREEN
+$h = (int) $ffi->GetSystemMetrics(1); // SM_CYSCREEN
+```
+
 ## CircleProgressBar Area 尺寸问题
 
 ### 问题
