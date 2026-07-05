@@ -121,6 +121,13 @@ $readBtn->onClicked(function () use ($tree, $statusLabel): void {
     $statusLabel->setText($path !== null ? "getSelectedPath() = \"{$path}\"" : 'getSelectedPath() = null');
 });
 
+// IMPORTANT: uiWindowOnClosing only supports ONE callback.
+// cleanupOnClose() would overwrite this handler, so we do NOT call it.
+// The WebView is destroyed AFTER the loop exits to avoid releasing
+// Objective-C objects (WKWebView, WKWebViewConfiguration) while the
+// NSApplication run loop's autorelease pool is still active —
+// destroying them inside the onClosing callback causes use-after-free
+// when the pool drains on loop exit (EXC_BAD_ACCESS / SIGSEGV).
 $window->onClosing(function () {
     Ffi::quit();
     return true;
@@ -129,6 +136,20 @@ $window->onClosing(function () {
 Ffi::onShouldQuit(fn () => true);
 
 $tree->autoResize($window, $treeX, $treeY);
-$tree->cleanupOnClose($window);
 
 Loop::run();
+
+// ── Post-loop cleanup ──
+// Destroy the WebView AFTER the NSApplication run loop has exited.
+// At this point the main autorelease pool has already been drained,
+// so releasing WKWebView and related ObjC objects is safe — there
+// are no stale autorelease references that could trigger a crash.
+$tree->destroy();
+
+// Run GC multiple times to collect wrapper objects whose __destruct()
+// frees C handles, before uiUninit()'s leak checker fires.
+\gc_collect_cycles();
+\gc_collect_cycles();
+\gc_collect_cycles();
+
+Ffi::uninit();

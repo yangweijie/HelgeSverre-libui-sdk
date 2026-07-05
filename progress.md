@@ -496,3 +496,38 @@
   2. `patches/helgesverre/libui/src/Ffi.php` — 同上，确保持久化
 - **验证**：Windows API `EnumWindows` 枚举确认存在 "Tetris" 和 "libui utility window" 窗口 ✅
 - Files: `vendor/helgesverre/libui/src/Ffi.php`, `patches/helgesverre/libui/src/Ffi.php`, `scripts/build-phar.php`
+
+## Session: 2026-07-05 — macOS WebView EXC_BAD_ACCESS 崩溃修复 + Loop API
+
+### Phase 34: macOS WebView EXC_BAD_ACCESS 崩溃修复 (work in progress)
+
+- **问题**：关闭窗口时 `wvb_destroy()` 因 autorelease pool 管理不当导致 WKWebView ObjC 对象在 NSApplication run loop pool 排空后仍被引用 → `EXC_BAD_ACCESS` / `SIGSEGV`
+- **根因**：
+  - `wvb_destroy()` 未使用独立 `@autoreleasepool` — webview_destroy() 中 autorelease 的 WKWebView 对象滞留在调用者的 autorelease pool 中
+  - 调用者（onClosing 回调）的 autorelease pool 在事件循环退出时排空 → 此时 WKWebView contentView 已为 nil → 访问已释放对象 → crash
+- **修复 — `bridge/webview_bridge.m`**：
+  - 每步操作独立 `@autoreleasepool`：
+    1. 获取 child window 指针（pre-destroy）
+    2. 从 parent 分离 child window
+    3. webview_destroy() — 释放 WKWebView 等
+    4. [childWin close] — 关闭窗口
+  - 各 pool 内 autorelease 的对象立即释放，不残留到调用者 pool
+  - 添加 null guard (`if (!wv) return;`)
+- **修复 — `test-treeview.php`**：
+  - 移除 `cleanupOnClose()` 调用（它用 onClosing destroy WebView 是不安全的）
+  - 新顺序：`Loop::run()` → `$tree->destroy()` → 三次 `gc_collect_cycles()` → `Ffi::uninit()`
+  - onClosing 只调 `Ffi::quit()`，不 destroy WebView
+- **修复 — `src/WebView.php`**：
+  - `cleanupOnClose()` 注释添加详细警告：onClosing 只支持一个回调，在 onClosing 内 destroy WebView 会导致 EXC_BAD_ACCESS
+  - 推荐模式：`Loop::run()` 后 destroy
+- **新增 — `patches/helgesverre/libui/src/Loop.php`**：
+  - `Loop::defer(callable)` — 下一个 tick（queueMain 包装）
+  - `Loop::delay(ms, callable): int` — 一次性延迟，支持 cancel
+  - `Loop::repeat(ms, callable): int` — 周期性重复，回调返回 false 停止
+  - `Loop::cancel(int id)` — 惰性取消（移除 ID，下次 native timer 醒来停止）
+  - `Loop::run()` — 包 Ffi::main()，退出后跑两次 GC
+  - `Loop::stop()` — 包 Ffi::quit()
+  - `Loop::isRunning()` — 是否在事件循环中
+- **新增 — `patches/WebView.php`**：将 WebView.php 移至 patches/ 系统（从 src/ 改为 patches/）
+- Files（未 commit）: `bridge/webview_bridge.m`, `examples/test-treeview.php`, `patch.php`, `src/WebView.php`, `patches/WebView.php`, `patches/helgesverre/libui/src/Loop.php`
+

@@ -98,6 +98,7 @@
 - [x] 覆盖：依赖项目使用方式、原生库提取机制、命令参考
 - **Status:** complete
 
+
 ### Phase 33: Windows Tetris.exe 窗口不显示修复 (micro.sfx uiInitOptions)
 - [x] Diagnose: Tetris.exe event loop runs but window invisible
 - [x] Isolate cause: uiInitOptions.Size not set → uiInit() silently fails under micro.sfx
@@ -105,6 +106,16 @@
 - [x] Verify: Window "Tetris" and "libui utility window" both appear on Windows
 - [x] Patch both vendor/ and patches/ Ffi.php for persistence
 - **Status:** complete
+
+### Phase 34: macOS WebView EXC_BAD_ACCESS 崩溃修复 + Loop API
+- [x] wvb_destroy() — 每步独立 @autoreleasepool 防止 ObjC use-after-free
+- [x] test-treeview.php — 关闭流程改为 Loop::run() 后 destroy，而非 onClosing 内
+- [x] src/WebView.php — cleanupOnClose() 注释警告单回调限制 + 推荐模式
+- [x] patches/WebView.php — 将 WebView.php 移至 patches/ 系统
+- [x] patches/helgesverre/libui/src/Loop.php — 新增 Loop API (defer/delay/repeat/cancel/run/stop)
+- [x] patch.php — 代码格式化整理
+- **Status:** complete
+
 
 # Errors Encountered
 

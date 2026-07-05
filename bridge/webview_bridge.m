@@ -200,26 +200,61 @@ void wvb_set_dock_icon(const char *iconFilePath) {
  * 1. webview_destroy() — WKWebView released, contentView set to nil
  * 2. Remove the child window from its parent
  * 3. Close and release the child window
+ *
+ * Each step runs in its own @autoreleasepool to ensure autoreleased
+ * objects are cleaned up immediately, preventing stale references from
+ * lingering in the caller's autorelease pool (which may be the
+ * NSApplication run loop's pool — draining it later would crash).
  */
 __attribute__((visibility("default")))
 void wvb_destroy(void *wv) {
-    @autoreleasepool {
-        NSWindow *childWin = (__bridge NSWindow *)webview_get_window(wv);
-        if (!childWin) {
-            webview_destroy(wv);
-            return;
-        }
+    if (!wv) return;
 
-        // Detach before destroying the webview (clean separation)
+    // Step 1: Get the child window pointer before destroying the webview.
+    // webview_get_window() returns m_window, which becomes nullptr in the
+    // destructor — must call before webview_destroy().
+    NSWindow *childWin = nil;
+    @autoreleasepool {
+        void *winPtr = webview_get_window(wv);
+        if (winPtr) {
+            childWin = (__bridge NSWindow *)winPtr;
+        }
+    }
+
+    if (!childWin) {
+        // No child window — just destroy the webview
+        @autoreleasepool {
+            webview_destroy(wv);
+        }
+        return;
+    }
+
+    // Step 2: Detach child window from parent BEFORE destroying the webview.
+    // This prevents the parent window from referencing a child whose
+    // contentView (WKWebView) is about to be released.
+    @autoreleasepool {
         NSWindow *parentWin = [childWin parentWindow];
         if (parentWin) {
             [parentWin removeChildWindow:childWin];
         }
+    }
 
-        // Destroy webview — releases WKWebView, sets contentView:nil
+    // Step 3: Destroy the webview (C++ delete → ~cocoa_wkwebview_engine).
+    // The destructor releases WKWebView, WKWebViewConfiguration, delegates,
+    // etc. Running this in its own @autoreleasepool ensures any objects
+    // autoreleased during destruction are immediately cleaned up, rather
+    // than lingering in the caller's pool where they'd become stale.
+    @autoreleasepool {
         webview_destroy(wv);
+    }
 
-        // Close and free the child window
+    // Step 4: Close the child window. Under ARC, closing the window sends
+    // windowWillClose: and posts NSWindowWillCloseNotification. Doing this
+    // after webview_destroy() ensures the WKWebView (previously the
+    // contentView) is already gone and can't receive stray events.
+    @autoreleasepool {
         [childWin close];
     }
+    // childWin is released by ARC when this function returns (local strong
+    // reference drops to 0 after removeChildWindow removed the parent's retain).
 }
