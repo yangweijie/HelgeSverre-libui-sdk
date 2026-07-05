@@ -555,3 +555,35 @@
   2. 依赖包：`__DIR__` 在 `vendor/yangweijie/ui2/` → 向上 2 层到项目根 `vendor/`
 - Files（未 commit）: `patch.php`, `bootstrap.php`, `.gitignore`
 
+## Session: 2026-07-05 — SvgView 鼠标交互支持 + 测试
+
+### Phase 36: SvgView 鼠标交互支持 (completed)
+
+- **需求**：为 `SvgView` 添加鼠标交互能力——点击、双击、右键、悬停、移动事件、悬停视觉反馈
+- **实现 — `SvgDelegate`**：
+  - 添加 `EmitsEvents` trait，事件驱动架构
+  - **Bounds 预计算**：解析时对每个元素（path/rect/circle/ellipse/line/polygon/polyline/text）计算 AABB，2px padding 边缘容错
+  - **`hitTest(float $x, float $y): ?int`**：反向遍历（最后绘制 = 最顶层），AABB 快速过滤 + 精确检测：
+    - 圆形：`dx² + dy² ≤ r²`
+    - 椭圆：`(dx/rx)² + (dy/ry)² ≤ 1`
+    - 路径/矩形/线段/文字：AABB 足够
+  - **`mouse(AreaMouseEvent)`**：实时 hover-change 检测 → 触发 `hoverchange` 事件 + `redraw()` 刷新悬停高亮；始终触发 `mousemove`；down 时按按钮分发 `click` / `contextmenu`(down=2/3) / `dblclick`(count=2)
+  - **`mouseCrossed(bool $left)`**：`false` → `mouseenter`；`true` → `mouseleave` + 重置 hoverIndex
+  - **`elementPayload(?int $index, float $x, float $y)`**：标准化事件载荷 `{x, y, index, element, type}`
+  - **`draw()` 悬停高亮**：循环中 `$i === $this->hoveredIndex` 时绘制半透明蓝色边框叠加层（非破坏性）
+  - **`parse()`** 和 **`setPaths()`** 在构建元素时附带 bounds
+- **实现 — `SvgView`**：
+  - 新增 7 个事件注册方法：`onClick`, `onDoubleClick`, `onContextMenu`, `onMouseMove`, `onHoverChange`, `onMouseEnter`, `onMouseLeave` — 全部返回 `$this` 支持链式调用
+- **测试 — `tests/SvgViewTest.php`**（27 个测试，纯 PHP，无 FFI）：
+  - `pathBounds()` (5): 坐标提取、单点、H/V 指令、空字符串、十进制
+  - `setPaths()` (1): 元素数组结构
+  - `hitTest()` (6): 命中坐标、空委托、边界外、顶层元素、圆形精确、椭圆精确
+  - `elementPayload()` (2): 未命中/命中载荷
+  - `mouse()` 事件 (7): mousemove、click、contextmenu(down=2/3)、dblclick、hoverchange、去重
+  - `mouseCrossed()` (2): enter、leave
+  - `parse()` (3): 最小 SVG、空 SVG、无效 XML
+  - SvgView API (1): 方法签名存在
+  - 验证：PHP 8.5.7 上 27/27 全绿
+- **注意**：`SvgDelegate` 与 `SvgView` 在同一文件定义，PSR-4 无法自动加载 — 测试中使用 `require_once` 手动引入
+- Files（未 commit）: `src/Widgets/SvgView.php`, `tests/SvgViewTest.php`
+

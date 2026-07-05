@@ -1023,3 +1023,59 @@ project/
 - `vendor/` 目录位置取决于包在项目中的安装位置，需要向上遍历查找
 - 向上遍历的安全上限：项目嵌套通常不超过 5 层，10 层是安全余量
 - `patches/` 目录不存在时 `copyPatchesSafely()` 返回 `false` —— 没有 patches 的包（如纯 upstream 依赖）也无需报错
+
+---
+
+## SvgView 鼠标交互
+
+### SvgDelegate 自动加载问题
+
+`SvgDelegate` 定义为 `final class SvgDelegate extends AreaDelegate`，与 `SvgView` 在同一文件 `src/Widgets/SvgView.php` 中。PSR-4 自动加载器按文件名匹配类名，因此 `new SvgDelegate()` 会查找 `src/Widgets/SvgDelegate.php`（不存在）而失败。
+
+**解决方案**：测试中使用 `require_once __DIR__ . '/../src/Widgets/SvgView.php'` 手动加载该文件，两行代码确保两个类都可用。
+
+**更优方案**（未实现）：将 `SvgDelegate` 移入独立文件 `src/Widgets/SvgDelegate.php`，或在 `composer.json` 中添加 classmap 条目。
+
+### 命中测试策略
+
+按照 SVG paint order（反向遍历 = 最后绘制的在最上层）：
+
+1. **AABB 快速过滤**：检查 `(x, y)` 是否在元素的 bounds 矩形内
+2. **精确检测**（仅对圆形/椭圆）：
+   - 圆形：`dx² + dy² ≤ r²`
+   - 椭圆：`(dx/rx)² + (dy/ry)² ≤ 1`
+3. **路径/矩形/线段/文字**：AABB 已足够，不支持精确轮廓检测
+
+### 事件载荷结构
+
+所有鼠标事件统一发射标准化数组：
+
+```php
+[
+    'x'       => float,      // 鼠标在 Area 中的 X 坐标
+    'y'       => float,      // 鼠标在 Area 中的 Y 坐标
+    'index'   => ?int,       // 命中的元素索引（null = 未命中）
+    'element' => ?array,     // 元素的完整数据（null = 未命中）
+    'type'    => ?string,    // 元素类型 'path'|'circle'|'ellipse'|'line'|'text'（null = 未命中）
+]
+```
+
+### 事件映射
+
+| 用户操作 | 触发事件 | 条件 |
+|---------|---------|------|
+| 左键按下 | `click` | `$event->down === 1` |
+| 右键按下 | `contextmenu` | `$event->down === 2 \|\| $event->down === 3` |
+| 双击 | `dblclick` | `$event->count === 2`（同时触发 click） |
+| 鼠标移动 | `mousemove` | 每次 `mouse()` 调用 |
+| 悬停元素切换 | `hoverchange` | 只有 hoveredIndex 变化时 |
+| 进入 Area | `mouseenter` | `mouseCrossed(false)` |
+| 离开 Area | `mouseleave` | `mouseCrossed(true)` + 重置 hoverIndex |
+
+### SvgDelegate 和 AreaDelegate 的 FFI 独立性
+
+`AreaDelegate` 是抽象类，没有构造函数。`SvgDelegate` 继承它，同样不需要 FFI 即可实例化——所有依赖都是纯 PHP（SimpleXML、数组操作、EmitsEvents trait）。这意味着与 SvgView 鼠标交互相关的所有逻辑都可以在不加载 libui 原生库的情况下进行单元测试。
+
+`AreaMouseEvent` 也是纯 PHP 类——构造函数直接接收标量参数，不依赖任何 CData 绑定。
+
+这使得 27 个测试全部可以在 0.01s 内完成，无需 FFI 初始化。

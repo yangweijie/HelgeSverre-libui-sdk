@@ -160,3 +160,11 @@
 | patch.php 硬编码 `patches/` `vendor/` 路径 | 用 __DIR__ 定位 patches | `getVendorDir()` 向上遍历 10 层找 vendor/ |
 | 作为依赖时 __DIR__ 在 `vendor/yangweijie/ui2/` | 无 | `getVendorDir()` 从 vendor/yangweijie/ui2/ 向上 2 层到 project root 的 vendor/ |
 | 每次请求都跑 patch.php 影响性能 | 无 | bootstrap.php 检查 .patches_applied 标记，存在则 skip |
+
+### Phase 36 (SvgView 鼠标交互支持 + 测试)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| SvgArea 默认没有鼠标交互 | 无 | SvgDelegate: 添加 EmitsEvents trait, `hitTest()`, `mouse()`, `mouseCrossed()` |
+| 悬停视觉反馈 | 无 | draw() 中非破坏性 hover highlight 叠加层 |
+| 圆形/椭圆精确命中测试 | AABB 不够精确 | 圆: `dx²+dy² ≤ r²`; 椭圆: `(dx/rx)² + (dy/ry)² ≤ 1` |
+| SvgDelegate 在单独文件中找不到 | 与 SvgView 同文件 | 测试中用 `require_once` 手动加载 |
