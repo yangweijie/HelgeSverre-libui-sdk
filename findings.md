@@ -971,3 +971,55 @@ if ($err !== null) {
 
 ### 验证
 Windows API 枚举确认调用 `EnumWindows` 后可见窗口列表包含 `"Tetris"` 和 `"libui utility window"`，证实 `uiInit()` 已正确执行。
+
+---
+
+## patch.php 依赖兼容性
+
+### 问题背景
+`patch.php` 是 yanngweijie/ui2 包的核心工具，负责将 `patches/` 目录下的文件递归复制到 `vendor/` 对应位置，实现对 upstream (helgesverre/libui) 的覆盖。该脚本通过 `composer.json` 的 `post-autoload-dump` 触发：
+
+```json
+"scripts": {
+    "post-autoload-dump": [
+        "@php patch.php"
+    ]
+}
+```
+
+### 两个场景
+
+**场景一：Root package**（开发/测试时）
+```
+project/
+├── patches/
+├── vendor/
+│   └── yangweijie/ui2/    ← __DIR__ = 这里
+│       └── patch.php
+├── composer.json
+```
+`__DIR__` 在 `vendor/yangweijie/ui2/patch.php`，`patches/` 在 `project/patches/` —— 不在 `patch.php` 所在目录！
+`getVendorDir()` 从 `__DIR__`（vendor/yangweijie/ui2/）向上 2 层到 project root，找到 vendor/。
+
+**场景二：依赖包**（生产使用）
+```
+project/
+├── vendor/
+│   ├── yangweijie/ui2/
+│   │   ├── patch.php      ← __DIR__ = 这里
+│   │   ├── bootstrap.php  ← **自动加载**
+│   │   └── patches/
+│   │       └── ...
+│   └── ...
+├── composer.json
+```
+`__DIR__` 在 `vendor/yangweijie/ui2/`，`patches/` 同目录（`__DIR__ . '/patches/'`），`vendor/` 向上 2 层（`__DIR__ . '/../../vendor/'`）。
+
+### 关键发现
+- Composer 的 `scripts` 是 root-package-only 机制——依赖包的 `post-autoload-dump` 永远不会自动执行
+- `autoload.files` 是唯一可靠的"依赖包代码自动执行"机制——Composer 对每个包都会加载其注册的 `autoload.files`
+- `file_exists('.patches_applied')` 是 O(1) 的极轻量检查，适合在 bootstrap 中执行
+- `patches/` 目录总是与 `patch.php` 同目录（属于同一个包），因此用 `__DIR__ . '/patches/'` 总是正确的
+- `vendor/` 目录位置取决于包在项目中的安装位置，需要向上遍历查找
+- 向上遍历的安全上限：项目嵌套通常不超过 5 层，10 层是安全余量
+- `patches/` 目录不存在时 `copyPatchesSafely()` 返回 `false` —— 没有 patches 的包（如纯 upstream 依赖）也无需报错

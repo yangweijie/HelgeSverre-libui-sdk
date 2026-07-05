@@ -531,3 +531,27 @@
 - **新增 — `patches/WebView.php`**：将 WebView.php 移至 patches/ 系统（从 src/ 改为 patches/）
 - Files（未 commit）: `bridge/webview_bridge.m`, `examples/test-treeview.php`, `patch.php`, `src/WebView.php`, `patches/WebView.php`, `patches/helgesverre/libui/src/Loop.php`
 
+## Session: 2026-07-05 — patch.php 依赖兼容性修复
+
+### Phase 35: patch.php 依赖兼容性修复 (completed)
+
+- **问题**：`patch.php` 使用硬编码相对路径 `patches/` 和 `vendor/`，作为 root package 正常工作，但作为 Composer 依赖安装在另一个项目中时失败（依赖包的 composer scripts 不执行，路径也完全不对）
+- **根因**：
+  - Composer 只执行 root package 的 `post-autoload-dump` 脚本，依赖包的 `@php patch.php` 从不触发
+  - 硬编码 `vendor/` 路径：依赖包安装在 `vendor/yangweijie/ui2/`，其 `vendor/` 不在 `__DIR__/vendor/` 而在 `__DIR__/../../vendor/`
+- **修复 — `patch.php`**：
+  - 新增 `getVendorDir(string $packageDir): string` — 从 `__DIR__` 向上遍历最多 10 层，找到第一个包含 `vendor/` 的目录
+  - `patches/` 使用 `__DIR__ . '/patches/'` 绝对路径，不再依赖 CWD
+  - 补丁复制成功后写入 `.patches_applied` 标记文件（含时间戳）
+- **修复 — `bootstrap.php`**：
+  - 新增 `.patches_applied` 标记检查，`file_exists()` 极轻量
+  - 标记不存在时 `require __DIR__ . '/patch.php'` 触发一次性打补丁
+  - 利用 `autoload.files`（Composer 对所有包都会加载）桥接脚本不执行的问题
+  - 后续请求仅做 `file_exists()` 检查，零性能开销
+- **修复 — `.gitignore`**：
+  - 添加 `/.patches_applied` 防止标记文件被误提交
+- **两种场景验证**：
+  1. Root package：`__DIR__` 在项目根 → `getVendorDir()` 立即找到同级 `vendor/`
+  2. 依赖包：`__DIR__` 在 `vendor/yangweijie/ui2/` → 向上 2 层到项目根 `vendor/`
+- Files（未 commit）: `patch.php`, `bootstrap.php`, `.gitignore`
+

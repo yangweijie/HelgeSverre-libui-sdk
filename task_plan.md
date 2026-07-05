@@ -152,3 +152,11 @@
 | 5 | 预览区域无边框 | 1 | 用 `Group::titled('NEXT', ...)` 包裹预览 Area |
 | 5 | 预览方块尺寸不随区域缩放 | 1 | 动态 cell size: `min(20.0, (aw-12.0)/max(cols,rows))` |
 | 5 | GAME OVER 文字偏左 | 1 | drawString x 从 10.0 → 0.0, width 从 BOARD_W-20 → BOARD_W |
+
+### Phase 35 (patch.php 依赖兼容性修复)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| 作为 Composer 依赖安装时 patch.php 不执行 | composer scripts 只跑 root package | bootstrap.php (autoload.files) + .patches_applied 标记 |
+| patch.php 硬编码 `patches/` `vendor/` 路径 | 用 __DIR__ 定位 patches | `getVendorDir()` 向上遍历 10 层找 vendor/ |
+| 作为依赖时 __DIR__ 在 `vendor/yangweijie/ui2/` | 无 | `getVendorDir()` 从 vendor/yangweijie/ui2/ 向上 2 层到 project root 的 vendor/ |
+| 每次请求都跑 patch.php 影响性能 | 无 | bootstrap.php 检查 .patches_applied 标记，存在则 skip |

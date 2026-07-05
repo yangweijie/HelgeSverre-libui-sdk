@@ -1,14 +1,41 @@
 <?php
 
-// 或者更好的方式：完全使用 PHP 实现，避免调用系统命令
-function copyPatchesSafely()
+/**
+ * Find the project vendor/ directory by walking up from the package directory.
+ *
+ * Works in both scenarios:
+ *   1. Root package (dev):  __DIR__/vendor/          → immediate
+ *   2. Dependency (vendor):  __DIR__/../../vendor/    → walk up
+ */
+function getVendorDir(string $packageDir): string
 {
-    $source = "patches/";
-    $destination = "vendor/";
+    $dir = $packageDir;
+
+    for ($i = 0; $i < 10; $i++) {
+        if (is_dir($dir . '/vendor')) {
+            return realpath($dir . '/vendor') . '/';
+        }
+        $parent = dirname($dir);
+        if ($parent === $dir) {
+            break; // hit filesystem root
+        }
+        $dir = $parent;
+    }
+
+    // Fallback: assume vendor/ lives alongside the package
+    return $packageDir . '/vendor/';
+}
+
+function copyPatchesSafely(): bool
+{
+    $packageDir = __DIR__;
+    $source = $packageDir . '/patches/';
 
     if (!is_dir($source)) {
         return false;
     }
+
+    $destination = getVendorDir($packageDir);
 
     $iterator = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator(
@@ -30,6 +57,9 @@ function copyPatchesSafely()
             copy($item->getPathname(), $target);
         }
     }
+
+    // Write marker so bootstrap.php can skip on subsequent requests
+    file_put_contents($packageDir . '/.patches_applied', date('c'));
 
     return true;
 }
