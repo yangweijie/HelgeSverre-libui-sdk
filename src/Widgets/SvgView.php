@@ -11,8 +11,11 @@ use Yangweijie\Ui2\Composite;
 /**
  * SVG display widget — renders SVG path data using libui's Area + DrawContext.
  *
- * Supports: paths with fill/stroke, solid colors, opacity.
- * Limitations: no gradients (url(#...)), no CSS inheritance, no dash arrays.
+ * Supports: paths/rects/circles/ellipses/lines/polygons/polylines/text with
+ * fill & stroke, solid colors (hex / rgb / rgba / named), opacity, gradient
+ * paints via `url(#gradientId)` (linear & radial, userSpaceOnUse and
+ * objectBoundingBox), `<style>` CSS inheritance (type / .class / #id selectors,
+ * descendant combinator), and dashed strokes via `stroke-dasharray`.
  *
  * ```php
  * $svg = new SvgView(400, 300);

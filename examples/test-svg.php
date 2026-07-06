@@ -66,8 +66,41 @@ $btnReload->onClicked(function () use ($svgView, $outputLabel, $sampleSvg): void
     $outputLabel->setText('Reset to geometric diagram');
 });
 
+// ── Fancy SVG: gradients (url(#...)), CSS <style> inheritance, dashed strokes ──
+$btnFancy = new \Libui\Button('Gradient + CSS + Dash');
+$btnFancy->onClicked(function () use ($svgView, $outputLabel): void {
+    $fancy = <<<'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#9333ea"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </radialGradient>
+  </defs>
+
+  <style>
+    .panel { fill: url(#sky); stroke: #ffffff; stroke-width: 2; }
+    .panel.dashed { stroke-dasharray: 8 4; }
+    .label { fill: #ffffff; font-size: 20px; font-family: sans-serif; }
+    .wire { fill: none; stroke: #22d3ee; stroke-width: 3; stroke-dasharray: 6 4; stroke-dashoffset: 0; }
+  </style>
+
+  <rect class="panel dashed" x="20" y="20" width="360" height="200" rx="16"/>
+  <circle class="sun" cx="320" cy="70" r="34" fill="url(#sun)"/>
+  <path class="wire" d="M 40 240 Q 200 120 360 240"/>
+  <text class="label" x="40" y="280">Gradient • CSS • Dasharray</text>
+</svg>
+SVG;
+    $svgView->loadString($fancy);
+    $outputLabel->setText('Loaded: gradient + CSS + dashed stroke demo');
+});
+
 $window->setChild(Build::vbox(
-    Build::hbox($btnLoadFile, $btnReload, Build::stretchy(new Label(''))),
+    Build::hbox($btnLoadFile, $btnReload, $btnFancy, Build::stretchy(new Label(''))),
     Build::stretchy($svgView->root()),
     $outputLabel,
 ));

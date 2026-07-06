@@ -585,5 +585,58 @@
   - SvgView API (1): 方法签名存在
   - 验证：PHP 8.5.7 上 27/27 全绿
 - **注意**：`SvgDelegate` 与 `SvgView` 在同一文件定义，PSR-4 无法自动加载 — 测试中使用 `require_once` 手动引入
-- Files（未 commit）: `src/Widgets/SvgView.php`, `tests/SvgViewTest.php`
+
+---
+
+## Session: 2026-07-06 — SvgDelegate 拆分 + PSR-4 自动加载
+
+### Phase 37: ✅ SvgDelegate 拆分到独立文件
+
+- **问题**：`SvgDelegate` 与 `SvgView` 在同一文件 (`src/Widgets/SvgView.php`) 定义，PSR-4 自动加载按文件名匹配类名，`new SvgDelegate()` 查找 `SvgDelegate.php` 不存在而失败。测试不得不使用 `require_once` 手动引入——维护上的脆弱点。
+- **修复**：
+  1. 创建 `src/Widgets/SvgDelegate.php` — 提取 `final class SvgDelegate extends AreaDelegate`（768 行，含 SVG 解析/draw/命中测试/鼠标交互/弧线转换算法）
+  2. 清理 `src/Widgets/SvgView.php` — 删除嵌入的 `SvgDelegate` 类（735 行）和所有仅 SvgDelegate 需要的 import（从 34 个 use 精简为 3 个：`Area`/`Control`/`Composite`）
+  3. 更新 `tests/SvgViewTest.php` — 移除 `require_once` 行（PSR-4 自动加载现已正常工作）
+- **验证**：`php85 vendor/bin/pest tests/SvgViewTest.php` — 27/27 全部通过（0.08s）
+- Files（未 commit）: `src/Widgets/SvgDelegate.php`（新建）, `src/Widgets/SvgView.php`（精简）, `tests/SvgViewTest.php`（清理）
+
+---
+
+## Session: 2026-07-06 (晚) — SvgView 渐变/CSS/虚线 + hoveredIndex 修复
+
+### Phase 38: ✅ SvgView 渐变引用 + CSS 继承 + 虚线支持
+
+- **需求**（用户）：`svgview` 增加 (1) 渐变引用 `url(#gradientId)` (2) CSS 继承 `<style>` (3) 虚线 `stroke-dasharray`
+- **实现 — 解析阶段**：
+  - `collectGradients()`：XPath `//linearGradient|//radialGradient`（含 `<defs>`），解析 `stop` 的 `offset`/`stop-color`/`stop-opacity`（stop alpha 并入元素 opacity）；记录 `gradientUnits`
+  - `collectStyles()` → `parseCss()`：支持 类型 / `.class` / `#id` 选择器 + **后代组合器**（按空格拆成复合选择器链）；规则按 specificity **升序**排列（高优先级后应用）；根 `<svg>` 注入祖先链使 `svg path` 可匹配
+- **实现 — 绘制阶段**：
+  - `resolveBrush()` → `gradientBrush()`：`fill/stroke = url(#id)` 构建 libui `Brush::linearGradient/radialGradient`；`objectBoundingBox`（默认）映射到元素 AABB，`userSpaceOnUse` 用原始坐标
+  - `stroke-dasharray` / `stroke-dashoffset` → `StrokeParams(dashes, dashPhase)`；奇数列表按 SVG 规范补偶；`none` → 实线；属性与 CSS 两种方式均生效
+- **级联优先级**：继承 < 表现属性 < CSS 规则 < 内联 style
+- **测试** — `tests/SvgViewTest.php` 新增 19 个（共 40 passed）：
+  - 渐变：注册表建立、userSpaceOnUse、stop-opacity、resolveBrush 返回 gradient 类型
+  - CSS：类/后代/ID 选择器、specificity 覆盖、内联 style 最高优先级
+  - 虚线：偶数 dash、奇数补偶、none 实线、dashoffset → dashPhase
+- **演示** — `examples/test-svg.php` 新增「Gradient + CSS + Dash」按钮，加载含渐变/CSS/dash 的 SVG
+- **发现并修复的 bug**：
+  1. 渐变坐标以 `SimpleXMLElement` 传入 `(float)` → strict_types TypeError；`frac()` 加 `(string)` 强转
+  2. 后代选择器未拆链 → 每个空格部分独立 `parseCompoundSelector()`
+  3. `usort` 曾按降序 → 改为升序，级联顺序才正确
+- **验证**：纯 PHP 解析冒烟测试确认级联/`url(#...)`/dash 捕获正确；全量套件仅余预存的 `CircleProgressBarTest`（无关，非回归）
+- Files（未 commit）: `src/Widgets/SvgDelegate.php`（+743 行）, `src/Widgets/SvgView.php`（docblock）, `tests/SvgViewTest.php`（+158 行）, `examples/test-svg.php`（+35 行）
+
+### Phase 39: ✅ SvgView 鼠标悬空 TypeError 修复
+
+- **症状**：`php85 examples/test-svg.php` 跑起来后，鼠标移到空白区域抛
+  `Cannot assign null to property Yangweijie\Ui2\Widgets\SvgDelegate::$hoveredIndex of type int`（SvgDelegate.php:992）
+- **根因**：`hitTest()` 返回 `?int`，光标在任意元素之外时返回 `null`；`mouse()` 将其赋给声明为 `int` 的 `$hoveredIndex` → TypeError（Area 事件处理器捕获并输出 `[Area] handler error`）
+- **修复**：
+  1. `private int $hoveredIndex = -1;` → `private ?int $hoveredIndex = null;`
+  2. `setPaths()` 重置 `-1` → `null`
+  3. `mouseCrossed()` 离开分支 `-1` → `null`
+  4. 悬停高亮判定 `$i === $this->hoveredIndex`（int !== null 恒 false，对 null 安全）
+- **验证**：`php85 vendor/bin/pest tests/SvgViewTest.php` 40 passed；重新运行 demo 鼠标移动/悬空不再报错
+- Files（未 commit）: `src/Widgets/SvgDelegate.php`（3 处改动）
+
 

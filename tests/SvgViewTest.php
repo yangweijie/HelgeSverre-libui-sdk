@@ -362,6 +362,164 @@ test('parse handles invalid XML gracefully', function (): void {
 });
 
 // ---------------------------------------------------------------------------
+// Gradient references (url(#id))
+// ---------------------------------------------------------------------------
+
+test('parse collects linear gradient defs and stores url() paint', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <defs>
+            <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#ff0000"/>
+                <stop offset="100%" stop-color="#0000ff"/>
+            </linearGradient>
+        </defs>
+        <rect x="0" y="0" width="50" height="50" fill="url(#grad)"/>
+    </svg>');
+
+    $elements = getPrivate($d, 'elements');
+    $gradients = getPrivate($d, 'gradients');
+
+    expect($elements[0]['fill'])->toBe('url(#grad)');
+    expect($gradients)->toHaveKey('grad');
+    expect($gradients['grad']['type'])->toBe('linear');
+    expect($gradients['grad']['stops'])->toHaveCount(2);
+    expect($gradients['grad']['stops'][0]['offset'])->toBe(0.0);
+    expect($gradients['grad']['stops'][0]['color'])->toBe('#ff0000');
+    expect($gradients['grad']['stops'][1]['offset'])->toBe(1.0);
+});
+
+test('parse collects radial gradient with stop-opacity', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <radialGradient id="rg" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+            <stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+        </radialGradient>
+        <circle cx="50" cy="50" r="40" fill="url(#rg)"/>
+    </svg>');
+
+    $gradients = getPrivate($d, 'gradients');
+    expect($gradients['rg']['type'])->toBe('radial');
+    expect($gradients['rg']['units'])->toBe('objectBoundingBox');
+    expect($gradients['rg']['stops'][1]['opacity'])->toBe(0.5);
+});
+
+test('parse supports userSpaceOnUse gradient units', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <linearGradient id="ug" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">
+            <stop offset="0" stop-color="#f00"/>
+            <stop offset="1" stop-color="#00f"/>
+        </linearGradient>
+        <rect x="0" y="0" width="100" height="100" fill="url(#ug)"/>
+    </svg>');
+
+    $gradients = getPrivate($d, 'gradients');
+    expect($gradients['ug']['units'])->toBe('userSpaceOnUse');
+    expect($gradients['ug']['coords']['x2'])->toBe(100.0);
+});
+
+// ---------------------------------------------------------------------------
+// CSS <style> inheritance
+// ---------------------------------------------------------------------------
+
+test('CSS .class selector applies fill', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <style>.red { fill: red; }</style>
+        <rect class="red" x="0" y="0" width="10" height="10"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['fill'])->toBe('red');
+});
+
+test('CSS rule overrides presentation attribute (higher priority)', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <style>rect { fill: green; }</style>
+        <rect x="0" y="0" width="10" height="10" fill="red"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['fill'])->toBe('green');
+});
+
+test('inline style attribute beats CSS rule', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <style>rect { fill: green; }</style>
+        <rect style="fill:blue" x="0" y="0" width="10" height="10"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['fill'])->toBe('blue');
+});
+
+test('CSS descendant selector matches nested element only', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <style>.series path { stroke: blue; }</style>
+        <g class="series"><path d="M0 0 L10 10"/></g>
+        <path d="M50 50 L60 60"/>
+    </svg>');
+    $els = getPrivate($d, 'elements');
+    expect($els[0]['stroke'])->toBe('blue');   // inside g.series
+    expect($els[1]['stroke'])->toBeNull();      // outside
+});
+
+test('CSS id selector has higher specificity than class', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <style>.box { fill: red; } #special { fill: purple; }</style>
+        <rect id="special" class="box" x="0" y="0" width="10" height="10"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['fill'])->toBe('purple');
+});
+
+// ---------------------------------------------------------------------------
+// Dashed strokes (stroke-dasharray / stroke-dashoffset)
+// ---------------------------------------------------------------------------
+
+test('stroke-dasharray attribute parsed into dash list', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <path d="M0 0 L10 10" stroke="black" stroke-dasharray="5 3"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['dash'])->toBe([5.0, 3.0]);
+});
+
+test('odd-length dasharray is duplicated per SVG spec', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <path d="M0 0 L10 10" stroke="black" stroke-dasharray="4 2 1"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['dash'])->toBe([4.0, 2.0, 1.0, 4.0, 2.0, 1.0]);
+});
+
+test('stroke-dashoffset parsed into dashPhase', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <path d="M0 0 L10 10" stroke="black" stroke-dasharray="5 3" stroke-dashoffset="2"/>
+    </svg>');
+    $el = getPrivate($d, 'elements')[0];
+    expect($el['dash'])->toBe([5.0, 3.0]);
+    expect($el['dashPhase'])->toBe(2.0);
+});
+
+test('CSS stroke-dasharray applies via stylesheet', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <style>path.dashed { stroke-dasharray: 8 4; }</style>
+        <path class="dashed" d="M0 0 L10 10" stroke="black"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['dash'])->toBe([8.0, 4.0]);
+});
+
+test('stroke-dasharray none yields solid line', function (): void {
+    $d = createDelegate();
+    $d->parse('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+        <path d="M0 0 L10 10" stroke="black" stroke-dasharray="none"/>
+    </svg>');
+    expect(getPrivate($d, 'elements')[0]['dash'])->toBe([]);
+});
+
+// ---------------------------------------------------------------------------
 // SvgView public event registration API
 // (requires SvgView construction — FFI needed, so only test method existence)
 // ---------------------------------------------------------------------------

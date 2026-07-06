@@ -116,6 +116,25 @@
 - [x] patch.php — 代码格式化整理
 - **Status:** complete
 
+### Phase 38: SvgView 渐变引用 + CSS 继承 + 虚线支持
+- [x] `collectGradients()` — 扫描 `//linearGradient|//radialGradient`（含 `<defs>` 内），解析 stop 颜色/offset/`stop-opacity` 与 `gradientUnits`，按 id 建注册表
+- [x] `resolveBrush()` → `gradientBrush()` — `fill/stroke = url(#id)` 构建 libui `Brush::linearGradient/radialGradient`
+- [x] 坐标空间：默认 `objectBoundingBox`（映射到元素 AABB）；`userSpaceOnUse` 用原始坐标
+- [x] `collectStyles()` → `parseCss()` — 解析 `<style>` 规则，支持 类型 / `.class` / `#id` 选择器 + 后代组合器（空格拆链）
+- [x] 级联顺序：继承 < 表现属性 < CSS 规则 < 内联 style；按 specificity **升序**排序（高优先级后应用生效）；根 `<svg>` 注入祖先链使 `svg path` 可匹配
+- [x] `stroke-dasharray` / `stroke-dashoffset` → `StrokeParams(dashes, dashPhase)`；奇数列表按 SVG 规范补偶；`none` → 实线
+- [x] `tests/SvgViewTest.php` 新增 19 个测试（共 40 passed）
+- [x] `examples/test-svg.php` 新增「Gradient + CSS + Dash」按钮
+- **Status:** complete
+
+### Phase 39: SvgView 鼠标悬空 TypeError 修复
+- [x] 症状：`php85 examples/test-svg.php` 抛 `Cannot assign null to property SvgDelegate::$hoveredIndex of type int`（SvgDelegate.php:992）
+- [x] 根因：`hitTest()` 返回 `?int`（光标在空白处返回 null），但 `$hoveredIndex` 声明为 `int`，赋值 null → TypeError
+- [x] 修复：`private ?int $hoveredIndex = null;`，两处重置（setPaths / mouseCrossed-leave）由 `-1` 改为 `null`
+- [x] 悬停高亮判定 `if ($i === $this->hoveredIndex ...)` 对 null 安全（int !== null）
+- [x] 验证：`php85 vendor/bin/pest tests/SvgViewTest.php` 40 passed 无回归
+- **Status:** complete
+
 
 # Errors Encountered
 
@@ -168,3 +187,20 @@
 | 悬停视觉反馈 | 无 | draw() 中非破坏性 hover highlight 叠加层 |
 | 圆形/椭圆精确命中测试 | AABB 不够精确 | 圆: `dx²+dy² ≤ r²`; 椭圆: `(dx/rx)² + (dy/ry)² ≤ 1` |
 | SvgDelegate 在单独文件中找不到 | 与 SvgView 同文件 | 测试中用 `require_once` 手动加载 |
+
+### Phase 37 (SvgDelegate 拆分到独立文件)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| PSR-4 无法加载 SvgDelegate（与 SvgView 同文件） | 测试用 require_once | 提取独立 `src/Widgets/SvgDelegate.php`，PSR-4 自动加载正常，移除测试中的 require_once |
+
+### Phase 38 (SvgView 渐变 / CSS / 虚线)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| TypeError: gradient coords `SimpleXMLElement` 不能传给 `(float)` | 1 | `frac()` 内 `(string)` 强制转换 stop offset / 坐标 |
+| 后代选择器（如 `svg path`）不匹配 | 1 | 每个空格分隔的复合选择器独立 `parseCompoundSelector()`，整链全部匹配 |
+| CSS 级联顺序错（高优先级规则被低优先级覆盖） | 1 | `usort` 由降序改为**升序**，高 specificity 后应用生效 |
+
+### Phase 39 (SvgView hoveredIndex TypeError)
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| `Cannot assign null to property $hoveredIndex of type int` | 1 | 属性改 `?int`，两处重置由 `-1` 改为 `null` |

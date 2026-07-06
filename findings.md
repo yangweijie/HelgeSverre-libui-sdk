@@ -1034,7 +1034,14 @@ project/
 
 **解决方案**：测试中使用 `require_once __DIR__ . '/../src/Widgets/SvgView.php'` 手动加载该文件，两行代码确保两个类都可用。
 
-**更优方案**（未实现）：将 `SvgDelegate` 移入独立文件 `src/Widgets/SvgDelegate.php`，或在 `composer.json` 中添加 classmap 条目。
+**更优方案**（✅ 已实现 — Phase 37）：将 `SvgDelegate` 移入独立文件 `src/Widgets/SvgDelegate.php`，PSR-4 自动加载正常工作。
+
+### SvgDelegate 拆分要点
+- 提取到 `src/Widgets/SvgDelegate.php`（768 行，与 `SvgView` 同命名空间 `Yangweijie\Ui2\Widgets`）
+- PSR-4 映射 `Yangweijie\Ui2\` → `src/` 自动覆盖
+- `SvgView.php` 从 34 个 use 精简到 3 个（Area/Control/Composite），删除 735 行嵌入的 SvgDelegate 类
+- `AreaDelegate` 是抽象类（无构造函数）→ `SvgDelegate` 纯 PHP 可实例化，无需 FFI
+- 27 个测试全部在 PSR-4 自动加载下正常工作，无需 `require_once`
 
 ### 命中测试策略
 
