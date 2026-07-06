@@ -135,6 +135,18 @@
 - [x] 验证：`php85 vendor/bin/pest tests/SvgViewTest.php` 40 passed 无回归
 - **Status:** complete
 
+### Phase 40: 音频系统（miniaudio + 仅播放 + 三平台）
+- [x] 决策确认：后端 miniaudio / 仅播放 / 三平台同步（用户已选）
+- [x] 调研：miniaudio 高层 `ma_engine`/`ma_sound` API、bridge 模式、C API 表面、编译命令（→ findings.md）
+- [x] `bridge/miniaudio.h` — 下载单文件头放入 bridge/（jsDelivr/Gitee 镜像，GitHub raw 被限流）
+- [x] `bridge/audio.c` — miniaudio 封装：audio_init/shutdown/load/unload/play/stop/set_volume/set_looping/is_playing；handle 1-based 索引内部 `ma_sound*`（动态 malloc，FFI 安全）
+- [x] 编译 `bridge/audio.dylib`（macOS clang -framework CoreFoundation/AudioToolbox/AudioUnit）；记录 Linux `libaudio.so`（gcc -lasound -lpthread）、Windows `audio.dll`（cl /LD）命令
+- [x] `src/System/Audio.php` — `\FFI::cdef` 加载 bridge，`match(\PHP_OS_FAMILY)` 选库；PHP API：load/play/pause/stop/resume/setVolume/setLooping/isPlaying/unload；lazy init
+- [x] `onEnded` 轮询：复用 `Loop::repeat(100ms)` 检测 playing→stopped 跳变触发 PHP 回调（避免 FFI C→PHP 闭包）；无 GUI 时 `Ffi::isInitialized()` 保护跳过轮询
+- [x] `tests/AudioTest.php` — API 形状 / 缺失文件抛异常 / 完整生命周期（device 可用则跑，否则 skip）
+- [x] `examples/test-audio.php` — GUI 演示：选文件 / 播放 / 暂停 / 停止 / 音量滑块 / 循环开关 / onEnded 标签
+- [x] 验证：macOS `php85 -l` + `vendor/bin/pest`（AudioTest 3 passed，SvgViewTest 40 passed，无回归）；C 层完整生命周期 FFI 冒烟通过（load→play→is_playing 1→0 自然结束→pause→resume→stop→unload→shutdown）
+- **Status:** complete
 
 # Errors Encountered
 
@@ -204,3 +216,15 @@
 | Error | Attempt | Resolution |
 |-------|---------|------------|
 | `Cannot assign null to property $hoveredIndex of type int` | 1 | 属性改 `?int`，两处重置由 `-1` 改为 `null` |
+
+### Phase 40 (音频系统 — 已实施)
+| Error / 风险 | Attempt | Resolution |
+|-------|---------|------------|
+| FFI 暴露 `ma_sound*` 指针给 PHP 不安全 | 设计 | handle 用 1-based 整数索引内部数组，PHP 只持有 int |
+| C 回调到 PHP 闭包（onEnded）在 FFI 下脆弱/泄漏 | 设计 | 改为 PHP 侧 `Loop::repeat` 轮询 `is_playing` 跳变 |
+| macOS 编译缺 framework | 设计 | clang 加 `-framework CoreFoundation -framework AudioToolbox -framework AudioUnit` |
+| Linux 缺 ALSA 开发库 | 设计 | 编译依赖 `-lasound -lpthread`；README 注明 `apt install libasound2-dev` |
+| 音量 >1 实为增益会破音 | 设计 | setVolume 文档注明 0..1 为线性，>1 放大 |
+| `examples/test-audio.php` Open 回调里 `Undefined variable $volSlider` | 1 | `$btnOpen->onClicked` 的 `use()` 漏了 `$volSlider`/`$loopChk`，已补进闭包捕获列表 |
+| `Slider::onChanged` 回调收到 `Libui\Slider` 而非 `int` 导致 TypeError | 1 | libui `Slider::onChanged` 签名是 `callable(Slider $sender): void`（传的是实例本身）；改为 `function (Slider $sender)` 内部 `$sender->value()` 取数值 |
+| bridge 缺失时无提示 | 设计 | 仿 GlobalHotkey 抛 RuntimeException + 编译命令 |

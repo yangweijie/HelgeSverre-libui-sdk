@@ -640,3 +640,81 @@
 - Files（未 commit）: `src/Widgets/SvgDelegate.php`（3 处改动）
 
 
+
+---
+
+## Session: 2026-07-06 (晚) — 音频系统规划 (Phase 40)
+
+### 背景
+- 项目（libui PHP FFI SDK）目前无任何音频能力。libui 本身不含音频，需引入原生桥接。
+- 用户要求「增加音频系统」→ 用 planning-with-files 流程规划，先对齐关键决策再落地规划文件。
+
+### 决策（AskUserQuestion 确认）
+- 后端：**miniaudio**（单文件 C 库，跨平台统一，原生解码 mp3/wav/flac/ogg，无第三方依赖）
+- 范围：**仅播放**（load/play/pause/stop/resume/setVolume/loop/isPlaying/onEnded）
+- 平台：**三平台同步**（macOS/Linux/Windows 一份 bridge 源）
+
+### 设计要点
+- 复用 `src/System/GlobalHotkey.php` 的 FFI 模式：`\FFI::cdef()` 加载 `bridge/audio.{dylib,so,dll}`，`match(\PHP_OS_FAMILY)` 选库
+- C API 表面（bridge/audio.c）：`audio_init/shutdown/load/unload/play/stop/set_volume/set_looping/is_playing`；handle 用 1-based 整数，内部索引 `ma_sound*`（不向 PHP 暴露 CData 指针）
+- `onEnded` 采用 **轮询模式**（非 FFI C→PHP 闭包）：PHP 层 `Loop::repeat(100ms)` 检测 playing→stopped 跳变触发回调，与 GlobalHotkey::poll() 同思路
+- 编译：macOS clang + CoreFoundation/AudioToolbox/AudioUnit framework；Linux gcc -lasound -lpthread；Windows cl /LD
+- 需将第三方单文件头 `miniaudio.h` 放入 `bridge/`
+
+### 已更新规划文件
+- `findings.md`：新增「音频系统调研」章节（miniaudio API、C API 表面、onEnded 决策、编译命令、待办文件清单）
+- `task_plan.md`：新增 **Phase 40**（8 个子步骤，Status: pending）+ 错误/风险表
+- `progress.md`：本条目
+- 待实施文件：`bridge/miniaudio.h`、`bridge/audio.c`(+三平台产物)、`src/System/Audio.php`、`tests/AudioTest.php`、`examples/test-audio.php`、composer.json autoload
+
+### 下一步
+- 用户批准后进入 Phase 40 实施：先 `bridge/miniaudio.h` → `bridge/audio.c` → 编译 macOS dylib → PHP 类 → 测试 → 示例 → 验证
+
+---
+
+## Session: 2026-07-06 (晚) — 音频系统实施 (Phase 40 complete)
+
+### 背景
+- 规划阶段（Phase 40 规划条目）用户确认：miniaudio + 仅播放 + 三平台同步。用户说"要"批准后进入实施。
+
+### 实施产出
+- `bridge/miniaudio.h`：Gitee 镜像下载单文件头（4.1MB；GitHub raw 被 429 限流，改 Gitee 成功）。
+- `bridge/audio.c`：miniaudio 封装，暴露 11 个 C API；整数 handle 1-based 索引内部 `ma_sound*`（动态 malloc，FFI 安全）。`audio_play`=stop+seek0+set_looping+start；`audio_pause/stop`=stop；`audio_resume`=start。
+- `bridge/audio.dylib`：macOS clang 编译成功（消除 `MINIAUDIO_IMPLEMENTATION` 重定义 warning），11 个 `audio_*` 符号全导出。
+- `src/System/Audio.php`：FFI 加载 bridge（`match(\PHP_OS_FAMILY)` 选库）；PHP API load/play/pause/resume/stop/setVolume/setLooping/isPlaying/onEnded/unload + 静态 init/shutdown。onEnded 用 `Loop::repeat(100ms)` 轮询 playing→stopped 跳变；`Ffi::isInitialized()` 守卫避免无 GUI 误调 `Loop::repeat`。
+- `tests/AudioTest.php`：3 passed（API 形状 / 缺失文件异常 / 完整生命周期）。
+- `examples/test-audio.php`：GUI 演示（OpenDialog 选文件 + 播放/暂停/恢复/停止 + 音量 Slider + 循环 Checkbox + onEnded 标签）。
+
+### 验证
+- `php85 -l` 无错；`vendor/bin/pest tests/AudioTest.php` 3 passed；`tests/SvgViewTest.php` 40 passed（无回归）。全量仅预存 `CircleProgressBarTest::SIZE` 失败（无关音频）。
+- C 层 FFI 冒烟全通过：load(handle=1)→play(is_playing=1)→300ms 自然结束(is_playing=0)→pause(0)→resume(1)→stop→unload→shutdown。
+
+### 决策修正 / 注意
+- `ma_sound_init_from_file` 第 5 参数是 `ma_fence*` 非 end callback（findings 已更正，C 传 NULL）。
+- composer.json autoload 无需改（Audio 在现有 `Yangweijie\Ui2\` → `src/` PSR-4 下）。
+- 待办：Linux/Windows bridge 实际编译验证（命令已记录未实测）；GUI 实际出声需显示环境人工验证。
+
+---
+
+## Session: 2026-07-06 (晚) — 音频 GUI 示例调试 (Phase 40 收尾)
+
+### 背景
+- Phase 40 实施完成（Audio.php / audio.c / audio.dylib / 测试 / 示例），用户实际运行 `php85 examples/test-audio.php` 跑出两个 demo 级错误（非核心逻辑问题，是 GUI 示例代码缺陷）。
+
+### 修复 1：Open 回调 `Undefined variable $volSlider`
+- 症状：选文件后报错 `Undefined variable $volSlider`（在 test-audio.php:55 引用 `$volSlider->value()`）。
+- 根因：`$btnOpen->onClicked` 闭包 `use()` 只捕获 `$dialogs, &$sound, $pathLabel, $statusLabel`，漏了 `$volSlider`/`$loopChk`，但闭包体内第 55–56 行直接用了这两个变量。
+- 修复：把 `$volSlider, $loopChk` 补进 `use()` 列表。
+
+### 修复 2：`Slider::onChanged` 回调类型错误
+- 症状：`Argument #1 ($v) must be of type int, Libui\Slider given`（onChanged 回调里写 `function (int $v)`）。
+- 根因：libui `Slider::onChanged` 签名是 `callable(Slider $sender): void`（见 `vendor/.../Generated/Slider.php:94` 的 `$cb($this)`），传的是 **Slider 实例本身**，不是 int 值。
+- 修复：闭包改为 `function (Slider $sender) use (&$sound)`，内部用 `$sender->value()` 取数值再换算音量。`Checkbox::onToggled` 同理（传 Checkbox 实例），本示例里该回调已正确接收 `$loopChk`（从外层 `use` 捕获，未用参数，无影响）。
+
+### 验证
+- `php85 -l examples/test-audio.php` 无语法错误。
+- 两处均为 GUI 示例闭包写法问题，核心 `Audio.php` / `audio.c` 未改动，已通过的 AudioTest（3 passed）与 SvgViewTest（40 passed）不受影响。
+- 实际出声需显示环境人工验证（无头环境无法跑 GUI）。
+
+### 经验沉淀
+- libui 控件事件回调统一传 **控件实例本身**（`$this`），不是值。已记入 Phase 40 Error 表。后续写 libui 示例时，所有 `onChanged`/`onToggled`/`onClicked` 等回调首参都应是对应控件类型。

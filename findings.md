@@ -1086,3 +1086,74 @@ project/
 `AreaMouseEvent` 也是纯 PHP 类——构造函数直接接收标量参数，不依赖任何 CData 绑定。
 
 这使得 27 个测试全部可以在 0.01s 内完成，无需 FFI 初始化。
+---
+
+## 音频系统调研 (2026-07-06) — miniaudio + 仅播放 + 三平台
+
+### 决策（用户确认）
+- 后端：**miniaudio**（单文件 C 库，FFI 友好，跨平台统一，原生解码 mp3/wav/flac/ogg，无系统框架/第三方依赖）
+- 范围：**仅播放**（load / play / pause / stop / resume / setVolume / loop / isPlaying / onEnded）
+- 平台：**三平台同步**（macOS/Linux/Windows 一份 bridge 源）
+
+### 复用现有 bridge 模式
+- 参考 `src/System/GlobalHotkey.php`：用 `\FFI::cdef($cdef, $libPath)` 加载 `bridge/<feature>.{dylib,so,dll}`
+- 平台选择：`match (\PHP_OS_FAMILY) { 'Darwin' => audio.dylib, 'Linux' => libaudio.so, 'Windows' => audio.dll }`
+- 库路径：`\dirname(__DIR__, 2) . '/bridge'`（与 GlobalHotkey 一致）
+- 缺失时抛清晰 RuntimeException + 编译命令提示（与 GlobalHotkey 同款 UX）
+
+### miniaudio 高层 API（已核实）
+- `ma_engine engine; ma_engine_init(NULL, &engine);` — 初始化（自动选 CoreAudio/WASAPI/ALSA）
+- 一次性播放：`ma_engine_play_sound(&engine, "x.wav", NULL);`
+- 可控播放（用 `ma_sound`）：
+  - `ma_sound_init_from_file(&engine, path, flags, NULL, NULL, &sound)`
+  - `ma_sound_set_looping(&sound, MA_TRUE)`
+  - `ma_sound_start(&sound)` / `ma_sound_stop(&sound)`
+  - `ma_sound_is_playing(&sound)` → ma_bool32
+  - `ma_sound_set_volume(&sound, float)` — 0..1（实为增益，>1 放大）
+  - `ma_sound_uninit(&sound)`
+- `ma_engine_uninit(&engine)` — 释放
+- 单文件引入：`#define MINIAUDIO_IMPLEMENTATION` 后 `#include "miniaudio.h"`
+
+### 拟定的 C API 表面（bridge/audio.c）
+```
+int  audio_init(void);                          // ma_engine_init; 返回 0=ok
+void audio_shutdown(void);                      // ma_engine_uninit
+int  audio_load(const char *path);              // ma_sound_init_from_file; 返回 1-based handle 或 0=失败
+void audio_unload(int handle);
+int  audio_play(int handle, int loop);          // set_looping + start; 0=ok
+void audio_stop(int handle);
+void audio_set_volume(int handle, float v);
+void audio_set_looping(int handle, int loop);
+int  audio_is_playing(int handle);              // ma_sound_is_playing
+```
+- handle 用 1-based 整数索引内部 `ma_sound*` 数组（避免向 PHP 暴露 CData 指针，FFI 安全）
+- 引擎单例在 `audio_init()` 内 `ma_engine_init`，全局持有
+
+### onEnded 设计决策（避免 FFI C→PHP 闭包）
+- 不接 `ma_sound_set_end_callback`（C 回调到 PHP 闭包在 FFI 下脆弱、易泄漏）
+- 改为 **轮询模式**（复用 GlobalHotkey 的 Loop::repeat 模式）：PHP 层用 `Loop::repeat(100ms)` 调 `audio_is_playing(handle)`，检测 playing→stopped 跳变时触发 PHP 回调
+- 与 SDK 现有事件/计时器体系一致，稳健
+
+### 编译命令（bridge/）
+- macOS: `clang -shared -fPIC -DMINIAUDIO_IMPLEMENTATION audio.c -framework CoreFoundation -framework AudioToolbox -framework AudioUnit -o audio.dylib`
+- Linux: `gcc -shared -fPIC -DMINIAUDIO_IMPLEMENTATION audio.c -lasound -lpthread -o libaudio.so`
+- Windows: `cl /LD /DMINIAUDIO_IMPLEMENTATION audio.c /Fe:audio.dll`
+- 需将 `miniaudio.h` 单文件头放入 `bridge/`（约 400KB，从 github.com/mackron/miniaudio 取）
+
+### 待办文件
+- `bridge/miniaudio.h`（新增，第三方单文件头）
+- `bridge/audio.c`（新增，miniaudio 封装 C API）
+- `bridge/audio.dylib` / `libaudio.so` / `audio.dll`（编译产出）
+- `src/System/Audio.php`（新增，FFI 加载 + PHP API + 轮询 onEnded）— 或放 `src/Audio/AudioPlayer.php`
+- `tests/AudioTest.php`（新增，FFI-free API 形状测试 + bridge 缺失时异常测试）
+- `examples/test-audio.php`（新增，GUI 演示：选文件/播放/暂停/停止/音量/循环/onEnded 标签）
+- `composer.json` autoload 需覆盖新 namespace（如新增 `src/Audio`）
+
+### 实施验证与修正 (2026-07-06)
+- **修正**：`ma_sound_init_from_file` 第 5 参数实为 `ma_fence* pDoneFence`（异步加载完成栅栏），非 end callback。C 侧传 `NULL`（同步加载），与轮询 onEnded 设计一致，不影响。
+- 编译命令已验证 macOS 成功产出 `audio.dylib`（1.1MB，11 个 `audio_*` 符号全导出）；Linux/Windows 命令记录在注释中（未在对应平台实测）。
+- GitHub raw 下载 `miniaudio.h` 被 429 限流，改用 Gitee 镜像 `https://gitee.com/mirrors/miniaudio/raw/master/miniaudio.h` 成功（4.1MB）。
+- 编译 warning：`MINIAUDIO_IMPLEMENTATION` 宏重定义（clang `-D` 已定义为 1，`.c` 里 `#define` 无值重复）。改为 `#ifndef/#define/#endif` 包裹消除。
+- C 层 FFI 冒烟全部通过：load(handle=1)→play(is_playing=1)→300ms 自然结束(is_playing=0)→pause(0)→resume(1)→stop→unload→shutdown。0.2s 静音 WAV 自然结束的 is_playing 1→0 跳变正是 onEnded 轮询触发点。
+- `Audio.php` 的 `onEnded` 轮询加 `Ffi::isInitialized()` 守卫：纯 CLI 无 GUI 时跳过轮询（播放仍可用），避免无事件循环时误调 `Loop::repeat`。
+- `composer.json` autoload 无需改：Audio 落在现有 `Yangweijie\Ui2\` → `src/` 下（`src/System/Audio.php`），PSR-4 已覆盖。
