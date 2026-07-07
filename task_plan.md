@@ -21,6 +21,7 @@
 | 8 | 结算画面居中对齐（区域中心精确居中） | ✅ complete | `drawOver()` x=W*0.25, w=W*0.5 |
 | 9 | 出牌日志：位置 / 截断 / 乱码修复 | ✅ complete | `mb_substr` 修复乱码 |
 | 10 | 托管（auto-play）功能 | ✅ complete | 延迟 1s、跨局重置 |
+| 11 | 拖拽选牌（长按连选 / 连消） | ✅ complete | `onClick` 重写 + `applyDrag`/`endDrag`，19 项测试全过 |
 
 ## 关键决策 / 约定
 - **类命名空间**：`Brush`=`Libui\Draw\Brush`、`Color`=`Libui\Color`、`FontDescriptor`=`Libui\Text\FontDescriptor`

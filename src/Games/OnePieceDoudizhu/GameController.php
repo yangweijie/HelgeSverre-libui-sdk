@@ -142,6 +142,13 @@ final class GameController
     /** 上次出牌的快照（lastPlay 被 pass 清空后仍保留，用于出牌区显示） */
     public ?array $lastShownPlay = null;
 
+    /** 拖拽选牌状态：是否正在拖拽 */
+    private bool $dragging = false;
+    /** 拖拽模式：true=连选（把经过的牌加入），false=连消（把经过的牌移除） */
+    private bool $dragModeSelect = true;
+    /** @var array<string,bool> 本次拖拽已处理过的卡牌 id，避免重复切换造成闪烁 */
+    private array $dragTouched = [];
+
     /* --------------------------- lifecycle --------------------------- */
 
     /** 调试日志：带时间戳写入 STDOUT。关闭时设 DEBUG_LOG = false 即可零开销。 */
@@ -162,6 +169,8 @@ final class GameController
         $this->gameLog = [];
         $this->autoPlay = false;
         $this->lastShownPlay = null;
+        $this->dragging = false;
+        $this->dragTouched = [];
         $this->redraw();
     }
 
@@ -880,19 +889,19 @@ final class GameController
 
     public function onClick(AreaMouseEvent $e): void
     {
-        if ($e->down === 0) {
-            return; // 仅在按下时响应，避免 down+up 双重触发
-        }
-        self::dbg("onClick(x={$e->x} y={$e->y} mode={$this->mode})");
         $x = $e->x;
         $y = $e->y;
+        // 指针是否处于「按住」状态：按下瞬间 down 有值，拖拽移动中 down=0 但 held 保持
+        $engaged = $e->down !== 0 || $e->held !== 0;
+        // 松开瞬间（up 有值）
+        $released = $e->up !== 0;
 
         if ($this->mode === 'select') {
-            $id = hitTopmost($this->hit['select'], $x, $y);
-            if ($id !== null) {
-                $this->startMatch($id);
-
-                return;
+            if ($e->down === 1 && $e->up === 0) {
+                $id = hitTopmost($this->hit['select'], $x, $y);
+                if ($id !== null) {
+                    $this->startMatch($id);
+                }
             }
 
             return;
@@ -901,26 +910,80 @@ final class GameController
             return;
         }
         if ($this->mode === 'play') {
+            // 技能指定目标：仅在左键按下时响应
             if ($this->pendingTarget !== null) {
-                foreach ([1, 2] as $p) {
-                    if (isset($this->hit['opp'][$p]) && inside($this->hit['opp'][$p], $x, $y)) {
-                        $this->armWithTarget($p);
+                if ($e->down === 1 && $e->up === 0) {
+                    foreach ([1, 2] as $p) {
+                        if (isset($this->hit['opp'][$p]) && inside($this->hit['opp'][$p], $x, $y)) {
+                            $this->armWithTarget($p);
 
-                        return;
+                            return;
+                        }
                     }
                 }
 
                 return;
             }
+
             if ($this->game->turn === $this->human && $this->game->phase === 'playing') {
-                $id = hitTopmost($this->hit['hand'], $x, $y);
-                if ($id !== null) {
-                    $this->toggleSelect($id);
+                // 松开鼠标：结束本次拖拽
+                if ($released) {
+                    $this->endDrag();
 
                     return;
                 }
+                // 纯悬停（无任何按键按住）：不做选牌
+                if (!$engaged) {
+                    return;
+                }
+                $id = hitTopmost($this->hit['hand'], $x, $y);
+                if ($id === null) {
+                    // 拖拽过程中移出手牌区域：保持拖拽状态，不处理
+                    return;
+                }
+                if (!$this->dragging) {
+                    // 拖拽起点：以首张牌当前状态决定本次拖拽是「连选」还是「连消」
+                    $this->dragging = true;
+                    $this->dragTouched = [];
+                    $this->dragModeSelect = !\in_array($id, $this->selected, true);
+                    $this->applyDrag($id);
+                } else {
+                    $this->applyDrag($id);
+                }
             }
         }
+    }
+
+    /** 拖拽选牌：将一张牌按当前拖拽模式加入/移出选中集合（同一次拖拽每个 id 只处理一次）。 */
+    private function applyDrag(string $id): void
+    {
+        if (isset($this->dragTouched[$id])) {
+            return;
+        }
+        $this->dragTouched[$id] = true;
+
+        if ($this->dragModeSelect) {
+            if (!\in_array($id, $this->selected, true)) {
+                $this->selected[] = $id;
+                $this->message = '已选 ' . \count($this->selected) . ' 张';
+                $this->redraw();
+            }
+        } else {
+            $i = \array_search($id, $this->selected, true);
+            if ($i !== false) {
+                unset($this->selected[$i]);
+                $this->selected = \array_values($this->selected);
+                $this->message = '已选 ' . \count($this->selected) . ' 张';
+                $this->redraw();
+            }
+        }
+    }
+
+    /** 结束拖拽，清空本次拖拽的临时状态。 */
+    private function endDrag(): void
+    {
+        $this->dragging = false;
+        $this->dragTouched = [];
     }
 
     public function onKey(AreaKeyEvent $e): bool
@@ -947,19 +1010,6 @@ final class GameController
         }
 
         return false;
-    }
-
-    private function toggleSelect(string $id): void
-    {
-        $i = \array_search($id, $this->selected, true);
-        if ($i === false) {
-            $this->selected[] = $id;
-        } else {
-            unset($this->selected[$i]);
-            $this->selected = \array_values($this->selected);
-        }
-        $this->message = '已选 ' . \count($this->selected) . ' 张';
-        $this->redraw();
     }
 
     public function redraw(): void

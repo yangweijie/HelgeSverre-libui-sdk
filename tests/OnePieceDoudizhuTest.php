@@ -12,6 +12,7 @@ use Yangweijie\Ui2\Games\OnePieceDoudizhu\Game;
 use Yangweijie\Ui2\Games\OnePieceDoudizhu\GameController;
 use Yangweijie\Ui2\Games\OnePieceDoudizhu\PlayerState;
 use Yangweijie\Ui2\Games\OnePieceDoudizhu\Sound;
+use Libui\Draw\Params\AreaMouseEvent;
 
 /* ============================ helpers ============================ */
 
@@ -418,4 +419,91 @@ test('auto-play toggle works', function () {
     expect($ctrl->autoPlay)->toBeFalse();
     $ctrl->newGame();
     expect($ctrl->autoPlay)->toBeFalse();
+});
+
+/* ============================ 拖拽选牌 ============================ */
+
+/**
+ * 构造一个 AreaMouseEvent。
+ * @param int $down  按下的按钮（1=左）
+ * @param int $up    松开的按钮（1=左）
+ * @param int $held  当前按住的按钮掩码（1=左）
+ */
+function opdMouse(float $x, float $y, int $down = 0, int $up = 0, int $held = 0): AreaMouseEvent
+{
+    return new AreaMouseEvent($x, $y, 960.0, 760.0, $down, $up, 1, 0, $held);
+}
+
+test('drag-select adds cards, drag from selected removes them', function () {
+    Sound::instance()->setEnabled(false);
+    $mockBtn = new class {
+        public function setText(string $t): void {}
+        public function enable(): void {}
+        public function disable(): void {}
+    };
+    $ctrl = new GameController();
+    $ctrl->area = null;
+    $ctrl->status = null;
+    $ctrl->actBtns = \array_fill(0, 6, $mockBtn);
+    $ctrl->startMatch('akainu');
+    $ctrl->humanBid(3); // 人类当地主，先手出牌
+    expect($ctrl->mode)->toBe('play');
+    expect($ctrl->game->turn)->toBe($ctrl->human);
+    expect($ctrl->game->phase)->toBe('playing');
+
+    // 手动布置手牌命中矩形（id 与 selected 对应），牌宽 68、步进 36
+    $ctrl->hit['hand'] = [
+        'h1' => [0, 600, 68, 90],
+        'h2' => [36, 600, 68, 90],
+        'h3' => [72, 600, 68, 90],
+        'h4' => [108, 600, 68, 90],
+    ];
+    $ctrl->selected = [];
+
+    // 在 h1 上按下（未选中 -> 连选模式），依次拖过 h2/h3/h4
+    $ctrl->onClick(opdMouse(34, 645, down: 1, held: 1));   // 按下 h1
+    expect($ctrl->selected)->toBe(['h1']);
+    $ctrl->onClick(opdMouse(70, 645, down: 0, held: 1));   // 拖到 h2
+    $ctrl->onClick(opdMouse(106, 645, down: 0, held: 1));  // 拖到 h3
+    $ctrl->onClick(opdMouse(142, 645, down: 0, held: 1));  // 拖到 h4
+    expect($ctrl->selected)->toBe(['h1', 'h2', 'h3', 'h4']);
+    // 松开，结束拖拽（第二次按下能正确识别 h4 已选中并进入连消模式，
+    // 即证明本次拖拽已正确结束并可开启新拖拽）
+    $ctrl->onClick(opdMouse(142, 645, down: 0, up: 1, held: 0));
+
+    // 从已选的 h4 上按下（已选中 -> 连消模式），拖回 h3/h2
+    $ctrl->onClick(opdMouse(142, 645, down: 1, held: 1));  // 按下 h4
+    expect($ctrl->selected)->toBe(['h1', 'h2', 'h3']);
+    $ctrl->onClick(opdMouse(106, 645, down: 0, held: 1));  // 拖到 h3
+    $ctrl->onClick(opdMouse(70, 645, down: 0, held: 1));   // 拖到 h2
+    expect($ctrl->selected)->toBe(['h1']);                  // 只剩 h1
+    $ctrl->onClick(opdMouse(70, 645, down: 0, up: 1, held: 0)); // 松开
+});
+
+test('single click still toggles one card (no drag)', function () {
+    Sound::instance()->setEnabled(false);
+    $mockBtn = new class {
+        public function setText(string $t): void {}
+        public function enable(): void {}
+        public function disable(): void {}
+    };
+    $ctrl = new GameController();
+    $ctrl->area = null;
+    $ctrl->status = null;
+    $ctrl->actBtns = \array_fill(0, 6, $mockBtn);
+    $ctrl->startMatch('akainu');
+    $ctrl->humanBid(3);
+
+    $ctrl->hit['hand'] = ['h1' => [0, 600, 68, 90], 'h2' => [36, 600, 68, 90]];
+    $ctrl->selected = [];
+
+    // 仅一次按下+松开，不做拖拽：应选中 1 张
+    $ctrl->onClick(opdMouse(34, 645, down: 1, held: 1));
+    $ctrl->onClick(opdMouse(34, 645, down: 0, up: 1, held: 0));
+    expect($ctrl->selected)->toBe(['h1']);
+
+    // 再次点同一张：应取消
+    $ctrl->onClick(opdMouse(34, 645, down: 1, held: 1));
+    $ctrl->onClick(opdMouse(34, 645, down: 0, up: 1, held: 0));
+    expect($ctrl->selected)->toBe([]);
 });
