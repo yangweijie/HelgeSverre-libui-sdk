@@ -37,6 +37,23 @@ php examples/tetris.php
 
 Controls: ← → ↓ move, ↑ rotate, Space hard drop, R restart, Escape pause/resume.
 
+## chart-demo.php
+
+A complete chart component demo built on `Area` custom drawing — no third-party chart library. Demonstrates:
+
+- **5 chart types** — Line, Bar, Pie, Doughnut, Scatter (switch from the top button bar)
+- **Gestures** — double-click zoom, Shift+drag pinch, drag box-zoom (when not zoomed), drag pan (when zoomed), keyboard `+/-/=` zoom, `0` reset
+- **Dynamic data** — the "Random Data" button triggers an easeOutCubic animated transition
+- **Value labels** — toggle data-point/bar values on and off
+- **Light / dark theme** — switch in one click (including tooltip colors)
+- **Hover tooltip** — follows the cursor showing `series: value` (pie shows a percentage)
+
+```bash
+php examples/chart-demo.php
+```
+
+The bottom status bar shows interaction hints: `double-click/box = zoom · Shift+drag = pinch · drag = pan after zoom · keys +/-/= zoom, 0 reset`.
+
 ## Test Files
 
 Additional test scripts in `examples/` for individual features:

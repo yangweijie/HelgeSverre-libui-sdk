@@ -322,6 +322,10 @@ $path->roundedRect(10, 10, 100, 50, 10);        // Rounded corners
 $path->bezierThrough([10, 40, 90], [50, 10, 50]); // Smooth curve
 ```
 
+### Chart component
+
+`Yangweijie\Ui2\Chart` is a Chart.js-style chart component built entirely on `Area` custom drawing — **no third-party chart library**. It supports Line / Bar / Pie / Doughnut / Scatter, gesture zoom (double-click, Shift+drag pinch, drag box-zoom, drag pan), animated data updates, axes / legend / grid / value labels, hover tooltips, and light / dark themes. See [docs](docs/zh/guide/chart.md) and `examples/chart-demo.php`.
+
 ## Menus
 
 Two APIs coexist. Menus **must** be created before the first `Window` (enforced at runtime via `MenuOrderException`):
@@ -362,6 +366,7 @@ The project uses Pest 4 (built on PHPUnit 12). The existing `tests/DialogsTest.p
 php examples/all-components.php   # Full demo with 6 tabs showing all widgets
 php examples/menu.php              # Declarative vs imperative menu APIs
 php examples/webview.php           # WebView with sidebar, JS ↔ PHP bridge
+php examples/chart-demo.php        # Chart.js-style charts via Area custom drawing
 ```
 
 The `all-components.php` example demonstrates every widget in this package across 6 tabs:
