@@ -31,6 +31,15 @@
 - **日志位置**：放在对手面板下方 / 出牌区域上方（`handTop - 80` 一带），避免与手牌或出牌区重叠
 - **出牌区回退**：`Game::advanceTurn()` 连续 2 次 pass 后 `lastPlay=null` → 新增 `$lastShownPlay` 保存快照，`drawPlayArea()` 回退显示
 
+## 并行工作流（独立子系统，非 Doudizhu）
+以下三个工作流有独立的 `.planning/` 子目录规划文件，已完成但未 commit：
+
+| 工作流 | 规划路径 | 状态 | 核心文件 |
+|--------|---------|------|---------|
+| 图表组件 | `.planning/2026-07-11-chart-component/` | 10/10 ✅ | `src/Charts/`, `tests/ChartTest.php`, `examples/chart-demo.php` |
+| 渲染引擎 | `.planning/2026-07-11-rendering-engine/` | 3/3 ✅ | `src/Rendering/`（RenderCommand, DesignTokens, WidgetRenderer），26 测试 |
+| 布局引擎+自绘控件 | `.planning/2026-07-11-layout-engine/` | 7/7 ✅ | `src/Layout/`, `src/Events/`, `src/Semantics/`, `src/Widgets/Surface.php` |
+
 ## Pending / 可选优化（待用户反馈）
 - 暂无明确待办；等待用户运行 `php85 examples/onepiece-doudizhu.php` 截图验证
 - 潜在：卡牌花色符号在某些字体的渲染对齐、更多武将技能平衡

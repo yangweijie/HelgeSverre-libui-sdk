@@ -7,7 +7,6 @@ namespace Yangweijie\Ui2\Widgets;
 use Libui\Area;
 use Libui\AreaDelegate;
 use Libui\Brush;
-use Libui\Color;
 use Libui\Control;
 use Libui\Draw\DrawContext;
 use Libui\Draw\Params\AreaDrawParams;
@@ -15,6 +14,7 @@ use Libui\Draw\Params\AreaMouseEvent;
 use Libui\Draw\StrokeParams;
 use Yangweijie\Ui2\Composite;
 use Yangweijie\Ui2\EmitsEvents;
+use Yangweijie\Ui2\Rendering\DesignTokens;
 
 /**
  * A custom-drawn toggle switch, rendered via an Area.
@@ -36,10 +36,13 @@ class ToggleSwitch extends Composite
 
     private readonly Area $area;
     private readonly ToggleDelegate $delegate;
+    public DesignTokens $tokens;
 
-    public function __construct(bool $initialValue = false)
+    public function __construct(bool $initialValue = false, ?DesignTokens $tokens = null)
     {
+        $this->tokens = $tokens ?? new DesignTokens();
         $this->delegate = new ToggleDelegate($initialValue);
+        $this->delegate->tokens = $this->tokens;
         $this->area = new Area($this->delegate);
 
         $this->delegate->onChange = function (bool $value): void {
@@ -63,6 +66,28 @@ class ToggleSwitch extends Composite
         $this->delegate->redraw();
         return $this;
     }
+
+    /**
+     * Return the active design tokens.
+     */
+    public function getTokens(): DesignTokens
+    {
+        return $this->tokens;
+    }
+
+    /**
+     * Apply a theme override (deep-merged on top of the current tokens) and
+     * repaint. The previous token set is never mutated.
+     *
+     * @param array<string, mixed> $overrides
+     */
+    public function setTheme(array $overrides): static
+    {
+        $this->tokens = $this->tokens->applyTheme($overrides);
+        $this->delegate->tokens = $this->tokens;
+        $this->delegate->redraw();
+        return $this;
+    }
 }
 
 /**
@@ -74,6 +99,7 @@ final class ToggleDelegate extends AreaDelegate
     public $onChange = null;
 
     public bool $on;
+    public DesignTokens $tokens;
 
     /** Track whether we are mid-drag. */
     private bool $dragging = false;
@@ -92,18 +118,18 @@ final class ToggleDelegate extends AreaDelegate
         $ox = ($params->areaWidth - $w) / 2;
         $oy = ($params->areaHeight - $h) / 2;
 
-        $bgColor = $this->on ? Color::rgba(0.2, 0.6, 1.0, 1.0) : Color::rgba(0.5, 0.5, 0.5, 0.4);
+        $bgColor = $this->on ? $this->tokens->color('color.toggleOn') : $this->tokens->color('color.toggleOff');
         $ctx->fillRoundedRect($ox, $oy, $w, $h, $r, $bgColor);
 
-        $borderColor = Color::rgba(0.3, 0.3, 0.3, 0.6);
+        $borderColor = $this->tokens->color('color.toggleBorder');
         $ctx->strokeRoundedRect($ox, $oy, $w, $h, $r, $borderColor, StrokeParams::solid(1.0));
 
         $knobX = $ox + ($this->on ? $w - $knobR - 3 : $knobR + 3);
         $knobY = $oy + $h / 2;
-        $knobColor = Color::rgba(1.0, 1.0, 1.0, 1.0);
+        $knobColor = $this->tokens->color('color.knob');
         $ctx->fillCircle($knobX, $knobY, $knobR, $knobColor);
 
-        $ctx->strokeCircle($knobX, $knobY, $knobR, Color::rgba(0.2, 0.2, 0.2, 0.3), StrokeParams::solid(0.5));
+        $ctx->strokeCircle($knobX, $knobY, $knobR, $this->tokens->color('color.knobBorder'), StrokeParams::solid(0.5));
     }
 
     public function mouse(AreaMouseEvent $event): void

@@ -1,5 +1,34 @@
 # 进度日志 (Progress Log)
 
+## 2026-07-01 — Tetris.app 闪退与内存泄漏修复
+
+### Phase 29c: ✅ Tetris.app 闪退分析
+- **问题 1**：启动闪退 "Cannot redeclare class Libui\Ffi" — PHP 8.5 `use FFI;` 语义变化 → 移除 `use FFI;`
+- **问题 2**：关闭时 SIGTRAP — drawString 内存泄漏 + GC 不充分 → 显式 `free()` + 三次 GC
+- **问题 3**：tokenizer 缺失 — 错误处理器崩溃 → 重建 micro.sfx 添加 tokenizer,filter
+
+### Phase 29d: ✅ micro.sfx 重建
+- SPC v3 构建：`ffi,phar,mbstring,json,ctype,posix,fileinfo,tokenizer,filter`
+- 验证：`tokenizer:YES`, `filter:YES`
+
+### Phase 29f: ✅ 补丁审查 + uiLabel 泄漏修复
+- **发现 bug**：`markExternallyClosed()` 调用 `unset($this->handle)` 阻断 destroy 循环
+- **修复**：保留 handle + `isExternallyClosed()` 守卫防双重释放
+
+### Phase 29g-29h: ✅ tetris.php 清理
+- 移除 onClosing 辅助代码（验证非必需）
+- 删除 `$nextLabel`、局部 label 变量、冗余 `Ffi::init()`
+
+### Phase 29i: ✅ 移除非必需补丁
+- 删除 `patches/composer/ClassLoader.php`
+
+### 文档更新
+- `docs/{en,zh}/guide/patches.md` — 新增 Ffi/App/Control 条目
+- `docs/{en,zh}/examples.md` — 扩展列表添加 tokenizer,filter
+- `scripts/install-spc.bat` — SPC v3 语法 + tokenizer,filter
+
+---
+
 ## 2026-07-07 晚（拖拽选牌功能）
 
 ### 本次完成
@@ -34,4 +63,42 @@
 6. mb_substr 日志乱码修复（本次）
 
 ---
-*规划文件遵循 planning-with-files 技能：task_plan.md=阶段追踪，findings.md=技术发现，progress.md=会话日志。*
+
+## 2026-07-11 — 三大子系统（图表 / 渲染引擎 / 布局引擎+自绘控件）
+
+### 图表组件（Chart Component）
+- **规划**：`.planning/2026-07-11-chart-component/`
+- **10 阶段全部完成**：核心数据模型 → ChartRenderer / LineRenderer / BarRenderer / PieRenderer → Chart Area 组件 → chart-demo.php + 24 测试 → 拖拽交互修复 → 柱状标签/ tooltip / 主题 → tooltip 样式打磨 → 文档 → Color::lerp 主题动画 → tooltip 箭头 + 上色重构
+- **测试**：24 项全部通过
+- **未 commit**
+
+### 渲染引擎（Rendering Engine）
+- **规划**：`.planning/2026-07-11-rendering-engine/`（活跃中）
+- **Phase 1**：RenderCommand / CommandExecutor / RenderCommandList + CircleProgressDelegate 提取到 Rendering 命名空间，8 测试
+- **Phase 2**：DesignTokens 不可变主题系统 + CircleProgressBar / ToggleSwitch 主题化，6 测试
+- **Phase 3**：WidgetRenderer 注册表（ButtonRenderer / CardRenderer）+ RendererButton 复合控件，12 测试
+- **测试**：Phase 1-3 共 26 项全部通过
+- **未 commit**
+
+### 布局引擎 + 全自绘控件系统（Layout Engine + Full Custom Widget System）
+- **规划**：`.planning/2026-07-11-layout-engine/`
+- **Phase 4**：Flexbox 布局（LayoutStyle / LayoutNode / FlexLayout）16 测试
+- **Phase 5**：Grid 布局（GridTrack / GridStyle / GridLayout）7 测试
+- **Phase 6**：Surface 画布控件（1056 行）— 单一 Area 驱动 FlexLayout + RendererRegistry 绘制 + 鼠标路由
+- **Phase 7**：扩展 WidgetRenderer（Checkbox / Radio / Slider / Progress / TextField / Select）9 测试
+- **Phase 8**：事件系统（PointerEvent / KeyboardEvent / FocusManager）测试通过
+- **Phase 9**：无障碍语义（WidgetRole / SemanticsNode）4 测试
+- **Phase 10**：DesignTokens 扩展（hover/disabled wash、focus ring、hairline、DARK 主题）4 测试
+- **额外控件**：BreadcrumbControl, ComboboxControl, DialogControl, DrawerControl, DropdownMenuControl, ListControl, PaginationControl, PopoverControl, ScrollViewControl, SearchFieldControl, SheetControl, TabControl, TableControl, TextAreaControl, RendererButton
+- **示例**：renderer-button-demo.php, surface-controls-demo.php, surface-demo.php
+- **修改**：CircleProgressBar.php / ToggleSwitch.php → DesignTokens；SeparatorLine.php → 移除 destructor；AGENTS.md → leak prevention 文档
+- **未 commit**
+
+### 修改的现有文件
+- `CircleProgressBar.php` — DesignTokens 主题接入
+- `ToggleSwitch.php` — DesignTokens 主题接入
+- `SeparatorLine.php` — 移除 destructor（Composite GC 陷阱）
+- `AGENTS.md` — 内存泄漏预防文档
+
+---
+*规划文件遵循 planning-with-files 技能：task_plan.md=阶段追踪，findings.md=技术发现，progress.md=会话日志。子工作流有独立的 `.planning/` 子目录规划文件。*

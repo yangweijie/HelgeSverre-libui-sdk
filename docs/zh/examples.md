@@ -54,6 +54,36 @@ php examples/chart-demo.php
 
 底部状态栏显示交互提示：`双击/框选=放大 · Shift+拖拽=捏合缩放 · 放大后拖拽=平移 · 键盘 +/-/= 放大、0 复位`。
 
+## renderer-button-demo.php
+
+演示 `RendererButton`——一个桥接控件，底层包装 libui 原生 `Button`，但外观通过 `ButtonRenderer` 和 `DesignTokens` 绘制：
+
+```bash
+php examples/renderer-button-demo.php
+```
+
+展示：带圆角的主题按钮、悬停/按下状态、通过 `DesignTokens` 配置颜色主题、与 libui 原生 `Box` 布局集成。
+
+## surface-demo.php
+
+演示 `Surface` 画布控件——一个基于单个 libui `Area` 构建的可组合自绘控件：
+
+```bash
+php examples/surface-demo.php
+```
+
+展示：Surface 控件配合 `FlexLayout` 定位多个 `WidgetRenderer` 子元素（按钮、滑块、复选框）、鼠标悬停/点击路由、命令批量渲染。
+
+## surface-controls-demo.php
+
+演示基于 Surface 的完整控件集：
+
+```bash
+php examples/surface-controls-demo.php
+```
+
+展示：ButtonControl、CheckboxControl、SliderControl、ProgressControl、TextFieldControl、SelectControl、ComboboxControl、TabControl 等——全部在 Surface 控件内渲染，支持主题切换。
+
 ## 测试文件
 
 `examples/` 中的其他测试脚本：

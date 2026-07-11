@@ -26,3 +26,70 @@
 - Pest 框架；`tests/OnePieceDoudizhuTest.php`，**17 项全过**（含 z-order 命中测试、托管自动出牌测试）。
 - 运行（在 `/Volumes/data/git/php/HelgeSverre-libui-sdk` 目录下）：`php85 vendor/bin/pest tests/OnePieceDoudizhuTest.php --no-coverage`
 - `Sound` 类无头环境安全（禁用即静音），便于测试。
+
+---
+
+## 新子系统：渲染引擎 (`src/Rendering/`)
+
+### RenderCommand 模式
+- `RenderCommand` 是一个可序列化的绘制指令结构体（BoxShadow→shadowRect→fill→clip→translate→drawRect→drawRoundedRect→drawCircle→drawString），携带颜色/尺寸/字体等参数
+- `CommandExecutor` 消费 RenderCommand 列表，在 `DrawContext` 上执行实际绘制。批量命令一次性执行，减少 FFI 往返
+- `RenderCommandList` 管理有序命令列表，支持隐式新建模式（`begin()` → `addShadow()` / `addFill()` / `end()`）。每次 `begin()` 返回 `$this` 后续入栈
+- `CircleProgressDelegate` 从 Widgets 命名空间移到 Rendering，测试覆盖弧线/文本绘制
+
+### DesignTokens 不可变主题系统
+- `DesignTokens` 是一个不可变值对象（`$tokens->with[key=>val]()` 返回新实例）。包含基础色板 + 组件专属 token + 派生色计算（`shade()`/`tint()`/`alpha()`/`isLight()`/`luminance()`）
+- `ThemeKey` 枚举定义了 token 键名（`PRIMARY`/`BG`/`TEXT`/`BORDER_RADIUS`/`FONT_SIZE` 等），按组件分组（`SURFACE_*`/`CHART_*`/`CIRCLE_PROGRESS_*`/`TOGGLE_*` 等）
+- 配套 `WidgetStyle` trait（提供 `resolveColor($key, $overrides)` / `resolveStyle($key, $overrides)`），Widget 类添加 `->withTokens(DesignTokens)` 即可驱动渲染
+- 扩展类型：`hoverColor`/`disabledColor` wash、`focusRing`（outer glow）、`hairline`（1px border）、`DARK` 主题预设
+
+### WidgetRenderer 注册表
+- `WidgetRenderer` 接口（`render(CommandList, $bounds, $state): void`）+ `RendererFactory::register($type, $renderer)` 静态注册表
+- 内置实现：ButtonRenderer, CardRenderer, CheckboxRenderer, RadioRenderer, SliderRenderer, ProgressRenderer, TextFieldRenderer, SelectRenderer
+- `RendererButton` — 扩展 Composite，底层是 Button，但外观完全由 WidgetRenderer 渲染。跨 custom-drawn 与 libui 原生互操作的桥梁
+- `RendererFactory::types()` 返回已注册类型列表，用于自动检测/枚举
+
+## 新子系统：布局引擎 (`src/Layout/`)
+
+### Flexbox 布局
+- `LayoutStyle` — 不可变样式对象（width/height/min/max/padding/margin/flexGrow/flexShrink/alignSelf），`with()` 返回新实例
+- `LayoutNode` — 节点树（children/parent），递归计算。`layout()` 传入位置约束，`measure()` 返回子树尺寸。缓存结构 + 脏标记
+- `FlexLayout::layout($nodes, $constraints)` — 经典 flexbox 算法：尺寸计算 → 主轴排列（flexGrow 均分剩余）→ 交叉轴对齐（stretch/center/flex-start/flex-end）。`flex-wrap` 显式 `<br>` 节点实现换行
+- 16 项测试覆盖：尺寸、边距、flexGrow、换行、嵌套、交叉轴、min/max、溢出
+
+### Grid 布局
+- `GridTrack` — 行列轨道定义（固定 px / fr 弹性 / min-content / max-content）。`resolveTrack()` 计算 FR 分配
+- `GridStyle` — 不可变样式（columns/rows/gap/placement），`with()` 返回新实例
+- `GridLayout::layout($nodes, $gridStyle, $constraints)` — 轨道计算 → 单元分配 → 间距排列。7 项测试
+
+## 新子系统：Surface 画布控件 (`src/Widgets/Surface.php`)
+
+### 架构
+- `Surface` 是一个 1056 行的 `Composite`，内部包裹一个 `Area` + `AreaDelegate`。用单个 libui Area 实现完整控件渲染
+- 可放置在任何 libui 容器（Box/Form/Grid/Tab）中，不受 WebView 子窗口限制
+- 内部组合：
+  - `FlexLayout` — 布局引擎驱动子控件位置
+  - `RendererFactory` — WidgetRenderer 注册表驱动绘制
+  - Commands 模式 — 多帧缓存防重绘闪烁
+
+### 鼠标路由
+- `mouse()` 事件 → `PointerEvent` 统一封装（`x/y/down/held/up/modifiers/clickCount/timestamp`）→ 分发给焦点控件
+- hitTest 遍历 Renderer 边界框确定目标
+
+### 事件系统 (`src/Events/`)
+- `PointerEvent` — 统一鼠标事件模型（封装 libui AreaMouseEvent）
+- `KeyboardEvent` — 统一键盘事件模型（封装 libui AreaKeyEvent）
+- `FocusManager` — 焦点管理（`requestFocus()` / `blur()` / `getFocused()` / `focusNext()` tab 导航）
+- 通过 `Surface` 的事件分发层注入给子控件
+
+### 语义 / 无障碍 (`src/Semantics/`)
+- `WidgetRole` 枚举（`Button`/`Checkbox`/`Radio`/`Slider`/`TextField`/`Label`/`Image`/`List`/`TreeGrid`/`Tab`/`ProgressBar`/`StatusBar`）
+- `SemanticsNode` — 角色 + 标签 + 值 + 状态（enabled/disabled/checked/pressed/focused/selected） + 边界框 + 子节点。构建树后提供 Flat 视图查询
+
+### 控件清单（未 commit）
+18 个 Renderer-based 控件：BreadcrumbControl, ComboboxControl, DialogControl, DrawerControl, DropdownMenuControl, ListControl, PaginationControl, PopoverControl, RendererButton, ScrollViewControl, SearchFieldControl, SheetControl, TabControl, TableControl, TextAreaControl（其中 RendererButton 是 Bridge；其余为 Surface 自绘）
+
+### 核心发现
+- Area 模式的极限：Surface 用 1056 行就封装了完整的布局+渲染+事件路由+语义栈，说明 libui 的 Area API 对自绘 UI 足够通用
+- FlexLayout + RendererRegistry + Surface 组合提供了类似 Flutter 的（布局 → 渲染 → 事件）三阶段流水线
+- 但性能瓶颈在单线程 FFI 调用：每帧所有子控件统一合并在一个 DrawContext 内批量绘制，没有独立的脏区域追踪

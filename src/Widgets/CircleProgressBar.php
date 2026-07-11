@@ -5,19 +5,10 @@ declare(strict_types=1);
 namespace Yangweijie\Ui2\Widgets;
 
 use Libui\Area;
-use Libui\AreaDelegate;
 use Libui\Color;
 use Libui\Control;
-use Libui\Draw\Brush;
-use Libui\Draw\DrawContext;
-use Libui\Draw\Params\AreaDrawParams;
-use Libui\Generated\Enum\DrawTextAlign;
-use Libui\Draw\StrokeParams;
-use Libui\Text\AttributedString;
-use Libui\Text\Attribute;
-use Libui\Text\FontDescriptor;
-use Libui\Text\TextLayout;
 use Yangweijie\Ui2\Composite;
+use Yangweijie\Ui2\Rendering\DesignTokens;
 
 /**
  * A custom-drawn circular/ring progress bar, rendered via an Area.
@@ -35,10 +26,12 @@ class CircleProgressBar extends Composite
 {
     private readonly Area $area;
     private readonly CircleProgressDelegate $delegate;
+    public DesignTokens $tokens;
 
-    public function __construct(int $initialProgress = 0, int $size = 200)
+    public function __construct(int $initialProgress = 0, int $size = 200, ?DesignTokens $tokens = null)
     {
-        $this->delegate = new CircleProgressDelegate($initialProgress, $size);
+        $this->tokens = $tokens ?? new DesignTokens();
+        $this->delegate = new CircleProgressDelegate($initialProgress, $size, $this->tokens);
         $this->area = Area::scrolling($this->delegate, $size, $size);
     }
 
@@ -70,21 +63,45 @@ class CircleProgressBar extends Composite
     }
 
     /**
-     * Get the current progress arc color.
+     * Get the current progress arc color (explicit override or theme token).
      */
     public function getColor(): Color
     {
-        return $this->delegate->color;
+        return $this->delegate->progressColor();
     }
 
     /**
-     * Set the progress arc color.
+     * Set the progress arc color explicitly (overrides the theme token).
      *
      * @return $this
      */
     public function setColor(Color $color): static
     {
         $this->delegate->color = $color;
+        $this->delegate->redraw();
+        return $this;
+    }
+
+    /**
+     * Return the active design tokens.
+     */
+    public function getTokens(): DesignTokens
+    {
+        return $this->tokens;
+    }
+
+    /**
+     * Apply a theme override (deep-merged on top of the current tokens) and
+     * repaint. The previous token set is never mutated.
+     *
+     * @param array<string, mixed> $overrides
+     *
+     * @return $this
+     */
+    public function setTheme(array $overrides): static
+    {
+        $this->tokens = $this->tokens->applyTheme($overrides);
+        $this->delegate->tokens = $this->tokens;
         $this->delegate->redraw();
         return $this;
     }
@@ -107,91 +124,5 @@ class CircleProgressBar extends Composite
         $this->delegate->thickness = max(1.0, $thickness);
         $this->delegate->redraw();
         return $this;
-    }
-}
-
-/**
- * @internal Area delegate driving the circular progress bar's drawing.
- */
-final class CircleProgressDelegate extends AreaDelegate
-{
-    private const DEFAULT_COLOR = [0.04, 0.52, 1.0, 1.0];
-    private const TRACK_COLOR = [0.88, 0.88, 0.88, 1.0];
-    private const TEXT_COLOR = [0.2, 0.2, 0.2, 1.0];
-
-    public int $progress;
-    public Color $color;
-    public float $thickness = 12.0;
-    private int $ringSize;
-
-    public function __construct(int $initialProgress, int $ringSize = 200)
-    {
-        $this->progress = max(0, min(100, $initialProgress));
-        $this->color = Color::rgba(...self::DEFAULT_COLOR);
-        $this->ringSize = $ringSize;
-    }
-
-    public function draw(DrawContext $ctx, AreaDrawParams $params): void
-    {
-        $w = $params->areaWidth;
-        $h = $params->areaHeight;
-
-        // When viewport is 0×0 (after tab switch), use content size as fallback.
-        // When viewport is correct, center the ring in it.
-        if ($w < $this->ringSize || $h < $this->ringSize) {
-            $w = $this->ringSize;
-            $h = $this->ringSize;
-        }
-
-        $cx = $w / 2;
-        $cy = $h / 2;
-
-        $minDiameter = $this->thickness * 2 + 8;
-        $diameter = max($minDiameter, $this->ringSize - 8);
-        $radius = $diameter / 2 - $this->thickness / 2;
-
-        if ($radius <= 0) {
-            return;
-        }
-
-        $startAngle = -M_PI / 2;
-
-        $trackStroke = new StrokeParams(
-            thickness: $this->thickness,
-            cap: \Libui\Generated\Enum\DrawLineCap::Round,
-            join: \Libui\Generated\Enum\DrawLineJoin::Round,
-        );
-        $ctx->strokePath(
-            Brush::color(Color::rgba(...self::TRACK_COLOR)),
-            $trackStroke,
-            static fn ($p) => $p->arc($cx, $cy, $radius, 0.0, 2 * M_PI),
-        );
-
-        $sweep = ($this->progress / 100.0) * 2 * M_PI;
-        if ($sweep > 0) {
-            $progressStroke = new StrokeParams(
-                thickness: $this->thickness,
-                cap: \Libui\Generated\Enum\DrawLineCap::Round,
-                join: \Libui\Generated\Enum\DrawLineJoin::Round,
-            );
-            $ctx->strokePath(
-                Brush::color($this->color),
-                $progressStroke,
-                static fn ($p) => $p->arc($cx, $cy, $radius, $startAngle, $sweep),
-            );
-        }
-
-        $text = $this->progress . '%';
-        $innerDiameter = $diameter - $this->thickness;
-        $fontSize = max(14.0, $innerDiameter * 0.10);
-
-        $font = new FontDescriptor('Arial', $fontSize);
-        $str = new AttributedString();
-        $str->append($text, Attribute::fromColor(Color::rgba(...self::TEXT_COLOR)), Attribute::size($fontSize));
-
-        $layout = new TextLayout($str, $font, $innerDiameter * 2, DrawTextAlign::Left);
-        [$textW, $textH] = $layout->extents();
-        $ctx->text($layout, $cx - $textW / 2, $cy - $textH / 2);
-        $layout->free();
     }
 }

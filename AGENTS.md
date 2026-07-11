@@ -40,10 +40,12 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 - `Tab.php` — Composite children
 - `Menu.php` — Fluent builder: `create()->item()->separator()->quitItem()`
 - `MenuItem.php` — `onClick()` **replaces** handler (no stacking); `removeOnClick()`
-- `Window.php` — `centered()`/`centeredOn()`; `onClose()`; `run()` loop; menu lock tracking
-- `Ffi.php` — `uiInitOptions.Size` set before `uiInit()` (critical for phpmicro compatibility)
+- `Window.php` — `centered()`/`centeredOn()`; `onClose()`; `run()` loop; menu lock tracking; `markExternallyClosed()`/`isExternallyClosed()`
+- `Ffi.php` — `uiInitOptions.Size` set before `uiInit()` (critical for phpmicro); `uninit()` order fix: retained closures cleared BEFORE `uiUninit()` + triple GC; PHAR `libPath()`/`readHeader()` support; debug mode
+- `App.php` — `gc_collect_cycles()` before/after destroy loop; explicit Window destroy in `finally` block
+- `Control.php` — `__destruct()` for toplevel widgets; `clearRetainedCallbacks()`
 - `Exception/MenuOrderException.php` — carries the Window title that locked menus
-- `Draw/DrawContext.php` — Builder pattern: `fillRect`/`strokeCircle`/`withSave()`/`drawString()`
+- `Draw/DrawContext.php` — Builder pattern: `fillRect`/`strokeCircle`/`withSave()`/`drawString()` with explicit `free()`
 - `Draw/Path.php` — `wedge()`/`polygon()`/`ellipse()`/`roundedRect()`/`quadTo()`/`bezierThrough()`
 - `Draw/Params/Area{Key,Mouse}Event.php` — Semantic query methods
 
@@ -56,6 +58,20 @@ composer build:bridge         # compiles webview_bridge.dylib after PebView is r
 php patch.php                 # manually re-apply patches (vendor-mirrored file copy)
 php scripts/build-phar.php    # bundle app into standalone PHAR archive
 ```
+
+## Standalone binary packaging
+
+```bash
+# 1. Install static-php-cli + build micro.sfx (one-time, 10-30 min)
+composer install:spc          # macOS/Linux
+scripts\install-spc.bat       # Windows
+
+# 2. Build PHAR + standalone binary
+composer build:phar -- examples/tetris.php --output=tetris.phar
+composer build:binary -- examples/tetris.php --name=Tetris --icon=icon.png
+```
+
+micro.sfx includes: `ffi,phar,mbstring,json,ctype,posix,fileinfo,tokenizer,filter`
 
 ## Widget catalog (src/Widgets/)
 
@@ -82,6 +98,7 @@ The `bridge/` directory has platform C source. Compiled binaries are in `bridge/
 - **`Libui\Ffi::init()`** — call before any widget. Idempotent.
 - **Menus before first Window** — enforced at runtime (`MenuOrderException`).
 - **`Window::run()`** = show + event loop + `Ffi::uninit()` in `finally`. Code after `run()` in the same script runs in a torn-down state — use the `$afterClose` callback. For multi-window apps, use `Libui\App::run()` instead (does not tear down FFI).
+- **`App::run()`** handles cleanup: `gc_collect_cycles()` → destroy all Windows → `Ffi::uninit()`. This is the correct lifecycle for most apps.
 - **`Window::setWindowIcon(string $iconPath)`** — set dock/taskbar icon cross-platform. macOS→bridge dylib via `NSApp setApplicationIconImage:`; Linux/Windows→PebView `set_icon()`.
 - **`App::afterInit(\Closure $callback)`** — queue callback to run right after `Ffi::init()` but before event loop. E.g. for setting dock icon at startup.
 - **Event callbacks** return `void`. Exceptions caught and printed to `STDERR`. Use try/catch in callbacks.
@@ -89,6 +106,19 @@ The `bridge/` directory has platform C source. Compiled binaries are in `bridge/
 - **`fn () => echo …`** is a PHP syntax error — use `print` or `function () {}`.
 - **`Ffi::get()`** lazily loads the C header and native lib. Singleton `\FFI` handle.
 - **Generated code** in `src/Native/` and `src/Generated/` — never edit by hand.
+
+## Memory leak prevention
+
+**Critical pattern**: libui tracks all C allocations. `uiUninit()` calls `uiprivUninitAlloc()` which SIGTRAPs if any allocations are unfreed.
+
+**Cleanup order** (enforced by patches):
+1. `Ffi::uninit()` clears `self::$retained` + `Control::$callbacks` BEFORE `uiUninit()`
+2. Triple `gc_collect_cycles()` runs to collect wrapper objects
+3. `App::run()` finally: `gc_collect_cycles()` → destroy all Windows → `gc_collect_cycles()` → `Ffi::uninit()`
+4. `Window::markExternallyClosed()` sets flag but **keeps handle** for destroy loop
+5. `Control::__destruct()` skips if `isExternallyClosed()` or not toplevel
+
+**drawString()**: Must call `$layout->free()` + `$string->free()` explicitly after drawing. Relying on `__destruct()` is unsafe in FFI callbacks where GC timing is unpredictable.
 
 ## Testing
 
@@ -136,6 +166,8 @@ composer regen        # Regenerate FFI header + typed classes from ui.h
 - **Composite GC trap** — temporary `Composite` objects (e.g. `(new SeparatorLine())->root()`) get `__destruct()` called at statement end via PHP's GC, which calls `uiControlDestroy()` on the underlying C widget while libui still holds a reference. **Always store Composites in named persistent variables.** If you see `uiControlVerifySetParent` errors, this is the cause.
 - **`patches/` is append-only** — removing a file from `patches/` does NOT remove it from `vendor/`. Clean `vendor/` manually.
 - **phpmicro / micro.sfx** — Standalone `.exe` builds require `Ffi.php` patch (`uiInitOptions.Size`). Without it, `uiInit()` silently fails on Windows and the event loop runs but no window appears.
+- **libui onClosing returns true only hides window** — does NOT call `uiControlDestroy()`. The destroy loop in `App::run()` handles this.
+- **`markExternallyClosed()` must NOT unset handle** — the destroy loop needs it to call `uiControlDestroy()`.
 
 ## Examples
 
@@ -143,4 +175,5 @@ composer regen        # Regenerate FFI header + typed classes from ui.h
 php examples/all-components.php   # 6-tab demo: fields, custom widgets, dialogs, pickers, table, webview
 php examples/menu.php              # Declarative vs imperative menu APIs
 php examples/webview.php           # WebView with sidebar, JS ↔ PHP bridge
+php examples/tetris.php            # Full Tetris game using Area + AreaDelegate
 ```

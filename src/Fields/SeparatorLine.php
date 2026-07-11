@@ -26,11 +26,13 @@ class SeparatorLine extends Composite
         $this->separator = new Separator();
     }
 
-    public function __destruct()
-    {
-        $this->separator->destroy();
-    }
-
+    /**
+     * No explicit destructor: a separator is always a child of the Box it is
+     * appended to, and libui frees child controls when their parent is destroyed.
+     * Calling destroy() here would fire libui's "cannot destroy a control that
+     * still has a parent" assertion when the PHP wrapper is garbage-collected
+     * (see Control::__destruct, which only frees toplevel controls).
+     */
     public function root(): Control
     {
         return $this->separator;

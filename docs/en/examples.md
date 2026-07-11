@@ -54,6 +54,36 @@ php examples/chart-demo.php
 
 The bottom status bar shows interaction hints: `double-click/box = zoom · Shift+drag = pinch · drag = pan after zoom · keys +/-/= zoom, 0 reset`.
 
+## renderer-button-demo.php
+
+Demonstrates the `RendererButton` — a bridge widget that wraps a libui native `Button` but renders its appearance via `ButtonRenderer` and `DesignTokens`:
+
+```bash
+php examples/renderer-button-demo.php
+```
+
+Shows: themed buttons with rounded corners, hover/active states, colour theming via `DesignTokens`, and integration with libui's native `Box` layout.
+
+## surface-demo.php
+
+Demonstrates the `Surface` canvas widget — a composable custom-drawing widget built on a single libui `Area`:
+
+```bash
+php examples/surface-demo.php
+```
+
+Shows: the Surface widget with `FlexLayout` positioning multiple `WidgetRenderer` children (buttons, sliders, checkboxes), mouse hover/click routing, and command-batched rendering.
+
+## surface-controls-demo.php
+
+Demonstrates the full set of Surface-based controls:
+
+```bash
+php examples/surface-controls-demo.php
+```
+
+Shows: ButtonControl, CheckboxControl, SliderControl, ProgressControl, TextFieldControl, SelectControl, ComboboxControl, TabControl, and more — all rendered inside a Surface widget with theme switching.
+
 ## Test Files
 
 Additional test scripts in `examples/` for individual features:
