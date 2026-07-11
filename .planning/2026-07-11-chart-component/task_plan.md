@@ -42,6 +42,17 @@
 - [x] `docs/zh|en/guide/chart.md` + 侧边栏注册 + README/Examples 更新
 - **Status:** complete
 
+### Phase 9: Color::lerp 应用 —— 明暗变体多系列调色板 + 主题切换颜色补间动画
+- [x] `ChartConfig`：`colorAt($i)` 超出基础 10 色后按基础色 HSL **亮度**自动生成明暗变体（交替更亮/更暗、`paletteVariantStep` 默认 0.13 递进），解决 >10 系列撞色；新增 `seriesPalette($count)`、`paletteVariantStep(float)`；`interpolateTheme($a,$b,$t)` 逐字段 `Color::rgb()->lerp()->toHex()`。
+- [x] `Chart`：`setTheme($name, ?bool $animate = null)` —— 绑定 Area 时经独立 `themeAnimator`（600ms easeOutCubic）对所有主题色（背景/网格/坐标轴/文字/tooltip）做 `Color::lerp` 逐帧补间；headless 即时切换。`themeColorsToRows`/`applyThemeRows` 负责 `[r,g,b]`↔int 转换。
+- **Status:** complete
+
+### Phase 10: Tooltip 小箭头 + 系列变色 Color::lerp 动画
+- [x] `Chart::hoverPointPx(ChartView)` 解析悬停数据点像素坐标（笛卡尔用 `points`/`barHitboxes`，饼/环用扇区中点）；`drawTooltipArrow()` 用 `fillPolygon`/`strokePolygon` 自动贴到离数据点最近的一条边（左/右/上/下），箭头与气泡同色无缝衔接。
+- [x] `Chart` 新增独立 `colorAnimator` + `displayColors` 状态；`draw()` 每帧把 `currentSeriesColors()` 注入 `ChartView::$seriesColors`；`CartesianRenderer`/`PieRenderer` 优先读该字段。`recolor(int ...$hex)` 绑 Area 时逐系列 `Color::lerp`（600ms）补间到新调色板，省略参数还原命名色；headless 即时。`colorsToRows`/`rowsToColors` 辅助。
+- [x] `examples/chart-demo.php` 加「重新配色」按钮（随机 5 色）；`docs/zh|en/guide/chart.md` 补「系列重新配色(recolor)」「tooltip 小箭头」两节。
+- **Status:** complete
+
 ## 关键决策 / 约定
 - **值/视图分离**：`Dataset`(数据) → `Scale`(nice-number 刻度) → `ZoomState`(缩放域) → `ChartView`(像素映射)，职责清晰、易测。
 - **渲染器可插拔**：`RendererFactory::all()` 是单例注册表；新增图表类型只需实现 `ChartRenderer` 接口并在工厂注册。`Line` 作为 fallback。
@@ -57,17 +68,21 @@
 ## 关键 API 速查
 - `Chart::__construct(ChartType, ?ChartConfig, array $datasets=[])`
 - `setData($datasets, $animate=null)` — 仅当 `$animate && $boundArea!==null` 才动画
-- `setType(ChartType)` / `setLabels(array)` / `resetZoom()` / `setTheme('light'|'dark')`
-- `getZoom()` / `getAnimator()` / `getHover()` / `getConfig()` / `getDisplayValues()` / `getLabels()`
-- `ChartConfig`: 流式 setter + 直接赋值字段；`THEMES` 预设含 tooltip 配色；`applyTheme($name)` 安全回退 `light`
+- `setType(ChartType)` / `setLabels(array)` / `resetZoom()` / `setTheme('light'|'dark', ?bool $animate=null)`（默认动画；headless 即时）
+- `recolor(int ...$hex)` — 系列色补间到新调色板，省略参数还原命名色
+- `getZoom()` / `getAnimator()`（数据）/ `getThemeAnimator()`（主题色）/ `getColorAnimator()`（系列色）/ `getHover()` / `getConfig()` / `getDisplayValues()` / `getLabels()`
+- `ChartConfig`：流式 setter + 直接赋值字段；`THEMES` 预设含 tooltip 配色；`applyTheme($name)` 安全回退 `light`；`colorAt($i)` 超基础 10 色自动生成 HSL 亮度变体；`seriesPalette($count)` / `paletteVariantStep($step)`；`interpolateTheme($a,$b,$t)` 用 `Color::lerp` 逐字段补间
 - `AreaDelegate::redraw()` 必须是 `public`（影响测试自动加载）
 
 ## Pending / 可选优化（待用户反馈）
 - 柱状图顶部数值标签（已做，toggle 按钮在 demo）
-- 悬停 tooltip 加小箭头指向数据点（未做）
+- 悬停 tooltip 小箭头指向数据点（**已做**，Phase 10）
+- 主题切换 Color::lerp 补间动画（**已做**，Phase 9）
+- 系列变色 Color::lerp 动画 / recolor（**已做**，Phase 10）
 - 右键拖拽平移作为 Shift+拖拽 的备选触发（未做）
 - 包成独立 Composer 包（当前 PSR-4 是 `Yangweijie\Ui2\`）
 - 触屏输入适配层（把真·双指捏合翻译到 `zoomAt/pan`）
+- 新设想（上一轮结尾提的可选增强，未做）：① tooltip 箭头「轻微弹入」微动画 ② `setData` 数据点数变化时新系列颜色 fade-in
 
 ## Errors Encountered
 | 现象 | 根因 | 解决 |

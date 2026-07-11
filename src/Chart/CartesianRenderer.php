@@ -50,7 +50,7 @@ abstract class CartesianRenderer implements ChartRenderer
         $view->categoryCount = $n;
         $view->labels = $chart->getLabels();
         foreach ($datasets as $i => $d) {
-            $view->colors[$i] = $d->color ?? $config->colorAt($i);
+            $view->colors[$i] = $d->color ?? ($view->seriesColors[$i] ?? $config->colorAt($i));
             $view->legend[] = [$d->label, $view->colors[$i]];
         }
         $view->barHitboxes = [];

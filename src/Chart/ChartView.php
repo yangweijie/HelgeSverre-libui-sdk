@@ -35,6 +35,16 @@ final class ChartView
     /** @var list<int> dataset index => 0xRRGGBB */
     public array $colors = [];
 
+    /**
+     * Per-series colours for the current frame. Normally mirrors
+     * {@see ChartConfig::colorAt()}, but during a series-recolour tween it holds
+     * the {@see \Libui\Color::lerp}-interpolated values so renderers paint the
+     * in-between shades without extra wiring. Null until the first draw.
+     *
+     * @var list<int>|null
+     */
+    public ?array $seriesColors = null;
+
     /** @var list<string> category labels for the X axis */
     public array $labels = [];
 

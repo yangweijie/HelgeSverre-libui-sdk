@@ -79,7 +79,7 @@ All config methods are fluent and return `self`:
 | `animation(float $ms, bool $enabled)` | Animation duration and toggle |
 | `zoom(bool $enabled, ?float $max)` | Zoom toggle and max zoom factor |
 | `padding(top, right, bottom, left)` | Plot area padding |
-| `colors(int ...$hex)` | Custom palette |
+| `colors(int ...$hex)` | Custom palette (overrides the named-colour default per instance) |
 | `applyTheme('light'\|'dark')` | Apply a theme preset |
 
 Common assignable fields: `showTitle`, `titleColor`, `titleSize`, `legendColor`, `showAxisX/Y`, `axisColor`, `axisLabelColor`, `axisFontSize`, `yZeroBased`, `panEnabled`, `maxZoom`, `background`, `plotBackground`, `tooltipBackground/Text/Border`, `fontSize`, `fontFamily`.
@@ -92,6 +92,35 @@ $config = (new ChartConfig())
     ->animation(500, true)
     ->zoom(true, 8.0)
     ->padding(20, 24, 16, 16);
+```
+
+### Colours & Palette
+
+The default palette `ChartConfig::PALETTE_NAMES` is a set of **CSS named colours** (e.g. `slateblue`, `crimson`, `teal`) resolved at runtime to `0xRRGGBB` via `Libui\Color::named()`. This keeps the palette semantic and consistent with every other colour in the app:
+
+```php
+use Libui\Color;
+
+Color::tomato();                 // named-colour shortcut
+Color::named('rebeccapurple');   // explicit lookup
+Color::hsl(210, 0.8, 0.5);      // HSL construction
+Color::red()->lerp(Color::blue(), 0.5); // blend two colours (purple)
+Color::white()->contrastColor(); // auto-contrast foreground (black / white)
+```
+
+`Color` also exposes `withHue / withSaturation / withLightness`, `toHsl()`, `mix()`, `luminance()`, and `isLight()` — handy for gradient brushes, theme transitions, and animation tweens.
+
+To use a custom hex palette instead, call `colors()` (overrides per instance, leaves the default untouched):
+
+```php
+(new ChartConfig())->colors(0x123456, 0xABCDEF);
+```
+
+When the number of series exceeds the base `PALETTE_NAMES` count (10 by default), `colorAt($i)` no longer simply wraps back onto an earlier colour (which would collide). Instead it derives harmonic light/dark **variants from the base colour's HSL lightness**: starting at the base hue, it alternates lighter / darker and steps further out each "ring" by `paletteVariantStep` (default `0.13`). So even 20–30 series get distinct, stylistically consistent colours without manual specification.
+
+```php
+$config->paletteVariantStep(0.16);     // widen the light/dark variant contrast
+$series = $config->seriesPalette(24);  // expand the full 24-series palette at once
 ```
 
 ## Interaction
@@ -124,6 +153,26 @@ $chart->setTheme('dark');            // switch theme
 $chart->setTheme('dark');   // equivalent to $chart->getConfig()->applyTheme('dark') then redraw
 ```
 
+`setTheme()` animates by default: in a GUI environment with a bound `Area`, every themed colour (background / grid / axes / text / tooltip) is tweened smoothly to the new preset over `animationDuration` (default 600ms, easeOutCubic) via `Color::lerp`; headless (no GUI) it switches instantly. You can also pass it explicitly:
+
+```php
+$chart->setTheme('dark');                   // follows config->animate (animation on by default)
+$chart->setTheme('light', animate: false);  // force an instant switch
+```
+
+## Recolouring series (recolor)
+
+`setTheme()` smoothly tweens the *themed* colours (background / grid / text / tooltip). The series themselves (each dataset / slice) are resolved by `colorAt($i)` from the palette and, by default, stay stable per index — so a given series keeps its identity across `setData` calls.
+
+To swap the palette, call `recolor()`, which **also tweens via `Color::lerp`** using the same ease-out cubic curve as the theme switch, but on its own `colorAnimator` so the two never clobber each other:
+
+```php
+$chart->recolor(0x111827, 0xef4444, 0x10b981); // new palette; series colours tween to it
+$chart->recolor();                              // omit args → revert to the default named palette
+```
+
+During the tween each in-between shade is injected into `ChartView::$seriesColors` by `Chart::draw()` and consumed by the renderers (`CartesianRenderer` / `PieRenderer`) in preference to `colorAt()`; once done it falls back to the resolved `colorAt($i)`. Headless (no GUI) switches instantly.
+
 ## Hover Tooltip
 
 The tooltip is drawn live in `draw()`: it measures the exact text size with `TextLayout::extents()` so the background box hugs the text with even padding and horizontally centered text. Hit-testing is driven by geometry each renderer fills while drawing:
@@ -132,6 +181,8 @@ The tooltip is drawn live in `draw()`: it measures the exact text size with `Tex
 - Pie / Doughnut: `pieCenter` / `pieRadius` / `pieInner` / `pieSlices` (sector angles and radii)
 
 A redraw only happens when the hovered target changes, avoiding needless repaints.
+
+The tooltip also draws a **small pointer toward the data point (or slice centroid)**: based on the point's position relative to the bubble box, it auto-attaches to the left / right / top / bottom edge, filled with `fillPolygon` and stroked with `tooltipBorder` so the bubble visually connects to the data.
 
 ## Extensibility
 
@@ -157,8 +208,8 @@ $renderer = RendererFactory::make(ChartType::Radar); // first renderer that supp
 # Visual demo (requires a libui GUI environment)
 php examples/chart-demo.php
 
-# Automated tests (Pest, 14 cases: types / zoom / animation / pixel mapping / theme / hover)
+# Automated tests (Pest, 24+ cases: types / zoom / animation / pixel mapping / theme / hover / palette variants / theme tween / series recolor)
 php vendor/bin/pest tests/ChartTest.php
 ```
 
-`examples/chart-demo.php` provides a full demo window: top buttons switch chart type, generate random data (animated), toggle value labels, switch theme, and reset zoom; a status bar at the bottom shows interaction hints.
+`examples/chart-demo.php` provides a full demo window: top buttons switch chart type, generate random data (animated), toggle value labels, switch theme, recolor, and reset zoom; a status bar at the bottom shows interaction hints.

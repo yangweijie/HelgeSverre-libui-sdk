@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Chart.js 风格自绘图表演示 (Area 自绘，无第三方图表库)
  * ────────────────────────────────────────────────────────────────────────
  * 基于 Yangweijie\Ui2\Chart\* 组件，演示：折线/柱状/饼图/环形/散点、网格与坐标
- * 轴、图例、数值标签、动画数据更新，悬停 tooltip，明/暗主题，以及手势缩放
+ * 轴、图例、数值标签、动画数据更新，悬停 tooltip（带指向数据点的小箭头），明/暗主题（切换带 Color::lerp 颜色补间动画），系列重新配色（同样走 Color::lerp 补间），以及手势缩放
  * （双击/框选放大、Shift+拖拽捏合、已放大后拖拽平移、+/-/0 键缩放）。
  *
  * 运行： php85 examples/chart-demo.php
@@ -73,6 +73,13 @@ $top = Build::hbox(
     $btn('主题', static function () use (&$theme, $chart): void {
         $theme = $theme === 'light' ? 'dark' : 'light';
         $chart->setTheme($theme);
+    }),
+    $btn('重新配色', static function () use ($chart): void {
+        $pal = [];
+        for ($k = 0; $k < 5; $k++) {
+            $pal[] = (rand(0, 255) << 16) | (rand(0, 255) << 8) | rand(0, 255);
+        }
+        $chart->recolor(...$pal);
     }),
     $btn('重置缩放', static fn () => $chart->resetZoom()),
     Build::stretchy(new Label('')),

@@ -50,6 +50,14 @@ final class Chart extends AreaDelegate
 
     private ZoomState $zoom;
     private Animator $animator;
+    /** Separate animator for theme colour-tweens so a data tween is never clobbered. */
+    private Animator $themeAnimator;
+    /** Separate animator for series-colour tweens so a data/theme tween is never clobbered. */
+    private Animator $colorAnimator;
+    /** Currently displayed per-series colours (0xRRGGBB); tweened on recolor(). */
+    private array $displayColors = [];
+    /** True while a series-colour tween is mid-flight. */
+    private bool $colorAnimating = false;
     private bool $pieExploded = false;
 
     /** Area captured on bind (parent's $area is private, so we keep our own). */
@@ -81,8 +89,11 @@ final class Chart extends AreaDelegate
         $this->config = $config ?? new ChartConfig();
         $this->zoom = new ZoomState($this->config->maxZoom);
         $this->animator = new Animator();
+        $this->themeAnimator = new Animator();
+        $this->colorAnimator = new Animator();
         $this->datasets = array_values($datasets);
         $this->syncDisplayImmediate();
+        $this->displayColors = $this->config->seriesPalette($this->seriesColorCount());
     }
 
     /** AreaDelegate bind hook — also stash the area for redraws. */
@@ -225,14 +236,32 @@ final class Chart extends AreaDelegate
         return $this;
     }
 
-    /** Switch the active colour theme (light / dark) and repaint. */
-    public function setTheme(string $name): self
+    /**
+     * Switch the active colour theme (light / dark). With $animate (or the config
+     * default) and a live Area, the themed colours tween smoothly to the new
+     * preset via {@see Color::lerp}; otherwise they snap immediately (also the
+     * headless path, since no event loop pumps the tween).
+     */
+    public function setTheme(string $name, ?bool $animate = null): self
     {
-        $this->config->applyTheme($name);
-        $this->hover = null;
-        $this->redraw();
+        $animate = $animate ?? $this->config->animate;
+        if (! $animate || $this->boundArea === null) {
+            $this->config->applyTheme($name);
+            $this->hover = null;
+            $this->redraw();
+
+            return $this;
+        }
+
+        $this->animateTheme($name);
 
         return $this;
+    }
+
+    /** The animator driving theme colour-tweens (seekable in tests). */
+    public function getThemeAnimator(): Animator
+    {
+        return $this->themeAnimator;
     }
 
     public function togglePieExplode(): self
@@ -241,6 +270,204 @@ final class Chart extends AreaDelegate
         $this->redraw();
 
         return $this;
+    }
+
+    /**
+     * Tween every themed colour field from its current value to the target
+     * preset using the shared {@see Animator} (ease-out cubic) and
+     * {@see ChartConfig::interpolateTheme()} (which calls {@see Color::lerp}).
+     */
+    private function animateTheme(string $name): void
+    {
+        $known = array_key_exists($name, ChartConfig::THEMES);
+        $targetName = $known ? $name : 'light';
+
+        $fromRows = $this->themeColorsToRows($this->currentThemeColors());
+        $toRows = $this->themeColorsToRows(ChartConfig::THEMES[$targetName]);
+
+        $this->themeAnimator->animate(
+            $fromRows,
+            $toRows,
+            $this->config->animationDuration,
+            function (array $rows) use ($targetName): void {
+                $this->applyThemeRows($rows);
+            },
+            function () use ($targetName): void {
+                // lock in exact target colours + record the resolved theme name
+                $this->config->applyThemeColors(ChartConfig::THEMES[$targetName]);
+                $this->config->theme = $targetName;
+                $this->redraw();
+            },
+        );
+    }
+
+    /** @return array<string,int> */
+    private function currentThemeColors(): array
+    {
+        $out = [];
+        foreach (ChartConfig::THEMED_FIELDS as $field) {
+            $out[$field] = $this->config->{$field};
+        }
+
+        return $out;
+    }
+
+    /** Map a name→int colour map into the Animator's list-of-[r,g,b]-rows shape. */
+    private function themeColorsToRows(array $colors): array
+    {
+        $rows = [];
+        foreach (ChartConfig::THEMED_FIELDS as $field) {
+            $c = Color::rgb($colors[$field] ?? 0xFFFFFF);
+            $rows[] = [$c->r, $c->g, $c->b];
+        }
+
+        return $rows;
+    }
+
+    /** Apply a list of [r,g,b] rows (from the tween) back onto the config fields. */
+    private function applyThemeRows(array $rows): void
+    {
+        $i = 0;
+        foreach (ChartConfig::THEMED_FIELDS as $field) {
+            [$r, $g, $b] = $rows[$i];
+            $this->config->{$field} = Color::rgb255(
+                (int) round(max(0.0, min(1.0, $r)) * 255),
+                (int) round(max(0.0, min(1.0, $g)) * 255),
+                (int) round(max(0.0, min(1.0, $b)) * 255),
+            )->toHex();
+            $i++;
+        }
+        $this->redraw();
+    }
+
+    /**
+     * Number of distinct series/slice colours the chart needs right now. For
+     * cartesian charts that's the dataset count; for pie/doughnut it's the
+     * larger of the dataset count and the first dataset's category count, so
+     * every slice gets its own colour slot.
+     */
+    private function seriesColorCount(): int
+    {
+        $n = count($this->datasets);
+        if (! $this->type->isCartesian()) {
+            $n = max($n, count($this->displayValues[0] ?? []));
+        }
+
+        return max(1, $n);
+    }
+
+    /**
+     * Per-series colours for the current frame. While a recolour tween runs we
+     * return the in-flight {@see self::$displayColors}; otherwise we resolve
+     * from the config palette (and keep {@see self::$displayColors} in sync so
+     * the next tween always starts from the true current colour).
+     *
+     * @return list<int>
+     */
+    private function currentSeriesColors(): array
+    {
+        $n = $this->seriesColorCount();
+        if ($this->colorAnimating) {
+            $out = [];
+            for ($i = 0; $i < $n; $i++) {
+                $out[$i] = $this->displayColors[$i] ?? $this->config->colorAt($i);
+            }
+
+            return $out;
+        }
+        $out = $this->config->seriesPalette($n);
+        $this->displayColors = $out;
+
+        return $out;
+    }
+
+    /**
+     * Re-assign the categorical palette and, when bound + animated, tween every
+     * series colour from its current shade to the new one with {@see Color::lerp}
+     * (reusing the shared ease-out cubic {@see Animator}). Headless (no Area)
+     * snaps immediately, mirroring setData/setTheme.
+     *
+     * @param int ...$hex 0xRRGGBB values; omit to revert to the named palette.
+     */
+    public function recolor(int ...$hex): self
+    {
+        $from = $this->displayColors;
+        if ($hex === []) {
+            $this->config->customPalette = null;
+        } else {
+            $this->config->colors(...$hex);
+        }
+        $n = $this->seriesColorCount();
+        $to = $this->config->seriesPalette($n);
+
+        if ($this->config->animate && $this->boundArea !== null) {
+            $fromRows = $this->colorsToRows($this->padColors($from, $n, $to));
+            $toRows = $this->colorsToRows($to);
+            $this->colorAnimating = true;
+            $this->colorAnimator->animate(
+                $fromRows,
+                $toRows,
+                $this->config->animationDuration,
+                function (array $rows): void {
+                    $this->displayColors = $this->rowsToColors($rows);
+                    $this->redraw();
+                },
+                function () use ($to): void {
+                    $this->colorAnimating = false;
+                    $this->displayColors = $to;
+                    $this->redraw();
+                },
+            );
+        } else {
+            $this->displayColors = $to;
+            $this->redraw();
+        }
+
+        return $this;
+    }
+
+    /** The animator driving series-colour tweens (seekable in tests). */
+    public function getColorAnimator(): Animator
+    {
+        return $this->colorAnimator;
+    }
+
+    /** Pad a colour list to $n entries, back-filling from $fallback / palette. */
+    private function padColors(array $colors, int $n, array $fallback): array
+    {
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $out[$i] = $colors[$i] ?? ($fallback[$i] ?? $this->config->colorAt($i));
+        }
+
+        return $out;
+    }
+
+    /** Map 0xRRGGBB ints into the Animator's list-of-[r,g,b] rows (floats 0..1). */
+    private function colorsToRows(array $colors): array
+    {
+        $rows = [];
+        foreach ($colors as $hex) {
+            $c = Color::rgb((int) $hex);
+            $rows[] = [$c->r, $c->g, $c->b];
+        }
+
+        return $rows;
+    }
+
+    /** Inverse of {@see self::colorsToRows()}: [r,g,b] floats back to 0xRRGGBB. */
+    private function rowsToColors(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as [$r, $g, $b]) {
+            $out[] = Color::rgb255(
+                (int) round(max(0.0, min(1.0, $r)) * 255),
+                (int) round(max(0.0, min(1.0, $g)) * 255),
+                (int) round(max(0.0, min(1.0, $b)) * 255),
+            )->toHex();
+        }
+
+        return $out;
     }
 
     /* ====================== AreaDelegate drawing ====================== */
@@ -254,6 +481,7 @@ final class Chart extends AreaDelegate
 
         $view = new ChartView($this->config);
         $view->plot = $this->computePlot($W, $H);
+        $view->seriesColors = $this->currentSeriesColors();
 
         if ($this->config->showTitle && $this->config->title !== '') {
             $this->drawTitle($ctx);
@@ -693,8 +921,75 @@ final class Chart extends AreaDelegate
 
         $ctx->fillRoundedRect($tx, $ty, $w, $h, 6.0, Brush::rgb($c->tooltipBackground));
         $ctx->strokeRect($tx, $ty, $w, $h, Brush::rgb($c->tooltipBorder), StrokeParams::solid(1.0));
+        $this->drawTooltipArrow($ctx, $view, $tx, $ty, $w, $h);
         // Centered horizontally within the box; top-aligned with even vertical padding.
         $ctx->drawString($text, $font, Color::rgb($c->tooltipText), $tx+$padX, $ty + $padY, $w, DrawTextAlign::Center);
+    }
+
+    /**
+     * Draw the little triangle that connects the tooltip bubble to the hovered
+     * data point, on whichever edge of the box faces that point.
+     */
+    private function drawTooltipArrow(DrawContext $ctx, ChartView $view, float $tx, float $ty, float $w, float $h): void
+    {
+        $pt = $this->hoverPointPx($view);
+        if ($pt === null) {
+            return;
+        }
+        [$dx, $dy] = $pt;
+        $len = 9.0;
+        $half = 6.0;
+        $bg = Brush::rgb($this->config->tooltipBackground);
+        $border = Brush::rgb($this->config->tooltipBorder);
+
+        if ($dx <= $tx) {                                   // left edge
+            $yc = max($ty + $half, min($ty + $h - $half, $dy));
+            $tri = [[$tx, $yc], [$tx + $len, $yc - $half], [$tx + $len, $yc + $half]];
+        } elseif ($dx >= $tx + $w) {                        // right edge
+            $yc = max($ty + $half, min($ty + $h - $half, $dy));
+            $tri = [[$tx + $w, $yc], [$tx + $w - $len, $yc - $half], [$tx + $w - $len, $yc + $half]];
+        } elseif ($dy <= $ty) {                             // top edge
+            $xc = max($tx + $half, min($tx + $w - $half, $dx));
+            $tri = [[$xc, $ty], [$xc - $half, $ty + $len], [$xc + $half, $ty + $len]];
+        } else {                                            // bottom edge
+            $xc = max($tx + $half, min($tx + $w - $half, $dx));
+            $tri = [[$xc, $ty + $h], [$xc - $half, $ty + $h - $len], [$xc + $half, $ty + $h - $len]];
+        }
+
+        $ctx->fillPolygon($tri, $bg);
+        $ctx->strokePolygon($tri, $border, StrokeParams::solid(1.0));
+    }
+
+    /** Pixel coordinate of the hovered data point (cartesian point/bar-top or pie-slice centroid). */
+    private function hoverPointPx(ChartView $view): ?array
+    {
+        if ($this->type->isCartesian()) {
+            $i = $this->hover['i'] ?? -1;
+            $j = $this->hover['j'] ?? -1;
+            foreach ($view->points as [$pi, $pj, $ptX, $ptY]) {
+                if ($pi === $i && $pj === $j) {
+                    return [$ptX, $ptY];
+                }
+            }
+            foreach ($view->barHitboxes as [$bi, $bj, $bx, $by, $bw, $bh]) {
+                if ($bi === $i && $bj === $j) {
+                    return [$bx + $bw / 2.0, $by];
+                }
+            }
+
+            return null;
+        }
+
+        $slice = $this->hover['slice'] ?? -1;
+        $s = $view->pieSlices[$slice] ?? null;
+        if ($s === null || $view->pieCenter === null) {
+            return null;
+        }
+        [$cx, $cy] = $view->pieCenter;
+        $mid = $s['a0'] + $s['sweep'] / 2.0;
+        $r = ($view->pieInner + $view->pieRadius) / 2.0;
+
+        return [$cx + $s['ox'] + cos($mid) * $r, $cy + $s['oy'] + sin($mid) * $r];
     }
 
     private function fmtVal(float $v): string

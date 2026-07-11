@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Libui\Color;
 use Yangweijie\Ui2\Chart\Animator;
 use Yangweijie\Ui2\Chart\BarRenderer;
 use Yangweijie\Ui2\Chart\Chart;
@@ -215,3 +216,155 @@ test('chart hover starts null and setTheme switches palette safely', function ()
     $chart->setTheme('light');
     expect($chart->getConfig()->background)->toBe(0xFFFFFF);
 });
+
+test('Color HSL round-trips and matches known anchors', function () {
+    expect(Color::hsl(0, 1.0, 0.5)->toHex())->toBe(0xFF0000); // pure red
+    expect(Color::hsl(120, 1.0, 0.5)->toHex())->toBe(0x00FF00); // pure green
+    expect(Color::hsl(240, 1.0, 0.5)->toHex())->toBe(0x0000FF); // pure blue
+
+    $c = Color::hsl(210, 0.8, 0.5);
+    [$h, $s, $l, $a] = $c->toHsl();
+    expect($h)->toEqualWithDelta(210.0, 0.01);
+    expect($s)->toEqualWithDelta(0.8, 0.01);
+    expect($l)->toEqualWithDelta(0.5, 0.01);
+    expect($a)->toBe(1.0);
+});
+
+test('Color lerp blends channels and alpha', function () {
+    $mid = Color::red()->lerp(Color::blue(), 0.5);
+    expect($mid->toHex())->toBe(0x800080); // equal red+blue
+    expect($mid->a)->toBe(1.0);
+
+    $half = Color::black()->lerp(Color::white(), 0.5);
+    expect($half->r)->toEqualWithDelta(0.5, 0.001);
+    expect($half->g)->toEqualWithDelta(0.5, 0.001);
+
+    // withAlpha + mix alias behave consistently
+    expect(Color::red()->mix(Color::blue(), 0.5)->toHex())->toBe(0x800080);
+    expect(Color::red()->withAlpha(0.3)->a)->toEqualWithDelta(0.3, 0.001);
+});
+
+test('Color contrast picks readable foreground', function () {
+    expect(Color::white()->contrastColor()->toHex())->toBe(0x000000);
+    expect(Color::black()->contrastColor()->toHex())->toBe(0xFFFFFF);
+    expect(Color::white()->isLight())->toBeTrue();
+    expect(Color::black()->isLight())->toBeFalse();
+});
+
+test('chart palette resolves named colors, then derives variants for extra series', function () {
+    $c = new ChartConfig();
+    $pal = $c->palette();
+    expect($pal)->toHaveCount(10);
+    // first entry is slateblue (per PALETTE_NAMES)
+    expect($pal[0])->toBe(Color::named(ChartConfig::PALETTE_NAMES[0])->toHex());
+    expect($c->colorAt(0))->toBe($pal[0]);
+    expect($c->colorAt(1))->toBe($pal[1]);
+
+    // beyond the 10 base colours, colorAt derives a distinct light/dark variant
+    expect($c->colorAt(10))->not->toBe($pal[0]);
+    expect($c->colorAt(20))->not->toBe($pal[0]);
+    expect($c->colorAt(10))->not->toBe($c->colorAt(20)); // different rings
+
+    // seriesPalette(22) yields 22 mostly-distinct colours (no earlier collisions)
+    $series = $c->seriesPalette(22);
+    expect($series)->toHaveCount(22);
+    expect(count(array_unique($series)))->toBeGreaterThanOrEqual(20);
+
+    $custom = (new ChartConfig())->colors(0x123456, 0xABCDEF);
+    expect($custom->palette())->toBe([0x123456, 0xABCDEF]);
+    expect($custom->colorAt(1))->toBe(0xABCDEF);
+    // custom palette also derives variants past its size
+    expect($custom->colorAt(2))->not->toBe(0xABCDEF);
+});
+
+test('theme interpolation lerps every themed colour via Color::lerp', function () {
+    $from = ChartConfig::THEMES['light'];
+    $to = ChartConfig::THEMES['dark'];
+
+    $expectedBg = Color::rgb($from['background'])->lerp(Color::rgb($to['background']), 0.5)->toHex();
+    expect(ChartConfig::interpolateTheme($from, $to, 0.5)['background'])->toBe($expectedBg);
+
+    expect(ChartConfig::interpolateTheme($from, $to, 0.0)['background'])->toBe(0xFFFFFF);
+    expect(ChartConfig::interpolateTheme($from, $to, 1.0)['background'])->toBe(0x0F172A);
+
+    $mid = ChartConfig::interpolateTheme($from, $to, 0.5);
+    foreach (ChartConfig::THEMED_FIELDS as $f) {
+        expect(array_key_exists($f, $mid))->toBeTrue();
+    }
+});
+
+test('setTheme animates only with a bound area; headless snaps immediately', function () {
+    $chart = new Chart(ChartType::Line);
+    // no Area bound -> even with animate requested, it applies instantly
+    $chart->setTheme('dark', animate: true);
+    expect($chart->getConfig()->theme)->toBe('dark');
+    expect($chart->getConfig()->background)->toBe(0x0F172A);
+
+    $chart->setTheme('light');
+    expect($chart->getConfig()->background)->toBe(0xFFFFFF);
+});
+
+test('recolor swaps the palette and updates series colors (headless snaps)', function () {
+    $chart = new Chart(ChartType::Line);
+    $chart->setData([new Dataset('A', [1, 2, 3]), new Dataset('B', [4, 5, 6])], animate: false);
+
+    expect($chart->getConfig()->customPalette)->toBeNull();
+    $chart->recolor(0x111111, 0x222222, 0x333333);
+    expect($chart->getConfig()->customPalette)->toBe([0x111111, 0x222222, 0x333333]);
+    // first series now takes the new palette's first colour
+    expect($chart->getConfig()->colorAt(0))->toBe(0x111111);
+    expect($chart->getConfig()->colorAt(1))->toBe(0x222222);
+});
+
+test('recolor() with no args reverts to the named palette', function () {
+    $chart = new Chart(ChartType::Line);
+    $chart->setData([new Dataset('A', [1, 2, 3])], animate: false);
+    $chart->recolor(0xABCDEF);
+    expect($chart->getConfig()->customPalette)->toBe([0xABCDEF]);
+    $chart->recolor();
+    expect($chart->getConfig()->customPalette)->toBeNull();
+    expect($chart->getConfig()->colorAt(0))->toBe(Color::named(ChartConfig::PALETTE_NAMES[0])->toHex());
+});
+
+test('series colour rows round-trip through colorsToRows/rowsToColors', function () {
+    $chart = new Chart(ChartType::Bar);
+    $rows = (new ReflectionMethod(Chart::class, 'colorsToRows'))
+        ->invoke($chart, [0xFF0000, 0x00FF00, 0x0000FF]);
+    expect($rows[0])->toBe([1.0, 0.0, 0.0]);
+    expect($rows[1])->toBe([0.0, 1.0, 0.0]);
+    expect($rows[2])->toBe([0.0, 0.0, 1.0]);
+
+    $back = (new ReflectionMethod(Chart::class, 'rowsToColors'))->invoke($chart, $rows);
+    expect($back[0])->toBe(0xFF0000);
+    expect($back[1])->toBe(0x00FF00);
+    expect($back[2])->toBe(0x0000FF);
+});
+
+test('hoverPointPx resolves the data point pixel for cartesian and pie', function () {
+    // cartesian: a plotted point
+    $chart = new Chart(ChartType::Line);
+    $view = new ChartView($chart->getConfig());
+    $view->points = [[0, 0, 120.0, 240.0]];
+    $hover = new ReflectionProperty(Chart::class, 'hover');
+    $hover->setAccessible(true);
+    $hover->setValue($chart, ['i' => 0, 'j' => 0]);
+    expect((new ReflectionMethod(Chart::class, 'hoverPointPx'))->invoke($chart, $view))
+        ->toBe([120.0, 240.0]);
+
+    // pie: the slice centroid
+    $pie = new Chart(ChartType::Pie);
+    $pview = new ChartView($pie->getConfig());
+    $pview->pieCenter = [300.0, 300.0];
+    $pview->pieInner = 50.0;
+    $pview->pieRadius = 100.0;
+    $pview->pieSlices = [['a0' => -M_PI / 2, 'sweep' => M_PI / 2, 'ox' => 0.0, 'oy' => 0.0, 'value' => 1, 'label' => 'x', 'color' => 0]];
+    $ph = new ReflectionProperty(Chart::class, 'hover');
+    $ph->setAccessible(true);
+    $ph->setValue($pie, ['slice' => 0]);
+    $ppt = (new ReflectionMethod(Chart::class, 'hoverPointPx'))->invoke($pie, $pview);
+    $mid = -M_PI / 2 + (M_PI / 2) / 2.0;
+    $r = 75.0;
+    expect($ppt[0])->toEqualWithDelta(300.0 + cos($mid) * $r, 1e-6);
+    expect($ppt[1])->toEqualWithDelta(300.0 + sin($mid) * $r, 1e-6);
+});
+

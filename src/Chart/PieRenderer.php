@@ -42,7 +42,7 @@ final class PieRenderer implements ChartRenderer
             if ($v === null || $v <= 0) {
                 continue;
             }
-            $color = $config->colorAt($j);
+            $color = $view->seriesColors[$j] ?? $config->colorAt($j);
             $label = $labels[$j] ?? ('Slice ' . ($j + 1));
             $slices[] = ['value' => (float) $v, 'color' => $color, 'label' => $label];
             $total += (float) $v;

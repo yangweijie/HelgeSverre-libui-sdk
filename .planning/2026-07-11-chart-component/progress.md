@@ -32,4 +32,28 @@
 - `redraw()` 改 public、`ChartRenderer.php` 改名、`toBeApproximately`/`toBeBetween` 替换。
 
 ---
+## Session: 2026-07-11（续）— Phase 9 + Phase 10 颜色与时序增强
+
+### Phase 9：Color::lerp 应用 —— 明暗变体多系列调色板 + 主题切换颜色补间动画
+- [x] `ChartConfig::colorAt($i)` 超基础 10 色自动按基础色 HSL **亮度**生成明暗变体（交替更亮/更暗，`paletteVariantStep` 默认 0.13 递进），解决 >10 系列撞色；新增 `seriesPalette($count)`、`paletteVariantStep(float)`。
+- [x] `ChartConfig::interpolateTheme($a,$b,$t)` 逐字段 `Color::rgb()->lerp()->toHex()`。
+- [x] `Chart::setTheme($name, ?bool $animate=null)`：绑定 Area 时经独立 `themeAnimator`（600ms easeOutCubic）对所有主题色补间；headless 即时。`themeColorsToRows`/`applyThemeRows` 做 `[r,g,b]`↔int 转换。
+- 测试由 14 → 20（新增变体解析、interpolateTheme、setTheme 动画/headless）。
+
+### Phase 10：Tooltip 小箭头 + 系列变色 Color::lerp 动画
+- [x] `Chart::hoverPointPx(ChartView)` 解析悬停数据点像素（笛卡尔用 `points`/`barHitboxes`，饼/环用扇区中点）；`drawTooltipArrow()` 用 `fillPolygon`/`strokePolygon` 自动贴到离点最近边（左/右/上/下），与气泡同色。
+- [x] `Chart` 新增独立 `colorAnimator` + `displayColors`；`draw()` 每帧注入 `ChartView::$seriesColors`，渲染器优先读之。`recolor(int ...$hex)` 逐系列 `Color::lerp`（600ms）补间，省略参数还原命名色；headless 即时。`colorsToRows`/`rowsToColors` 辅助。
+- [x] `examples/chart-demo.php` 加「重新配色」按钮；`docs/zh|en/guide/chart.md` 补「系列重新配色(recolor)」「tooltip 小箭头」两节。
+- 测试由 20 → **24**（新增 recolor 换色/还原、颜色行 round-trip、hoverPointPx）。
+
+### 验证（本轮）
+- `php85 -l` 全部改动文件（Chart/ChartView/CartesianRenderer/PieRenderer/ChartConfig/tests/demo）干净。
+- `php85 vendor/bin/pest tests/ChartTest.php --no-coverage` → **24 passed**（本会话末尾复核）。
+- 已知无关的预存失败：`CircleProgressBarTest`（`Undefined constant ...::SIZE`）、`EmitsEventsTest`（headless GUI 崩溃）— 均因真实 libui 需显示器，与图表改动无关。
+
+### 待用户验证（GUI 路径）
+- `php85 examples/chart-demo.php`：① 点「主题」看所有主题色 600ms 平滑补间 ② 点「重新配色」看系列色 lerp 过渡 ③ 悬停看 tooltip 带小箭头指向数据点。
+
+---
+
 *规划文件遵循 planning-with-files 技能：task_plan.md=阶段追踪，findings.md=技术发现，progress.md=会话日志。本 plan 独立于 One Piece 斗地主 plan（`.planning/2026-07-06-onepiece-doudizhu`）。*
