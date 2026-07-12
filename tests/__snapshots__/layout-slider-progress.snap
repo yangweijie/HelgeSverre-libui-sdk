@@ -1,0 +1,179 @@
+{
+    "viewport": {
+        "w": 350,
+        "h": 160
+    },
+    "layout": {
+        "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 350,
+            "h": 160
+        },
+        "style": {
+            "dir": "column",
+            "gap": 12,
+            "pad": 16,
+            "shrink": 1,
+            "w": 300,
+            "h": 120
+        },
+        "children": [
+            {
+                "id": "slider",
+                "rect": {
+                    "x": 16,
+                    "y": 16,
+                    "w": 280,
+                    "h": 20
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 280,
+                    "h": 20
+                },
+                "spec": {
+                    "value": 0.6,
+                    "enabled": true,
+                    "pressed": false,
+                    "hovered": false,
+                    "type": "slider"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 7,
+                        "width": 280,
+                        "height": 6,
+                        "radius": 3,
+                        "color": {
+                            "r": 0.88,
+                            "g": 0.88,
+                            "b": 0.88,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 7,
+                        "width": 168,
+                        "height": 6,
+                        "radius": 3,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "FillCircle",
+                        "cx": 168,
+                        "cy": 10,
+                        "radius": 8,
+                        "color": {
+                            "r": 1,
+                            "g": 1,
+                            "b": 1,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "StrokeCircle",
+                        "cx": 168,
+                        "cy": 10,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        },
+                        "stroke": {
+                            "cap": 0,
+                            "join": 0,
+                            "miterLimit": 10,
+                            "dashes": [],
+                            "thickness": 2
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "progress",
+                "rect": {
+                    "x": 16,
+                    "y": 48,
+                    "w": 280,
+                    "h": 12
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 280,
+                    "h": 12
+                },
+                "spec": {
+                    "value": 0.45,
+                    "enabled": true,
+                    "hovered": false,
+                    "radius": 6,
+                    "type": "progress"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 280,
+                        "height": 12,
+                        "radius": 6,
+                        "color": {
+                            "r": 0.88,
+                            "g": 0.88,
+                            "b": 0.88,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 126,
+                        "height": 12,
+                        "radius": 6,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "label",
+                "rect": {
+                    "x": 16,
+                    "y": 72,
+                    "w": 280,
+                    "h": 18
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 280,
+                    "h": 18
+                },
+                "spec": {
+                    "text": "45%",
+                    "size": 12,
+                    "align": "center",
+                    "color": "color.onSurface",
+                    "opacity": 0.85,
+                    "type": "label"
+                }
+            }
+        ]
+    }
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DSL 声明式计数器界面
+
+  等价于 surface-controls-demo.php 中 Elm 风格 Counter 的 LayoutNode 结构，
+  但完全用 .native 标记语言表达。配合 NativeLoader 编译为 LayoutNode 树。
+
+  按钮 id 与 Surface::onClick 匹配：
+    counter-dsl-dec  → dispatch CounterMsg::Dec
+    counter-dsl-inc  → dispatch CounterMsg::Inc
+    counter-dsl-reset → dispatch CounterMsg::Reset
+-->
+<Card bordered="true" radius="12" elevation="0.5" width="360" height="176">
+    <Column gap="12" padding="16" align="center" width="360" height="176">
+        <Label text="DSL Counter" size="14" align="center" opacity="0.6" width="328" height="18" />
+        <Label id="counter-dsl-label" text="0" size="28" align="center" width="328" height="32" />
+        <Row gap="12" justify="center" width="192" height="44">
+            <Button id="counter-dsl-dec"   label="−"     variant="soft"    width="44" height="44" radius="20" />
+            <Button id="counter-dsl-inc"   label="+"     variant="filled"  width="44" height="44" radius="20" />
+            <Button id="counter-dsl-reset" label="Reset"  variant="outline" width="80" height="36" radius="8"  />
+        </Row>
+        <Label text="declarative .native markup" size="10" opacity="0.35" align="center" width="328" height="14" />
+    </Column>
+</Card>

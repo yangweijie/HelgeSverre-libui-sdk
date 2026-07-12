@@ -71,6 +71,7 @@ class TextAreaControl
                 radius: $radius,
                 fontSize: $fontSize,
                 lineHeight: $lineHeight,
+                control: $this,
             ),
             width: $width,
             height: $height,
@@ -188,6 +189,11 @@ class TextAreaControl
         return $this->value;
     }
 
+    public function getCursor(): int
+    {
+        return $this->cursor;
+    }
+
     /** @param callable(string):void $fn */
     public function onChange(callable $fn): static
     {
@@ -221,6 +227,7 @@ class TextAreaControl
             lineHeight: $this->lineHeight,
             scrollY: $this->scrollY,
             cursor: $this->cursor,
+            control: $this,
         );
     }
 

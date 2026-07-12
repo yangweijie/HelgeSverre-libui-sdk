@@ -1,0 +1,210 @@
+{
+    "viewport": {
+        "w": 350,
+        "h": 140
+    },
+    "layout": {
+        "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 350,
+            "h": 140
+        },
+        "style": {
+            "dir": "column",
+            "gap": 8,
+            "pad": 12,
+            "shrink": 1,
+            "w": 300,
+            "h": 120
+        },
+        "spec": {
+            "bordered": true,
+            "hovered": false,
+            "radius": 8,
+            "elevation": 0,
+            "type": "card"
+        },
+        "commands": [
+            {
+                "_cmd": "FillRoundedRect",
+                "x": 0,
+                "y": 0,
+                "width": 350,
+                "height": 140,
+                "radius": 8,
+                "color": {
+                    "r": 1,
+                    "g": 1,
+                    "b": 1,
+                    "a": 1
+                }
+            },
+            {
+                "_cmd": "StrokeRoundedRect",
+                "x": 0.75,
+                "y": 0.75,
+                "width": 348.5,
+                "height": 138.5,
+                "radius": 8,
+                "color": {
+                    "r": 0.88,
+                    "g": 0.88,
+                    "b": 0.88,
+                    "a": 1
+                },
+                "stroke": {
+                    "cap": 0,
+                    "join": 0,
+                    "miterLimit": 10,
+                    "dashes": [],
+                    "thickness": 1
+                }
+            }
+        ],
+        "children": [
+            {
+                "id": "title",
+                "rect": {
+                    "x": 12,
+                    "y": 12,
+                    "w": 326,
+                    "h": 24
+                },
+                "style": {
+                    "shrink": 1,
+                    "h": 24
+                },
+                "spec": {
+                    "text": "Card Title",
+                    "size": 16,
+                    "align": "left",
+                    "color": "color.onSurface",
+                    "opacity": 0.85,
+                    "type": "label"
+                }
+            },
+            {
+                "id": "desc",
+                "rect": {
+                    "x": 12,
+                    "y": 44,
+                    "w": 326,
+                    "h": 18
+                },
+                "style": {
+                    "shrink": 1,
+                    "h": 18
+                },
+                "spec": {
+                    "text": "Description text",
+                    "size": 12,
+                    "align": "left",
+                    "color": "color.onSurface",
+                    "opacity": 0.6,
+                    "type": "label"
+                }
+            },
+            {
+                "rect": {
+                    "x": 12,
+                    "y": 70,
+                    "w": 326,
+                    "h": 36
+                },
+                "style": {
+                    "gap": 8,
+                    "shrink": 1,
+                    "h": 36
+                },
+                "children": [
+                    {
+                        "id": "ok",
+                        "rect": {
+                            "x": 12,
+                            "y": 70,
+                            "w": 80,
+                            "h": 36
+                        },
+                        "style": {
+                            "shrink": 1,
+                            "w": 80,
+                            "h": 36
+                        },
+                        "spec": {
+                            "label": "OK",
+                            "variant": "filled",
+                            "enabled": true,
+                            "pressed": false,
+                            "hovered": false,
+                            "radius": 8,
+                            "type": "button"
+                        },
+                        "commands": [
+                            {
+                                "_cmd": "FillRoundedRect",
+                                "x": 0,
+                                "y": 0,
+                                "width": 80,
+                                "height": 36,
+                                "radius": 8,
+                                "color": {
+                                    "r": 0.04,
+                                    "g": 0.52,
+                                    "b": 1,
+                                    "a": 1
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "id": "cancel",
+                        "rect": {
+                            "x": 100,
+                            "y": 70,
+                            "w": 80,
+                            "h": 36
+                        },
+                        "style": {
+                            "shrink": 1,
+                            "w": 80,
+                            "h": 36
+                        },
+                        "spec": {
+                            "label": "Cancel",
+                            "variant": "outline",
+                            "enabled": true,
+                            "pressed": false,
+                            "hovered": false,
+                            "radius": 8,
+                            "type": "button"
+                        },
+                        "commands": [
+                            {
+                                "_cmd": "StrokeRoundedRect",
+                                "x": 0.75,
+                                "y": 0.75,
+                                "width": 78.5,
+                                "height": 34.5,
+                                "radius": 8,
+                                "color": {
+                                    "r": 0.04,
+                                    "g": 0.52,
+                                    "b": 1,
+                                    "a": 1
+                                },
+                                "stroke": {
+                                    "cap": 0,
+                                    "join": 0,
+                                    "miterLimit": 10,
+                                    "dashes": [],
+                                    "thickness": 1.5
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

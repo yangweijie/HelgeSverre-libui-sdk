@@ -46,6 +46,7 @@ final class DesignTokens
             // Structural tints used by the composite controls built in this pass.
             'selection'    => [0.04, 0.52, 1.0, 0.12], // list/table row selected fill
             'scrim'        => [0.0, 0.0, 0.0, 0.45],   // modal dialog dim layer
+            'default'      => [0.88, 0.88, 0.90, 1.0], // neutral border / separator
         ],
         'radius' => [
             'sm'   => 4.0,

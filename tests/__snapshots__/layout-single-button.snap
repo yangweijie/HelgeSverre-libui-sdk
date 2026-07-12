@@ -1,0 +1,45 @@
+{
+    "viewport": {
+        "w": 200,
+        "h": 50
+    },
+    "layout": {
+        "id": "btn",
+        "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 200,
+            "h": 50
+        },
+        "style": {
+            "shrink": 1,
+            "w": 120,
+            "h": 36
+        },
+        "spec": {
+            "label": "Save",
+            "variant": "filled",
+            "enabled": true,
+            "pressed": false,
+            "hovered": false,
+            "radius": 8,
+            "type": "button"
+        },
+        "commands": [
+            {
+                "_cmd": "FillRoundedRect",
+                "x": 0,
+                "y": 0,
+                "width": 200,
+                "height": 50,
+                "radius": 8,
+                "color": {
+                    "r": 0.04,
+                    "g": 0.52,
+                    "b": 1,
+                    "a": 1
+                }
+            }
+        ]
+    }
+}

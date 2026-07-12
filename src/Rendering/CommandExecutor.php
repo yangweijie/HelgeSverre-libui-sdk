@@ -29,6 +29,12 @@ final class CommandExecutor
     private function dispatch(DrawContext $ctx, RenderCommand $cmd): void
     {
         match (true) {
+            $cmd instanceof FillArc => $ctx->fillPath(
+                Brush::color($cmd->color),
+                static fn (Path $p) => $cmd->wedge
+                    ? $p->wedge($cmd->cx, $cmd->cy, $cmd->radius, $cmd->startAngle, $cmd->sweep)
+                    : $p->arc($cmd->cx, $cmd->cy, $cmd->radius, $cmd->startAngle, $cmd->sweep),
+            ),
             $cmd instanceof StrokeArc => $ctx->strokePath(
                 Brush::color($cmd->color),
                 $cmd->stroke,

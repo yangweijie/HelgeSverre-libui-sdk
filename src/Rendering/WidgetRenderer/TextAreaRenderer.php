@@ -78,6 +78,8 @@ final class TextAreaRenderer implements WidgetRenderer
             throw new \InvalidArgumentException('TextAreaRenderer requires a TextAreaSpec');
         }
 
+        fwrite(STDERR, "[TextAreaRenderer] render: value=\"" . $spec->value . "\" width=" . $width . " height=" . $height . "\n");
+
         $commands = $this->shapeCommands($spec, $tokens, $width, $height);
 
         $lineH = $spec->lineHeight > 0 ? $spec->lineHeight : $spec->fontSize * 1.4;
@@ -86,15 +88,20 @@ final class TextAreaRenderer implements WidgetRenderer
         $onSurface = $tokens->color('color.onSurface');
         $color = $spec->enabled ? $onSurface : Color::rgba($onSurface->r, $onSurface->g, $onSurface->b, 0.4);
 
+        fwrite(STDERR, "[TextAreaRenderer] color: enabled=" . ($spec->enabled ? 'true' : 'false') . " focused=" . ($spec->focused ? 'true' : 'false') . " onSurface=" . ($onSurface ? 'found' : 'null') . "\n");
+
         $text = $spec->value;
         $isPlaceholder = $text === '';
         $shown = $isPlaceholder ? $spec->placeholder : $text;
+
+        fwrite(STDERR, "[TextAreaRenderer] text=\"" . $text . "\" shown=\"" . $shown . "\" isPlaceholder=" . ($isPlaceholder ? 'true' : 'false') . "\n");
 
         if ($shown === '') {
             return new RenderCommandList($commands);
         }
 
         [$lines, $starts] = $this->wrap($shown, $maxW, $spec->fontSize);
+        fwrite(STDERR, "[TextAreaRenderer] wrapped " . count($lines) . " lines\n");
 
         $font = $tokens->font($spec->fontSize);
         $scrollY = $spec->scrollY;

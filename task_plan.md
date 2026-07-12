@@ -68,3 +68,6 @@
 | D | Capability 守卫系统：Capability 接口/注册表 + 5 个原生能力实现 | ✅ complete | `src/System/Capability*.php` × 7 |
 | E | ImageControl / AvatarControl GD 像素提取修复（R/B 交换 + alpha 反转 + imagealphablending） | ✅ complete | `src/Widgets/ImageControl.php`, `src/Widgets/AvatarControl.php` |
 | F | Demo 更新：fromFile/fromPng 演示 | ✅ complete | `examples/surface-controls-demo.php` |
+| G | 状态管理（Elm Architecture）：Model/Msg/Effect/UpdateResult/AppRuntime 抽象 | ✅ complete | `src/State/` × 5 个文件 |
+| H | UI 声明（DSL）：.native XML → LayoutNode 编译器（NativeLoader + 19 个 Spec） | ✅ complete | `src/Compiler/` × 2 文件 + `examples/counter.native` |
+| I | TextArea IME 中文输入回显修复（三重 bug：withState 丢失 control + segfault + stale value） | ✅ complete | `Surface.php` + `TextAreaControl.php` + `TextAreaSpec.php` |

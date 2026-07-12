@@ -199,3 +199,89 @@ $pixels[] = 1.0 - (($rgba >> 24) & 0x7F) / 127.0; // inverted alpha
 - GD `imagecolorat()` 返回 `0xAARRGGBB`（R=bits16-23, G=bits8-15, B=bits0-7, A=bits24-31）
 - GD alpha: 0=不透明，127=透明（与标准相反）
 - SVG 不支持 via GD，需使用 `SvgView` 控件（`src/Widgets/SvgView.php`）
+
+---
+
+## Session: 2026-07-12 — DSL + State Management（Native SDK #1, #2）
+
+### Phase G: ✅ 状态管理（Elm Architecture）
+- **创建 5 个文件**：
+  - `src/State/Model.php` — `Model` 空标记接口
+  - `src/State/Msg.php` — `Msg` 空标记接口（UnitEnum）
+  - `src/State/Effect.php` — 抽象副作用基类
+  - `src/State/UpdateResult.php` — Model + Effect[] 返回类型
+  - `src/State/AppRuntime.php` — 持有 Model + Update 函数，dispatch() 返回新 Model
+- **设计**：Elm 架构映射到 PHP — Model(readonly class) / Msg(UnitEnum) / Update(纯函数) / AppRuntime(调度器)
+- **测试**：`tests/State/CounterModelTest.php` — CounterModel + CounterMsg enum + counterUpdate 函数的 8 个测试
+- **Demo 集成**：`examples/surface-controls-demo.php` — "Elm 风格 Counter" 区块，onClick → dispatch Msg → update spec → redraw
+- **修复**：LabelSpec 无 `$weight` 参数 → 移除所有 `weight:` 调用
+
+### Phase H: ✅ UI 声明（DSL via .native 标记）
+- **创建 3 个文件**：
+  - `src/Compiler/NativeException.php` — 解析异常（extends RuntimeException）
+  - `src/Compiler/NativeLoader.php` — .native XML → LayoutNode 编译器（SimpleXML + ReflectionClass 属性→构造函数参数映射，自动类型转换）
+  - `examples/counter.native` — 卡片 + Column + Label + Row + Button 的 Elm 计数器
+- **支持 19 个 WidgetSpec 子类**：ButtonSpec, LabelSpec, CheckboxSpec, SliderSpec, ProgressSpec, RadioSpec, SelectSpec, PanelSpec, CardSpec, ScrollViewSpec, TextFieldSpec, SearchFieldSpec, DialogSpec, DrawerSpec, SheetSpec, PopoverSpec, BreadcrumbSpec, DropdownMenuSpec, ListSpec
+- **特殊处理**：ScrollView → viewport row(ScrollViewSpec) + content column
+- **明确排除**：ImageSpec（像素数据是运行时动态的）
+- **Demo 集成**：`examples/surface-controls-demo.php` — "DSL 声明式 Counter" 区块，NativeLoader::load() + DFS 查找 Label 节点 + onClick dispatch CounterMsg
+
+### 全部文件验证
+- 所有新建和修改文件通过 `php -l` 语法检查
+
+---
+
+## 2026-07-12 — TextArea IME 中文输入回显修复
+
+### 问题
+Surface 的 TextAreaControl 输入中文/数字时，IME 候选词选择后文本不显示在多行文本框中。
+
+### 诊断过程
+1. **IME 代理工作正常**：`imeBridgeFfi=yes`，`text="a啊123c词"` 正确捕获 Unicode 输入
+2. **TextArea 始终渲染空**：`withState: TextAreaSpec value=""`，`TextAreaRenderer: value=""`
+3. **"checking cond" 调试行未出现**：说明 IME onChanged 回调在 line 503-533 之间因 segfault 静默死亡
+4. **添加逐行调试**：发现 `ime_get_text_view()` 返回空 FFI CData（NULL 指针）
+5. **根因**：`(int) $text_view_ptr === 0` → NULL 指针传给 `ime_is_composing()` → segfault
+
+### 修复（三重 bug）
+
+#### 1. IME onChanged segfault 修复 (Surface.php)
+```php
+// Before (always true for FFI NULL CData):
+if ($text_view_ptr !== null && ...)  // segfaults
+
+// After (checks actual pointer value):
+$isNull = (int) $text_view_ptr === 0;
+if (!$isNull && $this->imeBridgeFfi->ime_is_composing($text_view_ptr) === 0) {
+```
+
+#### 2. `withState()` 丢失 control 回引用 (Surface.php)
+```php
+// Before: new TextAreaSpec(... // 无 control, 用 stale $spec->value
+// After:
+$control = $spec->control;
+$value = $control !== null ? $control->getValue() : $spec->value;
+return new TextAreaSpec(
+    value: $value,
+    cursor: $control !== null ? $control->getCursor() : $spec->cursor,
+    control: $control,  // 保留回引用
+    // ...
+);
+```
+
+#### 3. TextAreaControl 添加 getCursor() (TextAreaControl.php)
+```php
+public function getCursor(): int
+{
+    return $this->cursor;
+}
+```
+
+### 文件变更
+- `src/Widgets/Surface.php` — withState 修复 + NULL 指针检查 + 逐行调试日志
+- `src/Widgets/TextAreaControl.php` — getCursor() 方法
+- `src/Rendering/WidgetRenderer/TextAreaSpec.php` — $control 回引用（已存在）
+
+### 验证
+- `php -l` 语法检查通过（所有修改文件）
+- **待手动验证**：`php85 examples/surface-controls-demo.php` → 输入中文/数字 → 观察文本是否回显

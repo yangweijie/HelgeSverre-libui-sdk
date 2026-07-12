@@ -17,6 +17,12 @@ final class AreaKeyEvent
         public readonly bool $up, // true = key released, false = key pressed
     ) {}
 
+    /** The pressed character, or '' for an extended (non-printable) key. */
+    public function char(): string
+    {
+        return $this->key > 0 ? \chr($this->key) : '';
+    }
+
     public static function fromCData(\FFI\CData $e): self
     {
         return new self(
@@ -27,12 +33,6 @@ final class AreaKeyEvent
             $e->Modifiers,
             $e->Up !== 0,
         );
-    }
-
-    /** The pressed character, or '' for an extended (non-printable) key. */
-    public function char(): string
-    {
-        return $this->key > 0 ? \chr($this->key) : '';
     }
 
     /**

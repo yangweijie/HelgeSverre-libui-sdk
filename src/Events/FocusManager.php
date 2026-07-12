@@ -67,18 +67,22 @@ final class FocusManager
      */
     public function focus(?string $id): void
     {
+        fwrite(STDERR, "[FocusManager] focus: id=" . ($id ?? 'null') . ", tabOrder=" . json_encode($this->tabOrder) . "\n");
         if ($id !== null && !in_array($id, $this->tabOrder, true)) {
+            fwrite(STDERR, "[FocusManager] focus: id not in tabOrder, returning early\n");
             return;
         }
 
         $old = $this->current;
         if ($old === $id) {
+            fwrite(STDERR, "[FocusManager] focus: same as current, returning early\n");
             return;
         }
 
         $this->current = $id;
 
         if ($this->onChange !== null) {
+            fwrite(STDERR, "[FocusManager] focus: firing onChange callback\n");
             ($this->onChange)($old, $id);
         }
     }

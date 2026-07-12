@@ -1,0 +1,107 @@
+{
+    "viewport": {
+        "w": 400,
+        "h": 50
+    },
+    "layout": {
+        "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 400,
+            "h": 50
+        },
+        "style": {
+            "gap": 8,
+            "align": "center",
+            "shrink": 1,
+            "h": 44
+        },
+        "children": [
+            {
+                "id": "save",
+                "rect": {
+                    "x": 0,
+                    "y": 7,
+                    "w": 100,
+                    "h": 36
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 100,
+                    "h": 36
+                },
+                "spec": {
+                    "label": "Save",
+                    "variant": "filled",
+                    "enabled": true,
+                    "pressed": false,
+                    "hovered": false,
+                    "radius": 8,
+                    "type": "button"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 100,
+                        "height": 36,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "cancel",
+                "rect": {
+                    "x": 108,
+                    "y": 7,
+                    "w": 100,
+                    "h": 36
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 100,
+                    "h": 36
+                },
+                "spec": {
+                    "label": "Cancel",
+                    "variant": "outline",
+                    "enabled": true,
+                    "pressed": false,
+                    "hovered": false,
+                    "radius": 8,
+                    "type": "button"
+                },
+                "commands": [
+                    {
+                        "_cmd": "StrokeRoundedRect",
+                        "x": 0.75,
+                        "y": 0.75,
+                        "width": 98.5,
+                        "height": 34.5,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        },
+                        "stroke": {
+                            "cap": 0,
+                            "join": 0,
+                            "miterLimit": 10,
+                            "dashes": [],
+                            "thickness": 1.5
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,242 @@
+{
+    "viewport": {
+        "w": 350,
+        "h": 200
+    },
+    "layout": {
+        "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 350,
+            "h": 200
+        },
+        "style": {
+            "dir": "column",
+            "gap": 8,
+            "pad": 12,
+            "shrink": 1,
+            "w": 300,
+            "h": 160
+        },
+        "children": [
+            {
+                "id": "name",
+                "rect": {
+                    "x": 12,
+                    "y": 12,
+                    "w": 280,
+                    "h": 36
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 280,
+                    "h": 36
+                },
+                "spec": {
+                    "value": "",
+                    "placeholder": "Enter name…",
+                    "enabled": true,
+                    "focused": false,
+                    "hovered": false,
+                    "radius": 6,
+                    "type": "text_field"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 280,
+                        "height": 36,
+                        "radius": 6,
+                        "color": {
+                            "r": 1,
+                            "g": 1,
+                            "b": 1,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "StrokeRoundedRect",
+                        "x": 0.75,
+                        "y": 0.75,
+                        "width": 278.5,
+                        "height": 34.5,
+                        "radius": 6,
+                        "color": {
+                            "r": 0.88,
+                            "g": 0.88,
+                            "b": 0.88,
+                            "a": 1
+                        },
+                        "stroke": {
+                            "cap": 0,
+                            "join": 0,
+                            "miterLimit": 10,
+                            "dashes": [],
+                            "thickness": 1.5
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "email",
+                "rect": {
+                    "x": 12,
+                    "y": 56,
+                    "w": 280,
+                    "h": 36
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 280,
+                    "h": 36
+                },
+                "spec": {
+                    "value": "",
+                    "placeholder": "user@example.com",
+                    "enabled": true,
+                    "focused": false,
+                    "hovered": false,
+                    "radius": 6,
+                    "type": "text_field"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 280,
+                        "height": 36,
+                        "radius": 6,
+                        "color": {
+                            "r": 1,
+                            "g": 1,
+                            "b": 1,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "StrokeRoundedRect",
+                        "x": 0.75,
+                        "y": 0.75,
+                        "width": 278.5,
+                        "height": 34.5,
+                        "radius": 6,
+                        "color": {
+                            "r": 0.88,
+                            "g": 0.88,
+                            "b": 0.88,
+                            "a": 1
+                        },
+                        "stroke": {
+                            "cap": 0,
+                            "join": 0,
+                            "miterLimit": 10,
+                            "dashes": [],
+                            "thickness": 1.5
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "agree",
+                "rect": {
+                    "x": 12,
+                    "y": 100,
+                    "w": 280,
+                    "h": 28
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 280,
+                    "h": 28
+                },
+                "spec": {
+                    "checked": false,
+                    "enabled": true,
+                    "hovered": false,
+                    "label": "I agree to terms",
+                    "radius": 4,
+                    "type": "checkbox"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 5,
+                        "width": 18,
+                        "height": 18,
+                        "radius": 4,
+                        "color": {
+                            "r": 0.88,
+                            "g": 0.88,
+                            "b": 0.88,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "StrokeRoundedRect",
+                        "x": 0,
+                        "y": 5,
+                        "width": 18,
+                        "height": 18,
+                        "radius": 4,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        },
+                        "stroke": {
+                            "cap": 0,
+                            "join": 0,
+                            "miterLimit": 10,
+                            "dashes": [],
+                            "thickness": 1.5
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "submit",
+                "rect": {
+                    "x": 12,
+                    "y": 136,
+                    "w": 100,
+                    "h": 36
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 100,
+                    "h": 36
+                },
+                "spec": {
+                    "label": "Submit",
+                    "variant": "filled",
+                    "enabled": true,
+                    "pressed": false,
+                    "hovered": false,
+                    "radius": 8,
+                    "type": "button"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 100,
+                        "height": 36,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

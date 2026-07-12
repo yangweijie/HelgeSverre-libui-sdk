@@ -54,9 +54,39 @@ use Yangweijie\Ui2\Widgets\ScrollViewControl;
 use Yangweijie\Ui2\Widgets\SearchFieldControl;
 use Yangweijie\Ui2\Widgets\SheetControl;
 use Yangweijie\Ui2\Widgets\Surface;
+use Yangweijie\Ui2\Compiler\NativeLoader;
 use Yangweijie\Ui2\Widgets\TabControl;
 use Yangweijie\Ui2\Widgets\TableControl;
 use Yangweijie\Ui2\Widgets\TextAreaControl;
+use Yangweijie\Ui2\State\AppRuntime;
+use Yangweijie\Ui2\State\Msg;
+use Yangweijie\Ui2\State\Model;
+use Yangweijie\Ui2\State\UpdateResult;
+
+// ── Elm-architecture counter: Model / Msg / Update ────────────────────────
+
+final readonly class CounterModel implements Model
+{
+    public function __construct(
+        public int $count = 0,
+    ) {}
+}
+
+enum CounterMsg: string implements Msg
+{
+    case Inc   = 'inc';
+    case Dec   = 'dec';
+    case Reset = 'reset';
+}
+
+function counterUpdate(CounterModel $m, CounterMsg $msg): UpdateResult
+{
+    return match ($msg) {
+        CounterMsg::Inc   => UpdateResult::pure(new CounterModel($m->count + 1)),
+        CounterMsg::Dec   => UpdateResult::pure(new CounterModel($m->count - 1)),
+        CounterMsg::Reset => UpdateResult::pure(new CounterModel(0)),
+    };
+}
 
 $darkOverrides = [
     'color' => [
@@ -119,6 +149,43 @@ $radioProgressRow = LayoutNode::row(gap: 24, align: 'start', height: 120)
     ->child($radioCol)
     ->child($progressCol);
 $section('Radio / Progress（单选 / 递增）', $radioProgressRow, 120.0);
+
+// ── Elm 风格 Counter：Model→Msg→Update→redraw（示例 AppRuntime）────────────
+$counterApp = new AppRuntime(new CounterModel(0), 'counterUpdate');
+$countLeaf = LayoutNode::leaf('counter-count',
+    new LabelSpec('0', size: 28.0),
+    width: 120, height: 40,
+);
+$counterRow = LayoutNode::row(gap: 12, align: 'center', height: 56)
+    ->child($countLeaf)
+    ->child(LayoutNode::leaf('counter-dec', new ButtonSpec('−', 'filled', radius: 20), width: 44, height: 44))
+    ->child(LayoutNode::leaf('counter-inc', new ButtonSpec('+', 'filled', radius: 20), width: 44, height: 44))
+    ->child(LayoutNode::leaf('counter-reset', new ButtonSpec('Reset', 'soft'), width: 80, height: 36));
+$section('Elm 风格 Counter（Model / Msg / Update）', $counterRow, 56.0);
+
+// ── DSL Counter：从 .native 文件加载 ─────────────────────────────────────────
+$dslCounterApp = new AppRuntime(new CounterModel(0), 'counterUpdate');
+$dslCounterPath = __DIR__ . '/counter.native';
+$dslCounterRoot = NativeLoader::load($dslCounterPath);
+$dslCounterRow = LayoutNode::row(gap: 0, align: 'center', height: 176.0)
+    ->child($dslCounterRoot);
+
+/**
+ * DFS-find a LayoutNode by id in the loaded DSL tree.
+ * @param  LayoutNode    $root  The tree root.
+ * @param  string        $id    Target node id.
+ * @return LayoutNode|null
+ */
+$dslFind = static function (LayoutNode $root, string $id) use (&$dslFind): ?LayoutNode {
+    if ($root->id === $id) return $root;
+    foreach ($root->children as $child) {
+        $found = $dslFind($child, $id);
+        if ($found !== null) return $found;
+    }
+    return null;
+};
+$dslLabelNode = $dslFind($dslCounterRoot, 'counter-dsl-label');
+$section('DSL 声明式 Counter（加载自 counter.native）', $dslCounterRow, 188.0);
 
 // ── Breadcrumb / Pagination ─────────────────────────────────────────────────
 $breadcrumb = new BreadcrumbControl('path', [
@@ -338,6 +405,56 @@ $surface->onClick('progress+', static function () use ($progressLeaf, $surface, 
     $progressLeaf->spec = new ProgressSpec(value: $next);
     $surface->redraw();
     $status->setText('进度: ' . (int) round($next * 100) . '%');
+});
+
+// Elm Counter：通过 AppRuntime::dispatch() 发送 Msg → Update → 更新 Label
+$surface->onClick('counter-inc', static function () use ($counterApp, $countLeaf, $surface, $status): void {
+    /** @var CounterModel $m */
+    $m = $counterApp->dispatch(CounterMsg::Inc);
+    $countLeaf->spec = new LabelSpec((string) $m->count, size: 28.0);
+    $surface->redraw();
+    $status->setText('Counter: ' . $m->count);
+});
+$surface->onClick('counter-dec', static function () use ($counterApp, $countLeaf, $surface, $status): void {
+    /** @var CounterModel $m */
+    $m = $counterApp->dispatch(CounterMsg::Dec);
+    $countLeaf->spec = new LabelSpec((string) $m->count, size: 28.0);
+    $surface->redraw();
+    $status->setText('Counter: ' . $m->count);
+});
+$surface->onClick('counter-reset', static function () use ($counterApp, $countLeaf, $surface, $status): void {
+    /** @var CounterModel $m */
+    $m = $counterApp->dispatch(CounterMsg::Reset);
+    $countLeaf->spec = new LabelSpec((string) $m->count, size: 28.0);
+    $surface->redraw();
+    $status->setText('Counter: ' . $m->count);
+});
+
+// DSL Counter：点击按钮 dispatch Msg → 更新 DSL 中的 Label 节点
+// Uses its OWN AppRuntime instance (independent of the Elm counter above).
+$surface->onClick('counter-dsl-inc', static function () use ($dslCounterApp, $dslLabelNode, $surface, $status): void {
+    if ($dslLabelNode === null) return;
+    /** @var CounterModel $m */
+    $m = $dslCounterApp->dispatch(CounterMsg::Inc);
+    $dslLabelNode->spec = new LabelSpec((string) $m->count, size: 28.0);
+    $surface->redraw();
+    $status->setText('DSL Counter: ' . $m->count);
+});
+$surface->onClick('counter-dsl-dec', static function () use ($dslCounterApp, $dslLabelNode, $surface, $status): void {
+    if ($dslLabelNode === null) return;
+    /** @var CounterModel $m */
+    $m = $dslCounterApp->dispatch(CounterMsg::Dec);
+    $dslLabelNode->spec = new LabelSpec((string) $m->count, size: 28.0);
+    $surface->redraw();
+    $status->setText('DSL Counter: ' . $m->count);
+});
+$surface->onClick('counter-dsl-reset', static function () use ($dslCounterApp, $dslLabelNode, $surface, $status): void {
+    if ($dslLabelNode === null) return;
+    /** @var CounterModel $m */
+    $m = $dslCounterApp->dispatch(CounterMsg::Reset);
+    $dslLabelNode->spec = new LabelSpec((string) $m->count, size: 28.0);
+    $surface->redraw();
+    $status->setText('DSL Counter: ' . $m->count);
 });
 
 // TextField（自绘）：点击聚焦后直接键入

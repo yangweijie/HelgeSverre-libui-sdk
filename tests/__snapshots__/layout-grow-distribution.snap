@@ -1,0 +1,119 @@
+{
+    "viewport": {
+        "w": 400,
+        "h": 50
+    },
+    "layout": {
+        "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 400,
+            "h": 50
+        },
+        "style": {
+            "shrink": 1,
+            "h": 40
+        },
+        "children": [
+            {
+                "id": "fixed",
+                "rect": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 100,
+                    "h": 36
+                },
+                "style": {
+                    "shrink": 1,
+                    "w": 100,
+                    "h": 36
+                },
+                "spec": {
+                    "label": "Fixed",
+                    "variant": "filled",
+                    "enabled": true,
+                    "pressed": false,
+                    "hovered": false,
+                    "radius": 8,
+                    "type": "button"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 100,
+                        "height": 36,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "growing",
+                "rect": {
+                    "x": 100,
+                    "y": 0,
+                    "w": 300,
+                    "h": 36
+                },
+                "style": {
+                    "grow": 1,
+                    "shrink": 1,
+                    "h": 36
+                },
+                "spec": {
+                    "label": "Growing",
+                    "variant": "soft",
+                    "enabled": true,
+                    "pressed": false,
+                    "hovered": false,
+                    "radius": 8,
+                    "type": "button"
+                },
+                "commands": [
+                    {
+                        "_cmd": "FillRoundedRect",
+                        "x": 0,
+                        "y": 0,
+                        "width": 300,
+                        "height": 36,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.88,
+                            "g": 0.88,
+                            "b": 0.88,
+                            "a": 1
+                        }
+                    },
+                    {
+                        "_cmd": "StrokeRoundedRect",
+                        "x": 0.75,
+                        "y": 0.75,
+                        "width": 298.5,
+                        "height": 34.5,
+                        "radius": 8,
+                        "color": {
+                            "r": 0.04,
+                            "g": 0.52,
+                            "b": 1,
+                            "a": 1
+                        },
+                        "stroke": {
+                            "cap": 0,
+                            "join": 0,
+                            "miterLimit": 10,
+                            "dashes": [],
+                            "thickness": 1.5
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

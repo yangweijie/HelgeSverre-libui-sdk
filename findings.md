@@ -117,7 +117,42 @@
 
 ---
 
-## GD 像素提取关键发现
+## 2026-07-12 — TextArea IME 输入修复
+
+### 问题
+在 Surface 的 TextAreaControl 中输入中文/数字，IME 候选词选择后文本不显示（回显失败）。
+
+### 根因（三重 bug）
+
+**Bug 1: `withState()` 丢失 control 回引用**
+- `Surface::withState()` 每帧创建新的 TextAreaSpec，但未传递 `control: $spec->control`
+- 结果：TextAreaSpec 的 `$control` 永远为 null，TextAreaControl 的 `$value` 与 spec 不同步
+
+**Bug 2: `withState()` 读取 stale spec 值**
+- `withState()` 读取 `$spec->value` 而非 TextAreaControl 的 `$this->value`
+- TextAreaControl 的 `syncSpec()` 更新 `$this->leaf->spec`，但 `withState()` 读的是另一份 spec 实例
+
+**Bug 3: IME 回调 segfault**
+- `ime_get_text_view()` 返回 NULL 指针（空 FFI CData 对象，非 `null`）
+- `$text_view_ptr !== null` 永远为 true → `ime_is_composing($text_view_ptr)` 传入 NULL → **segfault** → 回调静默死亡
+- 修复：`(int) $text_view_ptr === 0` 检查实际指针值
+
+### 修复内容
+
+| 文件 | 修改 |
+|------|------|
+| `src/Rendering/WidgetRenderer/TextAreaSpec.php` | 添加 `$control` 回引用属性（已存在） |
+| `src/Widgets/TextAreaControl.php` | 添加 `getCursor(): int` 方法；`syncSpec()` 设置 `control: $this` |
+| `src/Widgets/Surface.php` | `withState()` 读取 `$control->getValue()` + `$control->getCursor()`；保留 `control: $control`；NULL 指针检查 `(int) $text_view_ptr === 0` |
+
+### 技术发现
+- **PHP FFI NULL 指针陷阱**：FFI 返回的 NULL 指针是 CData 对象，永远不 === null。必须用 `(int) $ptr === 0` 检查实际值。
+- **Surface 渲染循环**：每帧 `withState()` → 新 spec 实例 → 渲染 → TextAreaRenderer 读 `$spec->value`。如果 spec 与 Control 不同步，渲染永远看到旧值。
+- **IME 回调 segfault 特征**：日志中断、无错误信息、下一个 keystroke 的日志立即出现（前一个回调已死）。
+
+### 验证
+- `php -l` 语法检查通过
+- 待运行 `php85 examples/surface-controls-demo.php` 手动验证中文输入回显
 
 ### imagecolorat() 返回格式
 - GD `imagecolorat()` 返回 `0xAARRGGBB`（**不是** `0xAABBGGRR`）
@@ -145,3 +180,57 @@
 - GD 不支持 SVG 解析
 - 项目有 `SvgView` 控件（`src/Widgets/SvgView.php`）专门用于 SVG 矢量渲染
 - 使用 SvgDelegate 解析路径并通过 DrawContext 绘制
+
+---
+
+## Elm Architecture 状态管理 (`src/State/`)
+
+### 架构映射
+- **Model** → `readonly` class（PHP 8.4+），实现 `Model` 空标记接口
+- **Msg** → PHP `UnitEnum`（不一定带数据），实现 `Msg` 空标记接口
+- **Update(Model, Msg) → (Model, Effect[])** → 纯函数返回 `UpdateResult`
+- **Effect** → 抽象基类，描述副作用（目前为标记，后续扩展）
+- **AppRuntime** → 持有 Surface + Model + Update fn + View fn；dispatch(Msg) → Update → 新 Model → 自动 redraw
+
+### 关键设计
+- 更新函数是纯函数——不访问 IO 或全局状态
+- `AppRuntime::dispatch()` 返回新 Model 实例（不可变）
+- 演示集成：Surface 的 `onClick(id, fn)` 路由 → dispatch Msg → 更新 LayoutNode spec → `$surface->redraw()`
+- Counter 示例：CounterMsg::{Inc,Dec,Reset} → counterUpdate → 更新 LabelSpec 文本
+
+### 限制
+- 没有内置 Effect 运行时（未来需要 EffectRunner 调度异步副作用）
+- 没有中间件/DevTools（Elm Debugger 那样的事件日志）
+- 当前最适合单一 Surface 应用；多 Surface 需要共享状态方案
+
+---
+
+## DSL：NativeLoader (`.native` → LayoutNode)
+
+### 架构
+- `NativeLoader::load(string $path): LayoutNode` — 读取 .native XML → SimpleXML 解析 → LayoutNode 树
+- 元素标签映射：`Row`→`LayoutNode::row()`, `Column`→`LayoutNode::column()`, 其他→`LayoutNode::leaf(id, spec)`
+- 标签名（Button/Label/Checkbox/Slider/Progress/Radio/Select/Panel/Card/ScrollView/TextField/SearchField/Dialog/Drawer/Sheet/Popover/Breadcrumb/DropdownMenu/List）→ 对应 `*Spec` 类
+- `ScrollView` 特殊处理：生成 viewport row（ScrollViewSpec） + content column
+- XML 属性 → ReflectionClass 构造函数参数映射，自动类型转换（numeric→float, "true"/"false"→bool）
+
+### Counter.native 示例
+```xml
+<Card bordered="false" radius="12" elevation="low">
+  <Column gap="8">
+    <Label id="counter-dsl-label" text="0" size="28" align="center" />
+    <Row gap="8" justify="center">
+      <Button id="counter-dsl-dec" label="−" variant="secondary" radius="6" />
+      <Button id="counter-dsl-inc" label="+" radius="6" />
+    </Row>
+    <Row gap="8" justify="center">
+      <Button id="counter-dsl-reset" label="Reset" variant="secondary" radius="6" />
+    </Row>
+  </Column>
+</Card>
+```
+
+### 限制
+- 不支持 ImageSpec（像素数据是运行时动态的，不适合 XML）
+- 没有条件/循环/表达式（纯声明式）
+- ScrollView 嵌套需要手动在 XML 里安排 Row > Column 结构
