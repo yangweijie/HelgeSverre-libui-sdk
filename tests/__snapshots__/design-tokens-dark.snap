@@ -1,0 +1,175 @@
+{
+    "color": {
+        "primary": [
+            0.1,
+            0.6,
+            1,
+            1
+        ],
+        "track": [
+            0.22,
+            0.22,
+            0.24,
+            1
+        ],
+        "onSurface": [
+            0.92,
+            0.92,
+            0.94,
+            1
+        ],
+        "surface": [
+            0.12,
+            0.12,
+            0.14,
+            1
+        ],
+        "onPrimary": [
+            1,
+            1,
+            1,
+            1
+        ],
+        "knob": [
+            1,
+            1,
+            1,
+            1
+        ],
+        "toggleOn": [
+            0.2,
+            0.6,
+            1,
+            1
+        ],
+        "toggleOff": [
+            0.5,
+            0.5,
+            0.5,
+            0.4
+        ],
+        "toggleBorder": [
+            0.3,
+            0.3,
+            0.3,
+            0.6
+        ],
+        "knobBorder": [
+            0.2,
+            0.2,
+            0.2,
+            0.3
+        ],
+        "washHover": [
+            1,
+            1,
+            1,
+            0.08
+        ],
+        "washHoverLight": [
+            1,
+            1,
+            1,
+            0.08
+        ],
+        "washDisabled": [
+            0,
+            0,
+            0,
+            0.3
+        ],
+        "focusRing": [
+            0.3,
+            0.7,
+            1,
+            0.95
+        ],
+        "selection": [
+            0.3,
+            0.7,
+            1,
+            0.2
+        ],
+        "scrim": [
+            0,
+            0,
+            0,
+            0.55
+        ]
+    },
+    "radius": {
+        "sm": 4,
+        "md": 8,
+        "lg": 12,
+        "full": 9999
+    },
+    "stroke": {
+        "hairline": 1,
+        "thin": 1,
+        "default": 1.5,
+        "thick": 2
+    },
+    "focus": {
+        "ringWidth": 2,
+        "ringGap": 3
+    },
+    "typography": {
+        "family": "Arial",
+        "body": {
+            "size": 14,
+            "weight": 400,
+            "lineHeight": 1.4
+        },
+        "label": {
+            "size": 14,
+            "weight": 400,
+            "lineHeight": 1.2
+        },
+        "button": {
+            "size": 14,
+            "weight": 500,
+            "lineHeight": 1.2
+        },
+        "caption": {
+            "size": 12,
+            "weight": 400,
+            "lineHeight": 1.3
+        },
+        "heading": {
+            "size": 16,
+            "weight": 600,
+            "lineHeight": 1.25
+        },
+        "subtitle": {
+            "size": 13,
+            "weight": 500,
+            "lineHeight": 1.3
+        },
+        "input": {
+            "size": 14,
+            "weight": 400,
+            "lineHeight": 1.2
+        },
+        "table": {
+            "size": 13,
+            "weight": 400,
+            "lineHeight": 1.2
+        }
+    },
+    "spacing": {
+        "gapXs": 2,
+        "gapSm": 4,
+        "gapMd": 8,
+        "gapLg": 12,
+        "gapXl": 16,
+        "paddingSm": 6,
+        "paddingMd": 10,
+        "paddingLg": 14
+    },
+    "elevation": {
+        "none": 0,
+        "low": 0.15,
+        "medium": 0.3,
+        "high": 0.5
+    }
+}

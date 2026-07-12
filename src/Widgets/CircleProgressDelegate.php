@@ -152,7 +152,7 @@ final class CircleProgressDelegate extends AreaDelegate
         $innerDiameter = $diameter - $this->thickness;
         $fontSize = max(14.0, $innerDiameter * 0.10);
 
-        $font = new FontDescriptor('Arial', $fontSize);
+        $font = $this->tokens->font($fontSize);
         $str = new AttributedString();
         $str->append($text, Attribute::fromColor($this->tokens->color('color.onSurface')), Attribute::size($fontSize));
 

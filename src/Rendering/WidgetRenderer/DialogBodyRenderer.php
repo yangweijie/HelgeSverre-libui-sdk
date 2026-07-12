@@ -44,7 +44,7 @@ final class DialogBodyRenderer implements WidgetRenderer
 
         $padX = 2.0;
         $titleSize = min($height * 0.16, 18.0);
-        $titleFont = new FontDescriptor('Arial', $titleSize);
+        $titleFont = $tokens->font($titleSize);
         $titleStr = new AttributedString();
         $titleStr->append($spec->title, Attribute::fromColor($onSurface), Attribute::size($titleSize));
         $titleLayout = new TextLayout($titleStr, $titleFont, $width - $padX * 2, DrawTextAlign::Left);
@@ -54,7 +54,7 @@ final class DialogBodyRenderer implements WidgetRenderer
 
         if ($spec->message !== '') {
             $msgSize = min($height * 0.13, 14.0);
-            $msgFont = new FontDescriptor('Arial', $msgSize);
+            $msgFont = $tokens->font($msgSize);
             $msgStr = new AttributedString();
             $msgStr->append($spec->message, Attribute::fromColor($muted), Attribute::size($msgSize));
             $msgLayout = new TextLayout($msgStr, $msgFont, $width - $padX * 2, DrawTextAlign::Left);

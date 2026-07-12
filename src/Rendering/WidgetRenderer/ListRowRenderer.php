@@ -80,7 +80,7 @@ final class ListRowRenderer implements WidgetRenderer
 
         $padX = 12.0;
         $labelSize = min($height * 0.42, 14.0);
-        $labelFont = new FontDescriptor('Arial', $labelSize);
+        $labelFont = $tokens->font($labelSize);
         $labelStr = new AttributedString();
         $labelStr->append($spec->label, Attribute::fromColor($onSurface), Attribute::size($labelSize));
         $labelLayout = new TextLayout($labelStr, $labelFont, $width - $padX * 2, DrawTextAlign::Left);
@@ -88,7 +88,7 @@ final class ListRowRenderer implements WidgetRenderer
 
         if ($spec->subtitle !== '') {
             $subSize = min($height * 0.34, 12.0);
-            $subFont = new FontDescriptor('Arial', $subSize);
+            $subFont = $tokens->font($subSize);
             $subStr = new AttributedString();
             $subStr->append($spec->subtitle, Attribute::fromColor($muted), Attribute::size($subSize));
             $subLayout = new TextLayout($subStr, $subFont, $width - $padX * 2, DrawTextAlign::Left);

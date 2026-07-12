@@ -76,7 +76,7 @@ final class CheckboxRenderer implements WidgetRenderer
         if ($spec->label !== '') {
             $box = min($height, 18.0);
             $fontSize = min($height * 0.5, 14.0);
-            $font = new FontDescriptor('Arial', $fontSize);
+            $font = $tokens->font($fontSize);
             $str = new AttributedString();
             $str->append($spec->label, Attribute::fromColor($this->paint($spec, $tokens, 'color.onSurface')), Attribute::size($fontSize));
             $layout = new TextLayout($str, $font, $width - $box - 8, DrawTextAlign::Left);

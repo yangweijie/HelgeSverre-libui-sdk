@@ -48,7 +48,7 @@ final class BreadcrumbItemRenderer implements WidgetRenderer
         $color = $spec->active ? $tokens->color('color.primary') : $onSurface;
 
         $fontSize = min($height * 0.5, 13.0);
-        $font = new FontDescriptor('Arial', $fontSize);
+        $font = $tokens->font($fontSize);
         $str = new AttributedString();
         $str->append($spec->label, Attribute::fromColor($color), Attribute::size($fontSize));
         $layout = new TextLayout($str, $font, $width, DrawTextAlign::Left);

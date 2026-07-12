@@ -92,7 +92,7 @@ final class ButtonRenderer implements WidgetRenderer
         $label = $spec->label;
         if ($label !== '') {
             $fontSize = min($height * 0.42, 16.0);
-            $font = new FontDescriptor('Arial', $fontSize);
+            $font = $tokens->font($fontSize);
             $str = new AttributedString();
             $str->append($label, Attribute::fromColor($this->textColor($spec, $tokens)), Attribute::size($fontSize));
 

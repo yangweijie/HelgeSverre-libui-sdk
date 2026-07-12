@@ -960,7 +960,7 @@ final class SurfaceDelegate extends AreaDelegate
         $focused = $this->surface->focus()->current();
         if ($focused !== null) {
             $textHandler = $this->surface->textHandlerFor($focused);
-            if ($textHandler !== null && ($k->isPrintable() || $k->isBackspace())) {
+            if ($textHandler !== null && ($k->isPrintable() || $k->isBackspace() || $k->isEnter())) {
                 $textHandler($k->isBackspace() ? '' : $k->char, $k->isBackspace());
 
                 return true;

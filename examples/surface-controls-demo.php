@@ -39,13 +39,14 @@ use Yangweijie\Ui2\Rendering\WidgetRenderer\ListRowSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\ProgressSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\RadioSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\SliderSpec;
-use Yangweijie\Ui2\Rendering\WidgetRenderer\TextAreaSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\TextFieldSpec;
 use Yangweijie\Ui2\Widgets\BreadcrumbControl;
 use Yangweijie\Ui2\Widgets\ComboboxControl;
 use Yangweijie\Ui2\Widgets\DialogControl;
 use Yangweijie\Ui2\Widgets\DrawerControl;
 use Yangweijie\Ui2\Widgets\DropdownMenuControl;
+use Yangweijie\Ui2\Widgets\ImageControl;
+use Yangweijie\Ui2\Widgets\AvatarControl;
 use Yangweijie\Ui2\Widgets\ListControl;
 use Yangweijie\Ui2\Widgets\PaginationControl;
 use Yangweijie\Ui2\Widgets\PopoverControl;
@@ -223,6 +224,56 @@ $overlayRow = LayoutNode::row(gap: 12, align: 'center', height: 42)
     ->child(LayoutNode::leaf('openSheet', new ButtonSpec('打开底部面板', 'soft'), width: 160, height: 36))
     ->child(LayoutNode::leaf('openPopover', new ButtonSpec('打开气泡', 'soft'), width: 140, height: 36));
 $section('叠加层：Dialog / Drawer / Sheet / Popover', $overlayRow, 42.0);
+
+// ── Image / Avatar（图片 / 头像）────────────────────────────────────────────
+// When GD is available, load fromFile(); otherwise fall back to generated pixel data.
+$iconPath = __DIR__ . '/../assets/app-icon.png';
+$canLoadFile = extension_loaded('gd') && file_exists($iconPath);
+
+// Generate a gradient sphere as fallback pixel data (also used for avatar fallback).
+$imgSize = 48;
+$imgPixels = [];
+$icx = $icy = $imgSize / 2;
+$ir = $imgSize / 2 - 1;
+for ($iy = 0; $iy < $imgSize; $iy++) {
+    for ($ix = 0; $ix < $imgSize; $ix++) {
+        $dx = $ix - $icx;
+        $dy = $iy - $icy;
+        $dist = sqrt($dx * $dx + $dy * $dy);
+        if ($dist <= $ir) {
+            $f = $dist / $ir;
+            $imgPixels[] = 0.2 + 0.6 * (1.0 - $f);
+            $imgPixels[] = 0.3 + 0.3 * $f;
+            $imgPixels[] = 0.9 - 0.3 * $f;
+            $imgPixels[] = 1.0;
+        } else {
+            $imgPixels[] = 0.0; $imgPixels[] = 0.0; $imgPixels[] = 0.0; $imgPixels[] = 0.0;
+        }
+    }
+}
+
+if ($canLoadFile) {
+    $demoImg    = ImageControl::fromFile('demo-file-img',    $iconPath, width: 96.0, height: 96.0, fit: 'contain', sampling: 'linear');
+    $demoAvatar = AvatarControl::fromFile('demo-file-avatar', $iconPath, radius: 22.0, width: 48.0, height: 48.0, sampling: 'linear');
+    $imgLabel   = 'fromFile(' . basename($iconPath) . ')';
+    $avatarLabel = 'fromFile · radius:22 · cover · linear';
+} else {
+    $demoImg    = new ImageControl('demo-img',    $imgPixels, imgW: $imgSize, imgH: $imgSize, width: 96.0, height: 96.0);
+    $demoAvatar = new AvatarControl('demo-avatar', $imgPixels, imgW: $imgSize, imgH: $imgSize, radius: 22.0, width: 48.0, height: 48.0);
+    $imgLabel   = '像素生成（GD 不可用）';
+    $avatarLabel = 'radius:22 · cover';
+}
+
+$imageRow = LayoutNode::row(gap: 32, align: 'center', height: 112.0)
+    ->child(LayoutNode::column(gap: 4, align: 'center', width: 120.0, height: 112.0)
+        ->child($demoImg->root())
+        ->child(LayoutNode::leaf(null, new LabelSpec('Image（图片）', size: 11.0, opacity: 0.5), width: 120.0, height: 16.0))
+        ->child(LayoutNode::leaf(null, new LabelSpec($imgLabel, size: 9.0, opacity: 0.35), width: 120.0, height: 14.0)))
+    ->child(LayoutNode::column(gap: 4, align: 'center', width: 100.0, height: 112.0)
+        ->child($demoAvatar->root())
+        ->child(LayoutNode::leaf(null, new LabelSpec('Avatar（头像）', size: 11.0, opacity: 0.5), width: 100.0, height: 16.0))
+        ->child(LayoutNode::leaf(null, new LabelSpec($avatarLabel, size: 9.0, opacity: 0.35), width: 100.0, height: 14.0)));
+$section('Image / Avatar（图片 / 头像）', $imageRow, 112.0);
 
 // ── 计算 ScrollView contentHeight ──────────────────────────────────────────
 $contentHeight = 0.0;

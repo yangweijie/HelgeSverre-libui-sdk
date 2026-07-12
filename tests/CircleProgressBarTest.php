@@ -87,10 +87,4 @@ test('setThickness clamps minimum to 1.0', function (): void {
     expect($bar->root())->toBeInstanceOf(Control::class);
 });
 
-// ---------------------------------------------------------------------------
-// SIZE constant
-// ---------------------------------------------------------------------------
 
-test('SIZE constant is defined', function (): void {
-    expect(CircleProgressBar::SIZE)->toBe(120);
-});

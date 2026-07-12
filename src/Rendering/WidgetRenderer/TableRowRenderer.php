@@ -84,7 +84,7 @@ final class TableRowRenderer implements WidgetRenderer
             if ($colW <= $padX * 2) {
                 continue;
             }
-            $font = new FontDescriptor('Arial', $fontSize);
+            $font = $tokens->font($fontSize);
             $str = new AttributedString();
             $str->append((string) $text, Attribute::fromColor($onSurface), Attribute::size($fontSize));
             $layout = new TextLayout($str, $font, $colW - $padX * 2, DrawTextAlign::Left);

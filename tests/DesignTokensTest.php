@@ -54,6 +54,26 @@ test('recursive token references are dereferenced', function () {
     expect($next->color('color.accent')->r)->toBe(1.0);
 });
 
+test('font() does not crash on literal family value', function () {
+    $t = new DesignTokens();
+
+    // Regression guard: resolve('typography.family') returns string 'Arial';
+    // resolveIn must NOT try to recurse into plain string literals.
+    $f = $t->font(14.0);
+
+    expect($f)->toBeInstanceOf(\Libui\Text\FontDescriptor::class);
+});
+
+test('shortcut fonts do not crash on literal family value', function () {
+    $t = new DesignTokens();
+
+    expect($t->bodyFont())->toBeInstanceOf(\Libui\Text\FontDescriptor::class);
+    expect($t->headingFont())->toBeInstanceOf(\Libui\Text\FontDescriptor::class);
+    expect($t->captionFont())->toBeInstanceOf(\Libui\Text\FontDescriptor::class);
+    expect($t->labelFont())->toBeInstanceOf(\Libui\Text\FontDescriptor::class);
+    expect($t->inputFont())->toBeInstanceOf(\Libui\Text\FontDescriptor::class);
+});
+
 test('missing token path throws', function () {
     (new DesignTokens())->resolve('color.does.not.exist');
 })->throws(\OutOfBoundsException::class);

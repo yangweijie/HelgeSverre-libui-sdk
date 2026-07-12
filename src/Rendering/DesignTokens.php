@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Yangweijie\Ui2\Rendering;
 
 use Libui\Color;
+use Libui\Generated\Enum\TextWeight;
+use Libui\Text\FontDescriptor;
 
 /**
  * Immutable design-token tree.
@@ -59,7 +61,37 @@ final class DesignTokens
             'ringGap'   => 3.0,  // gap between widget edge and the ring
         ],
         'typography' => [
-            'body' => ['size' => 14.0, 'weight' => 400],
+            'family'     => 'Arial',      // FontDescriptor family name
+            'body'       => ['size' => 14.0, 'weight' => 400, 'lineHeight' => 1.4],
+            'label'      => ['size' => 14.0, 'weight' => 400, 'lineHeight' => 1.2],
+            'button'     => ['size' => 14.0, 'weight' => 500, 'lineHeight' => 1.2],
+            'caption'    => ['size' => 12.0, 'weight' => 400, 'lineHeight' => 1.3],
+            'heading'    => ['size' => 16.0, 'weight' => 600, 'lineHeight' => 1.25],
+            'subtitle'   => ['size' => 13.0, 'weight' => 500, 'lineHeight' => 1.3],
+            'input'      => ['size' => 14.0, 'weight' => 400, 'lineHeight' => 1.2],
+            'table'      => ['size' => 13.0, 'weight' => 400, 'lineHeight' => 1.2],
+        ],
+        'spacing' => [
+            'gapXs'  => 2.0,
+            'gapSm'  => 4.0,
+            'gapMd'  => 8.0,
+            'gapLg'  => 12.0,
+            'gapXl'  => 16.0,
+            'paddingSm' => 6.0,
+            'paddingMd' => 10.0,
+            'paddingLg' => 14.0,
+        ],
+        'stroke' => [
+            'hairline' => 1.0,
+            'thin'     => 1.0,
+            'default'  => 1.5,
+            'thick'    => 2.0,
+        ],
+        'elevation' => [
+            'none'   => 0.0,
+            'low'    => 0.15,
+            'medium' => 0.30,
+            'high'   => 0.50,
         ],
     ];
 
@@ -98,8 +130,10 @@ final class DesignTokens
     /**
      * Resolve a dotted path (e.g. "color.primary") to its value.
      *
-     * A string value that itself is a dotted path is treated as a reference and
-     * dereferenced recursively (depth-guarded against cycles).
+     * A string value that contains a dot is treated as a reference to another
+     * token path and dereferenced recursively (depth-guarded against cycles).
+     * Plain string literals (e.g. the typography family name "Arial") are
+     * returned as-is.
      *
      * @throws \OutOfBoundsException when a segment is missing.
      */
@@ -125,7 +159,7 @@ final class DesignTokens
             $value = $value[$seg];
         }
 
-        return is_string($value)
+        return is_string($value) && str_contains($value, '.')
             ? $this->resolveIn($this->tokens, $value, $depth + 1)
             : $value;
     }
@@ -220,6 +254,68 @@ final class DesignTokens
     public function scrim(): Color
     {
         return $this->color('color.scrim');
+    }
+
+    /**
+     * Build a FontDescriptor from the tokenised font family.
+     *
+     * The family is read from `typography.family` (default 'Arial') so
+     * renderers never hard-code it.  $size is passed explicitly because many
+     * renderers compute a dynamic size (e.g. `min($h * 0.42, 16.0)`); pass
+     * `null` to read a static size from the given `$sizePath`.
+     */
+    public function font(float $size, string $familyPath = 'typography.family'): FontDescriptor
+    {
+        return new FontDescriptor(
+            (string) $this->resolve($familyPath),
+            $size,
+        );
+    }
+
+    /** Shortcut: heading-size FontDescriptor. */
+    public function headingFont(): FontDescriptor
+    {
+        return $this->font((float) $this->resolve('typography.heading.size'));
+    }
+
+    /** Shortcut: body-size FontDescriptor. */
+    public function bodyFont(): FontDescriptor
+    {
+        return $this->font((float) $this->resolve('typography.body.size'));
+    }
+
+    /** Shortcut: caption-size FontDescriptor. */
+    public function captionFont(): FontDescriptor
+    {
+        return $this->font((float) $this->resolve('typography.caption.size'));
+    }
+
+    /** Shortcut: label-size FontDescriptor. */
+    public function labelFont(): FontDescriptor
+    {
+        return $this->font((float) $this->resolve('typography.label.size'));
+    }
+
+    /** Shortcut: input-size FontDescriptor. */
+    public function inputFont(): FontDescriptor
+    {
+        return $this->font((float) $this->resolve('typography.input.size'));
+    }
+
+    /**
+     * Resolve a numeric spacing token.
+     */
+    public function spacing(string $path): float
+    {
+        return $this->number("spacing.{$path}");
+    }
+
+    /**
+     * Resolve a numeric elevation token.
+     */
+    public function elevation(string $path): float
+    {
+        return $this->number("elevation.{$path}");
     }
 
     /**

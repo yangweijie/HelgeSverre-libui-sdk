@@ -76,7 +76,7 @@ final class SearchFieldRenderer implements WidgetRenderer
             $isPlaceholder = $spec->value === '';
             $color = $isPlaceholder ? $muted : ($spec->enabled ? $onSurface : Color::rgba($onSurface->r, $onSurface->g, $onSurface->b, 0.4));
             $fontSize = min($height * 0.5, 14.0);
-            $font = new FontDescriptor('Arial', $fontSize);
+            $font = $tokens->font($fontSize);
             $str = new AttributedString();
             $str->append($text, Attribute::fromColor($color), Attribute::size($fontSize));
             $layout = new TextLayout($str, $font, $width - 44, DrawTextAlign::Left);

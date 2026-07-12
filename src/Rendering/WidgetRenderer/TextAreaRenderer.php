@@ -40,6 +40,8 @@ final class TextAreaRenderer implements WidgetRenderer
     /** @var array<string,float> Per-(text,size) measured widths, reused across frames. */
     private static array $measureCache = [];
 
+    private ?DesignTokens $tokens = null;
+
     public static function type(): string
     {
         return 'text_area';
@@ -70,6 +72,8 @@ final class TextAreaRenderer implements WidgetRenderer
 
     public function render(WidgetSpec $spec, DesignTokens $tokens, float $width, float $height): RenderCommandList
     {
+        $this->tokens = $tokens;
+
         if (! $spec instanceof TextAreaSpec) {
             throw new \InvalidArgumentException('TextAreaRenderer requires a TextAreaSpec');
         }
@@ -92,7 +96,7 @@ final class TextAreaRenderer implements WidgetRenderer
 
         [$lines, $starts] = $this->wrap($shown, $maxW, $spec->fontSize);
 
-        $font = new FontDescriptor('Arial', $spec->fontSize);
+        $font = $tokens->font($spec->fontSize);
         $scrollY = $spec->scrollY;
         $innerH = $height - 2 * self::PAD;
 
@@ -127,6 +131,25 @@ final class TextAreaRenderer implements WidgetRenderer
         // bleeds over the border or past the rounded corners.
         $clip = (new Path())->addRectangle(1.0, 1.0, $width - 2.0, $height - 2.0)->end();
         $commands[] = new SaveClip($clip, $children);
+
+        // Overlay scrollbar — visible only when content overflows the viewport.
+        $totalH = count($lines) * $lineH;
+        $visH = $height - 2 * self::PAD;
+        if ($totalH > $visH + 0.5) {
+            $sbW = 7.0;
+            $sbX = $width - self::PAD - $sbW;
+            $sbH = $height - 2 * self::PAD;
+            $ratio = $visH / $totalH;
+            $thumbH = max(24.0, $sbH * $ratio);
+            $maxScroll = $totalH - $visH;
+            $frac = $maxScroll > 0 ? $scrollY / $maxScroll : 0.0;
+            $thumbY = self::PAD + $frac * ($sbH - $thumbH);
+            $trackColor = Color::rgba(0, 0, 0, 0.08);
+            $thumbColor = Color::rgba(0, 0, 0, 0.28);
+            $sbRad = $sbW / 2;
+            $commands[] = new FillRoundedRect($sbX, self::PAD, $sbW, $sbH, $sbRad, $trackColor);
+            $commands[] = new FillRoundedRect($sbX, $thumbY, $sbW, $thumbH, $sbRad, $thumbColor);
+        }
 
         return new RenderCommandList($commands);
     }
@@ -202,7 +225,7 @@ final class TextAreaRenderer implements WidgetRenderer
         $line = 0;
         for ($i = 0; $i < $total; $i++) {
             $nextStart = $i + 1 < $total ? $starts[$i + 1] : $this->totalCodepoints($lines, $starts);
-            if ($cursor >= $starts[$i] && $cursor <= $nextStart) {
+            if ($cursor >= $starts[$i] && $cursor < $nextStart) {
                 $line = $i;
                 break;
             }
@@ -258,7 +281,13 @@ final class TextAreaRenderer implements WidgetRenderer
             return self::$measureCache[$key];
         }
 
-        $font = new FontDescriptor('Arial', $fontSize);
+        // Guard: when called from TextAreaControl (wrap/caretPosition) before
+        // any render() lifecycle, $this->tokens is null.  Fall back to defaults.
+        if ($this->tokens === null) {
+            $this->tokens = new DesignTokens();
+        }
+
+        $font = $this->tokens->font($fontSize);
         $str = new AttributedString();
         $str->append($s, Attribute::fromColor(Color::rgba(0, 0, 0, 1)), Attribute::size($fontSize));
         $layout = new TextLayout($str, $font, 1_000_000, DrawTextAlign::Left);

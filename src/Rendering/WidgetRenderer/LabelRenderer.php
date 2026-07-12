@@ -48,7 +48,7 @@ final class LabelRenderer implements WidgetRenderer
         $text = $spec->text;
         if ($text !== '') {
             $fontSize = $spec->size;
-            $font = new FontDescriptor('Arial', $fontSize);
+            $font = $tokens->font($fontSize);
             $baseColor = $tokens->color($spec->color) ?? $tokens->color('color.onSurface');
             $color = Color::rgba($baseColor->r, $baseColor->g, $baseColor->b, $baseColor->a * $spec->opacity);
 

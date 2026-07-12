@@ -57,6 +57,9 @@
             "@php -r \"if (PHP_OS_FAMILY === 'Windows') { passthru(__DIR__ . '/scripts/install-spc.bat'); } else { passthru('bash ' . __DIR__ . '/scripts/install-spc.sh'); }\""
         ]
     },
+  "bin": [
+    "bin/ui2"
+  ],
   "minimum-stability": "dev",
   "config": {
     "allow-plugins": {

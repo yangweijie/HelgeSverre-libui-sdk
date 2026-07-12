@@ -1,0 +1,469 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ui2 — Unified CLI for yangweijie/ui2
+ *
+ * Usage:
+ *   php bin/ui2 <command> [options]
+ *
+ * Commands:
+ *   build:phar     Build PHAR archive from entry script
+ *   build:binary   Build standalone executable (micro.sfx + PHAR)
+ *   build:pebview  Compile PebView native library
+ *   build:bridge   Compile WebView bridge platform module
+ *   check          Validate system requirements
+ *   init           Scaffold new ui2 project
+ *   info           Show version and environment info
+ *   list           List available commands
+ *   install:spc    Install static-php-cli + build micro.sfx
+ *   install:opencode  Copy .opencode/ to project
+ *
+ * Examples:
+ *   php bin/ui2 build:phar examples/tetris.php --output=tetris.phar
+ *   php bin/ui2 check
+ *   php bin/ui2 init my-app
+ */
+
+// ── Constants ──
+
+const UI2_VERSION = '0.1.0';
+
+// ── Resolve project root ──
+// Handles both in-project (bin/ui2) and vendor (vendor/yangweijie/ui2/bin/ui2) locations.
+
+$scriptDir = dirname(realpath($_SERVER['SCRIPT_FILENAME'] ?? __FILE__) ?: __FILE__);
+$ui2Root = match (true) {
+    basename(dirname($scriptDir)) === 'bin' && is_file(dirname($scriptDir) . '/composer.json')
+        => dirname($scriptDir),                                      // bin/ui2 — project root
+    basename(dirname($scriptDir)) === 'ui2' && is_file(dirname($scriptDir, 5) . '/composer.json')
+        => dirname($scriptDir, 5),                                   // vendor/yangweijie/ui2/bin/ui2
+    default => getcwd(),
+};
+$scriptsDir = $ui2Root . '/scripts';
+
+// ── Parse command ──
+
+$args = array_slice($argv, 1);
+$command = $args[0] ?? 'list';
+$commandArgs = array_slice($args, 1);
+
+// ── Dispatch ──
+
+$commands = [
+    'build:phar'    => 'cmdBuildPhar',
+    'build:binary'  => 'cmdBuildBinary',
+    'build:pebview' => 'cmdBuildPebview',
+    'build:bridge'  => 'cmdBuildBridge',
+    'check'         => 'cmdCheck',
+    'init'          => 'cmdInit',
+    'info'          => 'cmdInfo',
+    'list'          => 'cmdList',
+    'install:spc'   => 'cmdInstallSpc',
+    'install:opencode' => 'cmdInstallOpencode',
+];
+
+if (!isset($commands[$command])) {
+    fwrite(STDERR, "Unknown command: {$command}\n\n");
+    cmdList();
+    exit(1);
+}
+
+try {
+    $fn = $commands[$command];
+    $fn($commandArgs);
+} catch (\Throwable $e) {
+    fwrite(STDERR, "Error: {$e->getMessage()}\n");
+    exit(1);
+}
+
+// ======================================================================
+//  Command Handlers
+// ======================================================================
+
+/**
+ * Build PHAR archive from an entry script.
+ * Delegates to scripts/build-phar.php.
+ */
+function cmdBuildPhar(array $args): void
+{
+    $script = __DIR__ . '/../scripts/build-phar.php';
+    if (!is_file($script)) {
+        fwrite(STDERR, "Error: build-phar.php not found (expected at {$script})\n");
+        exit(1);
+    }
+    passthruPhp($script, $args);
+}
+
+/**
+ * Build standalone executable (micro.sfx + PHAR).
+ * Delegates to scripts/build-binary.php.
+ */
+function cmdBuildBinary(array $args): void
+{
+    $script = __DIR__ . '/../scripts/build-binary.php';
+    if (!is_file($script)) {
+        fwrite(STDERR, "Error: build-binary.php not found (expected at {$script})\n");
+        exit(1);
+    }
+    passthruPhp($script, $args);
+}
+
+/**
+ * Compile PebView native library.
+ * Inline from composer.json build:pebview script.
+ */
+function cmdBuildPebview(array $args): void
+{
+    fwrite(STDOUT, "Building PebView native library...\n");
+
+    switch (PHP_OS_FAMILY) {
+        case 'Darwin':
+            $cmd = 'bash vendor/kingbes/pebview/source/macos.sh';
+            break;
+        case 'Linux':
+            $cmd = 'bash vendor/kingbes/pebview/source/linux.sh';
+            break;
+        case 'Windows':
+            $cmd = 'cmd /c vendor\\kingbes\\pebview\\source\\build.cmd';
+            break;
+        default:
+            fwrite(STDERR, "Unsupported platform: " . PHP_OS_FAMILY . "\n");
+            exit(1);
+    }
+
+    fwrite(STDOUT, "  Running: {$cmd}\n");
+    passthru($cmd, $exitCode);
+    exit($exitCode);
+}
+
+/**
+ * Compile WebView bridge platform module.
+ * Inline from composer.json build:bridge script.
+ */
+function cmdBuildBridge(array $args): void
+{
+    fwrite(STDOUT, "Building WebView bridge...\n");
+
+    $pwd = getcwd();
+    switch (PHP_OS_FAMILY) {
+        case 'Darwin':
+            $cmd = sprintf(
+                'clang -shared -fobjc-arc bridge/webview_bridge.m vendor/kingbes/pebview/lib/macos/arm64/PebView.dylib -Wl,-rpath,%s/vendor/kingbes/pebview/lib/macos/arm64 -framework Cocoa -o bridge/webview_bridge.dylib',
+                escapeshellarg($pwd)
+            );
+            break;
+        case 'Linux':
+            $cmd = 'gcc -shared -fPIC bridge/webview_bridge_linux.c -o bridge/webview_bridge.so $(pkg-config --cflags --libs gtk+-3.0)';
+            break;
+        case 'Windows':
+            $cmd = 'gcc -shared bridge/webview_bridge_win.c -o bridge/webview_bridge.dll -luser32';
+            break;
+        default:
+            fwrite(STDERR, "Unsupported platform: " . PHP_OS_FAMILY . "\n");
+            exit(1);
+    }
+
+    fwrite(STDOUT, "  Running: {$cmd}\n");
+    passthru($cmd, $exitCode);
+    exit($exitCode);
+}
+
+/**
+ * Install static-php-cli and build micro.sfx.
+ */
+function cmdInstallSpc(array $args): void
+{
+    $script = __DIR__ . '/../scripts/install-spc.sh';
+    if (!is_file($script)) {
+        fwrite(STDERR, "Error: install-spc.sh not found (expected at {$script})\n");
+        exit(1);
+    }
+
+    $extra = implode(' ', array_map('escapeshellarg', $args));
+    if (PHP_OS_FAMILY === 'Windows') {
+        $batScript = __DIR__ . '/../scripts/install-spc.bat';
+        $cmd = $batScript . ($extra ? " {$extra}" : '');
+    } else {
+        $cmd = 'bash ' . escapeshellarg($script) . ($extra ? " {$extra}" : '');
+    }
+
+    fwrite(STDOUT, "  Running: {$cmd}\n");
+    passthru($cmd, $exitCode);
+    exit($exitCode);
+}
+
+/**
+ * Copy .opencode/ to project.
+ */
+function cmdInstallOpencode(array $args): void
+{
+    $script = __DIR__ . '/../scripts/install-opencode.php';
+    if (!is_file($script)) {
+        fwrite(STDERR, "Error: install-opencode.php not found (expected at {$script})\n");
+        exit(1);
+    }
+    passthruPhp($script, $args);
+}
+
+/**
+ * Validate system requirements.
+ */
+function cmdCheck(array $args): void
+{
+    $allPassed = true;
+
+    fwrite(STDOUT, "=== ui2 System Check ===\n\n");
+    fwrite(STDOUT, "PHP Version: " . PHP_VERSION . "\n");
+
+    // PHP version check
+    if (PHP_VERSION_ID >= 80500) {
+        fwrite(STDOUT, "  ✓ PHP 8.5+ requirement met\n");
+    } else {
+        fwrite(STDOUT, "  ✗ PHP 8.5+ required (running " . PHP_VERSION . ")\n");
+        $allPassed = false;
+    }
+
+    // ext-ffi
+    if (extension_loaded('ffi')) {
+        fwrite(STDOUT, "  ✓ ext-ffi loaded\n");
+    } else {
+        fwrite(STDOUT, "  ✗ ext-ffi not loaded\n");
+        $allPassed = false;
+    }
+
+    // ext-phar
+    if (extension_loaded('phar')) {
+        fwrite(STDOUT, "  ✓ ext-phar loaded\n");
+    } else {
+        fwrite(STDOUT, "  ✗ ext-phar not loaded\n");
+        $allPassed = false;
+    }
+
+    // ext-mbstring
+    if (extension_loaded('mbstring')) {
+        fwrite(STDOUT, "  ✓ ext-mbstring loaded\n");
+    } else {
+        fwrite(STDOUT, "  ✗ ext-mbstring not loaded\n");
+        $allPassed = false;
+    }
+
+    // Vendor check
+    fwrite(STDOUT, "\n--- Dependencies ---\n");
+    if (is_dir('vendor')) {
+        fwrite(STDOUT, "  ✓ vendor/ exists\n");
+        // Check for key packages
+        $packages = ['helgesverre/libui', 'kingbes/pebview', 'utopia-php/system'];
+        foreach ($packages as $pkg) {
+            $pkgDir = 'vendor/' . $pkg;
+            if (is_dir($pkgDir)) {
+                fwrite(STDOUT, "  ✓ {$pkg}\n");
+            } else {
+                fwrite(STDOUT, "  ✗ {$pkg} — not installed (run composer install)\n");
+                $allPassed = false;
+            }
+        }
+    } else {
+        fwrite(STDOUT, "  ✗ vendor/ not found (run composer install)\n");
+        $allPassed = false;
+    }
+
+    // Native libui library
+    fwrite(STDOUT, "\n--- Native Libraries ---\n");
+    $libDir = match (PHP_OS_FAMILY) {
+        'Darwin' => 'vendor/helgesverre/libui/lib/darwin',
+        'Linux' => 'vendor/helgesverre/libui/lib/linux-' . (str_contains(php_uname('m'), 'aarch64') ? 'aarch64' : 'x86_64'),
+        'Windows' => 'vendor/helgesverre/libui/lib/windows-x86_64',
+        default => null,
+    };
+    if ($libDir !== null && is_dir($libDir)) {
+        $dylibs = glob($libDir . '/*.{dylib,so,dll}', GLOB_BRACE);
+        if (!empty($dylibs)) {
+            foreach ($dylibs as $lib) {
+                fwrite(STDOUT, "  ✓ " . basename(ltrim($lib, '/')) . "\n");
+            }
+        } else {
+            fwrite(STDOUT, "  ✗ No native libs found in {$libDir}\n");
+            $allPassed = false;
+        }
+    } else {
+        fwrite(STDOUT, "  - Skipped (libui not installed)\n");
+    }
+
+    // PebView bridge
+    fwrite(STDOUT, "\n--- WebView Bridge ---\n");
+    $bridgeFiles = [
+        'Darwin' => 'bridge/webview_bridge.dylib',
+        'Linux' => 'bridge/webview_bridge.so',
+        'Windows' => 'bridge/webview_bridge.dll',
+    ];
+    $expectedBridge = $bridgeFiles[PHP_OS_FAMILY] ?? null;
+    if ($expectedBridge !== null && is_file($expectedBridge)) {
+        fwrite(STDOUT, "  ✓ {$expectedBridge}\n");
+    } elseif ($expectedBridge !== null) {
+        fwrite(STDOUT, "  ✗ {$expectedBridge} not found (run: php bin/ui2 build:bridge)\n");
+    }
+
+    // micro.sfx
+    fwrite(STDOUT, "\n--- Standalone Binary ---\n");
+    $home = getenv('HOME') ?: '~';
+    $microCandidate = $home . '/.spc/micro.sfx';
+    if (is_file($microCandidate)) {
+        fwrite(STDOUT, "  ✓ micro.sfx found at {$microCandidate}\n");
+    } else {
+        fwrite(STDOUT, "  - micro.sfx not found (optional, needed for --build:binary)\n");
+    }
+
+    fwrite(STDOUT, "\n" . ($allPassed ? "✓ All checks passed\n" : "✗ Some checks failed\n"));
+    exit($allPassed ? 0 : 1);
+}
+
+/**
+ * Scaffold a new ui2 project in the current directory.
+ */
+function cmdInit(array $args): void
+{
+    $name = $args[0] ?? 'ui2-app';
+    $targetDir = getcwd() . '/' . basename($name);
+
+    if (is_dir($targetDir) && count(glob($targetDir . '/*')) > 0) {
+        fwrite(STDERR, "Error: target directory already exists and is not empty: {$targetDir}\n");
+        exit(1);
+    }
+
+    @mkdir($targetDir . '/examples', 0755, true);
+
+    // Create main.php
+    file_put_contents($targetDir . '/main.php', <<<PHP
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Libui\App;
+use Libui\Window;
+use Libui\Ffi;
+use Yangweijie\Ui2\Fields\TextField;
+use Yangweijie\Ui2\Layout\TabContainer;
+use Yangweijie\Ui2\Widgets\CircleProgressBar;
+
+\$progress = new CircleProgressBar();
+\$progress->setProgress(65);
+
+Ffi::init();
+\$window = new Window('{$name}', 480, 360, true);
+\$window->setChild(new TabContainer([
+    'Form' => new TextField('Name:'),
+    'Status' => \$progress,
+]));
+\App::new()->run(\$window);
+PHP
+    );
+
+    // Create composer.json
+    file_put_contents($targetDir . '/composer.json', json_encode([
+        'name' => "you/{$name}",
+        'description' => "ui2 desktop application",
+        'type' => 'project',
+        'require' => [
+            'php' => '>=8.5',
+            'yangweijie/ui2' => '*',
+        ],
+        'minimum-stability' => 'dev',
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+
+    // Create .gitignore
+    file_put_contents($targetDir . '/.gitignore', "/vendor/\n/dist/\n");
+
+    fwrite(STDOUT, "✓ Scaffolded new ui2 project in: {$targetDir}\n");
+    fwrite(STDOUT, "\nNext steps:\n");
+    fwrite(STDOUT, "  cd {$targetDir}\n");
+    fwrite(STDOUT, "  composer install\n");
+    fwrite(STDOUT, "  php main.php\n");
+}
+
+/**
+ * Display version and environment info.
+ */
+function cmdInfo(array $args): void
+{
+    fwrite(STDOUT, "ui2 v" . UI2_VERSION . "\n");
+    fwrite(STDOUT, "PHP: " . PHP_VERSION . " (" . PHP_OS_FAMILY . " " . php_uname('m') . ")\n");
+
+    $composerJson = __DIR__ . '/../composer.json';
+    if (is_file($composerJson)) {
+        $meta = json_decode(file_get_contents($composerJson), true);
+        if (isset($meta['version'])) {
+            fwrite(STDOUT, "Package: yangweijie/ui2 v{$meta['version']}\n");
+        } else {
+            fwrite(STDOUT, "Package: yangweijie/ui2 (dev)\n");
+        }
+    }
+
+    fwrite(STDOUT, "Extensions: ");
+    $exts = ['ffi', 'phar', 'mbstring', 'json', 'ctype', 'posix', 'fileinfo', 'tokenizer', 'filter'];
+    $loaded = [];
+    $missing = [];
+    foreach ($exts as $ext) {
+        if (extension_loaded($ext)) {
+            $loaded[] = $ext;
+        } else {
+            $missing[] = $ext;
+        }
+    }
+    fwrite(STDOUT, implode(', ', $loaded) . "\n");
+    if ($missing) {
+        fwrite(STDOUT, "Missing: " . implode(', ', $missing) . "\n");
+    }
+
+    fwrite(STDOUT, "\nScripts:\n");
+    $sDir = __DIR__ . '/../scripts';
+    if (is_dir($sDir)) {
+        foreach (glob($sDir . '/*.php') as $f) {
+            fwrite(STDOUT, "  scripts/" . basename($f) . "\n");
+        }
+        foreach (glob($sDir . '/*.sh') as $f) {
+            fwrite(STDOUT, "  scripts/" . basename($f) . "\n");
+        }
+    }
+}
+
+/**
+ * List available commands.
+ */
+function cmdList(array $args = []): void
+{
+    fwrite(STDOUT, "ui2 v" . UI2_VERSION . " — Unified CLI\n\n");
+    fwrite(STDOUT, "Usage: php bin/ui2 <command> [options]\n\n");
+    fwrite(STDOUT, "Build commands:\n");
+    fwrite(STDOUT, "  build:phar <entry> [--output=] [--name=]    Build PHAR archive\n");
+    fwrite(STDOUT, "  build:binary <entry> [--name=] [--icon=]    Build standalone executable\n");
+    fwrite(STDOUT, "  build:pebview                               Compile PebView native library\n");
+    fwrite(STDOUT, "  build:bridge                                Compile WebView bridge\n\n");
+    fwrite(STDOUT, "Install commands:\n");
+    fwrite(STDOUT, "  install:spc [--no-build]                    Install static-php-cli + micro.sfx\n");
+    fwrite(STDOUT, "  install:opencode                            Copy .opencode/ to project\n\n");
+    fwrite(STDOUT, "Utility commands:\n");
+    fwrite(STDOUT, "  check                                       Validate system requirements\n");
+    fwrite(STDOUT, "  init [name]                                 Scaffold new project\n");
+    fwrite(STDOUT, "  info                                        Show version & environment\n");
+    fwrite(STDOUT, "  list                                        Show this help\n");
+}
+
+// ======================================================================
+//  Helpers
+// ======================================================================
+
+/**
+ * Run a PHP script via passthru with the given arguments.
+ */
+function passthruPhp(string $script, array $args): void
+{
+    $escapedArgs = implode(' ', array_map('escapeshellarg', $args));
+    $cmd = PHP_BINARY . ' ' . escapeshellarg($script) . ($escapedArgs ? ' ' . $escapedArgs : '');
+    passthru($cmd, $exitCode);
+    exit($exitCode);
+}

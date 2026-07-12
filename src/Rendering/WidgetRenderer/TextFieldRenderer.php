@@ -75,7 +75,7 @@ final class TextFieldRenderer implements WidgetRenderer
         }
 
         $fontSize = min($height * 0.5, 14.0);
-        $font = new FontDescriptor('Arial', $fontSize);
+        $font = $tokens->font($fontSize);
         $str = new AttributedString();
         $str->append($text, Attribute::fromColor($color), Attribute::size($fontSize));
         $layout = new TextLayout($str, $font, $width - 16, DrawTextAlign::Left);

@@ -93,3 +93,55 @@
 - Area 模式的极限：Surface 用 1056 行就封装了完整的布局+渲染+事件路由+语义栈，说明 libui 的 Area API 对自绘 UI 足够通用
 - FlexLayout + RendererRegistry + Surface 组合提供了类似 Flutter 的（布局 → 渲染 → 事件）三阶段流水线
 - 但性能瓶颈在单线程 FFI 调用：每帧所有子控件统一合并在一个 DrawContext 内批量绘制，没有独立的脏区域追踪
+
+## DesignTokens 核心发现
+- **FontDescriptor** 来自 `Libui\Text\FontDescriptor`（不是 `Libui\Draw`）— `new FontDescriptor(string $family, float $size, int $weight = 400, int $italic = 0)`
+- **font($size) 工厂**：返回新 `FontDescriptor` 实例（不可缓存），render 时一次性创建用完丢弃，无泄漏风险
+- **Arial 规模**：15/17 个 renderer 硬编码 `'Arial'` — 通过 sed + 手动修复完成迁移
+- **字号收敛**：button=16, body=14, caption=12, heading=24, subtitle=18, label=14, input=14, table=13
+
+## bin/ui2 CLI 要点
+- **架构**：单文件入口手写路由（避免 symfony/console 依赖），$argv[1] 匹配
+- **check 命令**：验证 PHP ≥8.5、ext-ffi/phar/mbstring、vendor、native libs、bridge、micro.sfx
+- **init 命令**：`composer create-project yangweijie/ui2-skeleton $name` 脚手架（需 skeleton 包存在）
+
+## 快照测试要点
+- 轻量文件系统 JSON 快照：`Snapshot::assert($name, $data)` — 首次写基线，后续对比
+- 基线文件在 `tests/__snapshots__/`，DesignTokens 用 ReflectionClass 读私有 `$tokens`
+
+## Capability 守卫系统要点
+- **接口**：`Capability`：`name()` / `available()` / `reason()` / `dependencies()`
+- **注册表**：`CapabilityRegistry` 单例，首次 getInstance() 自动通过 autoload 发现内置能力
+- **内置 5 个**：audio（bridge/audio.dylib）、tray（PebView）、hotkey（bridge/hotkey.dylib）、system-info（utopia-php/system）、process（illuminate/process）
+- **测试**：23 个 — 接口约定验证、注册表自动注册、require 异常、自定义能力注册
+
+---
+
+## GD 像素提取关键发现
+
+### imagecolorat() 返回格式
+- GD `imagecolorat()` 返回 `0xAARRGGBB`（**不是** `0xAABBGGRR`）
+- Bits 0-7: Blue
+- Bits 8-15: Green
+- Bits 16-23: Red
+- Bits 24-31: Alpha（0=不透明，127=透明）
+
+### Alpha 反转
+- GD alpha: 0=不透明，127=透明
+- 渲染器 alpha: 0.0=透明，1.0=不透明
+- 转换公式：`1.0 - (($rgba >> 24) & 0x7F) / 127.0`
+
+### imagealphablending()
+- GD 默认 `imagealphablending($im, true)` — 半透明像素与黑色背景混合
+- 像素提取前必须调用 `imagealphablending($im, false)` 获取原始 alpha 值
+
+### ImageControl / AvatarControl 架构
+- `ImageControl::fromPng()` 和 `fromFile()` 都委托给内部 GD 加载逻辑
+- `AvatarControl::fromPng()` 和 `fromFile()` 都委托给 `fromGdImage()`
+- `ImageSpec` 接受 flat `float[]` RGBA 数组、`imgW`、`imgH`
+- 渲染管线：`sampleNearest()`/`sampleLinear()` → `drawSampledPixels()` → RLE 合并 → `fillRect()`
+
+### SVG 支持
+- GD 不支持 SVG 解析
+- 项目有 `SvgView` 控件（`src/Widgets/SvgView.php`）专门用于 SVG 矢量渲染
+- 使用 SvgDelegate 解析路径并通过 DrawContext 绘制

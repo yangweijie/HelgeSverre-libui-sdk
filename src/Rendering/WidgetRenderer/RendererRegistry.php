@@ -79,6 +79,7 @@ final class RendererRegistry
         $registry->register(new TextAreaRenderer());
         $registry->register(new LabelRenderer());
         $registry->register(new PanelRenderer());
+        $registry->register(new ImageRenderer());
         $registry->register(new ScrimRenderer());
 
         return $registry;

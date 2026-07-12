@@ -99,6 +99,103 @@
 - `ToggleSwitch.php` — DesignTokens 主题接入
 - `SeparatorLine.php` — 移除 destructor（Composite GC 陷阱）
 - `AGENTS.md` — 内存泄漏预防文档
+---
+
+## Session: 2026-07-12 — 4 个子系统实施
+
+### Phase A: ✅ DesignTokens 扩展
+- **范围**：扩展 `src/Rendering/DesignTokens.php` — 新增 typography（family/size/weight/lineHeight × 8 角色）、spacing（gap × 5 + padding × 3）、stroke（thin/default/thick）、elevation（none/low/medium/high）
+- **迁移**：15 个 WidgetRenderer 文件从 `new FontDescriptor('Arial', $SIZE)` → `$tokens->font($SIZE)`
+- **新增方法**：`font($size): FontDescriptor`, `spacing(): array`, `elevation(): array` + 快捷字体（headingFont, bodyFont, captionFont, labelFont, inputFont）
+- **修复**：CircleProgressDelegate.php `$tokens` → `$this->tokens`
+- **验证**：所有非 FFI 测试通过，WidgetRenderer 目录零残留 `new FontDescriptor('Arial', ...)`
+
+### Phase B: ✅ 统一 CLI 工具链
+- **创建**：`bin/ui2`（469 行）— 10 个子命令（build:phar/build:binary/build:pebview/build:bridge/install:spc/install:opencode/check/init/info/list）
+- **composer.json**：添加 `"bin": ["bin/ui2"]`
+- **验证**：`php bin/ui2 check/list/info` 正常输出
+
+### Phase C: ✅ UI 快照测试
+- **创建**：`tests/Helpers/Snapshot.php` — 轻量 JSON 快照断言（首次运行写基线，后续运行对比）
+- **创建**：`tests/SnapshotTest.php` — 4 个测试（DesignTokens default/dark tree，SystemInfo static properties）
+- **基线**：`tests/__snapshots__/` 下 3 个基线文件（357 行）
+- **验证**：4/4 通过（首次创建 + 第二次对比）
+
+### Phase D: ✅ Capability 守卫系统
+- **创建**：`src/System/Capability.php`（接口）+ `CapabilityRegistry.php`（单例）+ `CapabilityException.php`
+- **5 个实现**：AudioCapability（bridge/audio.dylib）、TrayCapability（PebView）、HotkeyCapability（bridge/hotkey.dylib）、SystemInfoCapability、ProcessCapability
+- **验证**：`tests/CapabilityTest.php` — 23/23 通过
+
+### 统计
+| 指标 | Phase A | Phase B | Phase C | Phase D | 合计 |
+|------|---------|---------|---------|---------|------|
+| 新文件 | 0 | 1 | 4 | 8 | 13 |
+| 修改文件 | 16 | 1 | 0 | 0 | 17 |
+| 添加行 | ~120 | 469 | 220 | 480 | ~1289 |
+| 测试 | — | — | 4 | 23 | 27 |
+
+*规划文件遵循 planning-with-files 技能：task_plan.md=阶段追踪，findings.md=技术发现，progress.md=会话日志。子工作流有独立的 `.planning/` 子目录规划文件。*
 
 ---
-*规划文件遵循 planning-with-files 技能：task_plan.md=阶段追踪，findings.md=技术发现，progress.md=会话日志。子工作流有独立的 `.planning/` 子目录规划文件。*
+
+## Session: 2026-07-12 — ImageControl / AvatarControl GD 像素提取修复
+
+### 问题背景
+- `ImageControl::fromFile()` 和 `fromPng()` 加载 PNG 后显示内容但有严重噪声/颜色错误
+- `AvatarControl::fromFile()` 同样显示橙色而非蓝色
+- 像素数据提取的 R/B 通道顺序错误
+
+### 根因分析
+GD `imagecolorat()` 返回 `0xAARRGGBB` 格式：
+- Bits 0-7: Blue
+- Bits 8-15: Green  
+- Bits 16-23: Red
+- Bits 24-31: Alpha（0=不透明，127=透明）
+
+**原始代码 R/B 通道交换**：提取 bits 0-7 作为 R，bits 16-23 作为 B → 颜色反转
+
+**Alpha 反转**：GD alpha 0=不透明，渲染器 alpha 1.0=不透明 → 需要 `1.0 - alpha/127.0`
+
+### 修复内容
+
+#### 1. `ImageControl::fromPng()` 和 `fromFile()` (src/Widgets/ImageControl.php)
+```php
+$rgba = \imagecolorat($im, $x, $y);
+// GD imagecolorat() returns 0xAARRGGBB: bits 16-23=R, 8-15=G, 0-7=B, 24-31=A
+$pixels[] = (($rgba >> 16) & 0xFF) / 255.0;  // R
+$pixels[] = (($rgba >> 8) & 0xFF) / 255.0;   // G
+$pixels[] = ($rgba & 0xFF) / 255.0;           // B
+$pixels[] = 1.0 - (($rgba >> 24) & 0x7F) / 127.0; // inverted alpha
+```
+
+#### 2. `AvatarControl::fromGdImage()` (src/Widgets/AvatarControl.php)
+- 同样修复 R/B 交换
+- 添加 `\imagealphablending($im, false)` 防止 GD 默认混合黑色背景
+
+#### 3. Alpha 混合修复
+- 在三个位置添加 `\imagealphablending($im, false)`：
+  - `ImageControl::fromPng()` line ~85
+  - `ImageControl::fromFile()` line ~143
+  - `AvatarControl::fromGdImage()` line ~135
+
+#### 4. Demo 更新 (examples/surface-controls-demo.php)
+- 当 GD 可用时使用 `ImageControl::fromFile()` 加载 `assets/app-icon.png`
+- 当 GD 可用时使用 `AvatarControl::fromFile()` 加载同一图标
+- GD 不可用时回退到渐变球像素生成
+- 标签显示使用的方法：`fromFile(app-icon.png)` 或 `像素生成（GD 不可用）`
+
+### 验证
+- `assets/app-icon.png`：256×256 蓝色方块白色 "U2" 文字
+- 像素诊断：所有像素完全不透明（A=0），角落像素 R=37,G=99,B=235（蓝色）正确
+- 渲染管线验证：`CommandExecutor::drawSampledPixels()` 读取 RGBA 顺序正确
+- AvatarControl `fromPng()` 和 `fromFile()` 均委托给 `fromGdImage()`
+
+### 文件变更
+- `src/Widgets/ImageControl.php` — R/B 修复 + imagealphablending(false)
+- `src/Widgets/AvatarControl.php` — R/B 修复 + imagealphablending(false)
+- `examples/surface-controls-demo.php` — fromFile 演示
+
+### 技术发现
+- GD `imagecolorat()` 返回 `0xAARRGGBB`（R=bits16-23, G=bits8-15, B=bits0-7, A=bits24-31）
+- GD alpha: 0=不透明，127=透明（与标准相反）
+- SVG 不支持 via GD，需使用 `SvgView` 控件（`src/Widgets/SvgView.php`）

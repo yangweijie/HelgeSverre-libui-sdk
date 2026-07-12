@@ -57,3 +57,14 @@
 | 结算文字偏左 | Center 在 fillRect 后失效 | x=W*0.25, w=W*0.5 |
 | 出牌区空白 | pass×2 清 lastPlay | 新增 lastShownPlay 回退 |
 | 日志乱码（♣♣） | `substr` 劈开 UTF-8 多字节 | → `mb_substr(...,'UTF-8')` |
+
+## 扩展子系统
+
+| Phase | 内容 | 状态 | 备注 |
+|-------|------|------|------|
+| A | DesignTokens 扩展：font family/size/weight/lineHeight, spacing, stroke, elevation + 15 个 renderer 迁移 | ✅ complete | `src/Rendering/DesignTokens.php` |
+| B | CLI 工具链：`bin/ui2` — 10 个子命令（build:phar/build:binary/check/init/info/list 等） | ✅ complete | `bin/ui2` + composer.json bin |
+| C | 快照测试：轻量 JSON 快照机制 + 3 个基线（DesignTokens/SystemInfo） | ✅ complete | `tests/Helpers/Snapshot.php` + `tests/__snapshots__/` |
+| D | Capability 守卫系统：Capability 接口/注册表 + 5 个原生能力实现 | ✅ complete | `src/System/Capability*.php` × 7 |
+| E | ImageControl / AvatarControl GD 像素提取修复（R/B 交换 + alpha 反转 + imagealphablending） | ✅ complete | `src/Widgets/ImageControl.php`, `src/Widgets/AvatarControl.php` |
+| F | Demo 更新：fromFile/fromPng 演示 | ✅ complete | `examples/surface-controls-demo.php` |

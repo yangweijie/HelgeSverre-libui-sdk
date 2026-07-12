@@ -69,7 +69,7 @@ final class TabRenderer implements WidgetRenderer
         $color = $spec->active ? $primary : $onSurface;
 
         $fontSize = min($height * 0.42, 14.0);
-        $font = new FontDescriptor('Arial', $fontSize);
+        $font = $tokens->font($fontSize);
         $str = new AttributedString();
         $str->append($spec->label, Attribute::fromColor($color), Attribute::size($fontSize));
         $layout = new TextLayout($str, $font, $width, DrawTextAlign::Center);
