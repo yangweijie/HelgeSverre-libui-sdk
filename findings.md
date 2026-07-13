@@ -285,3 +285,41 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 ### detach 重排法则
 - destroy **先于** callback 清理；每段清理独立 try/catch 隔离，避免一处异常阻断其余
 - `removeFromSuperview` 已隐含 resignFirstResponder，**不要**再单独调 first-responder 清退（会重入 focus 机制）
+
+---
+
+## 「全面转向自绘」简化可行性审计（2026-07-13）
+
+用户提出：若 `Surface` 自绘模式成为主流，哪些 SDK 模块可去除。审计结论：**当前架构是"混合"而非"纯自绘"，列出的原生模块并非死代码，盲目删除会破坏 IME 功能与测试/示例。**
+
+### 关键反证 1：IME 覆盖层绑定原生控件（最危险）
+- `src/Widgets/Surface.php:1094` 的 IME 路径依赖 `TextAreaControl` 持有 spec 并 `syncSpec()` 同步值
+- `src/Rendering/WidgetRenderer/TextAreaSpec.php:36` 带 `public readonly TextAreaControl|null $control` 反向引用（nullable，但 Surface 的 IME 路径实际用它）
+- 即：TextField/SearchField/TextArea 是 libui 原生控件，Surface 在其上浮动 NSTextView/EDIT/GTK 覆盖层做中文输入。**去除原生控件 = 去除刚完成的 IME 功能**，除非把覆盖层改成浮动在"绘制矩形"上（需重写 IME 路由）
+
+### 关键反证 2：示例 + 测试仍大量使用原生封装
+- 示例：`test-fields.php`、`test-widgets.php`、`all-components.php`、`surface-controls-demo.php`、`test-circle-progress.php`、`renderer-button-demo.php`
+- 测试：`FieldsTest.php`、`WidgetsTest.php`、`InputControlsTest.php`、`EditControlsTest.php`
+- 文档：`docs/{zh,en}/guide/widgets.md`、`quick-start.md`、`examples.md`、`README.md`
+- 删除 `src/Fields/*` 或 `*Control` 会直接让上述 4 个测试文件 + 多个示例编译/运行失败
+
+### 关键反证 3：自绘 Spec 覆盖度有缺口
+`src/Rendering/WidgetRenderer/` 已有丰富 Spec（TextField/TextArea/SearchField/Checkbox/Switch/Select/RadioGroup/Slider/Progress/Stepper/Button/Label/Separator/Tab/Grid/Card/Stack…）。但以下 Field **无对应 Spec**：
+- `DatePickerField` → 仅有 `src/Pickers/DatePicker`（模态对话框），无自绘 Spec
+- `FilePickerField` → 仅有 `src/Pickers`（模态对话框），无自绘 Spec
+- `PasswordField` → 无 PasswordSpec
+- `NumberField` → 无 NumberSpec（TextFieldSpec 可勉强顶替，但语义不同）
+- 删除这些原生封装会丢失功能，除非先造 Spec
+
+### 结论
+"先做精简"在当前状态下**不能直接等于删除**。安全路径是分阶段：先补 Spec 缺口 → 解耦 IME → 迁移示例/测试 → 最后才删除原生封装。否则破坏构建。
+
+### 可安全立即做的"轻量精简"
+- 仅当确认某原生模块**全仓库零引用**时才可删；但审计显示被列出的模块均有引用，故当前无可安全删除项（除上游 `Generated\*` 需走 vendor 机制，不在本仓库直接删）
+- `bridge/README.md` 等文档可补"自绘 vs 原生"对照，但不属代码精简
+
+### 决议（2026-07-13 续）：DatePicker/FilePicker 走"自绘按钮 + 调 Picker"
+用户确认：自绘为"点击触发 Picker 的按钮"。已实现：
+- `DatePickerSpec`/`DatePickerRenderer`、`FilePickerSpec`/`FilePickerRenderer` 画成只读字段 + 右侧 chevron（`date_picker`/`file_picker` 已注册）
+- 点击由 Surface `onClick` 调 `DatePickerDialog::pick()` / 新增 `FilePickerDialog::pick()`（封装 `\Libui\Dialogs::openFile()`，与 `src/Pickers/` 家族对称）
+- 四组缺失 Spec（Number/Password/Date/File）全部补齐，原生 `Fields/*` 可被自绘替代面已覆盖 → Phase M ✅

@@ -73,3 +73,8 @@
 | I | TextArea IME 中文输入回显修复（五重 bug：segfault + withState 丢失 control + stale value + callback GC + observer block-based） | ✅ complete | `Surface.php` + `TextAreaControl.php` + `ime_bridge.m` — segfault / spec 丢失 / callback GC 全修复，用户确认中文回显正常 |
 | J | 表单字段 IME 覆盖层（searchField/textField）"幽灵重叠"修复（四重 bug：销毁未执行 + 字号不一致 + 首焦不可见 + 滚动跟随） | ✅ complete | `Surface.php` + `ime_bridge.m` + `TextFieldRenderer/SearchFieldRenderer` — 递归整窗清扫、字号参数化、逐帧重定位、typingAttributes 统一。用户截图确认全部正常 |
 | K | ime_bridge 跨平台（Windows/Linux）+ 接入构建系统 | ✅ complete | `bridge/ime_bridge_win.c`(EDIT) + `bridge/ime_bridge_linux.c`(GTK3) 三平台同符号；`Surface.php` 加 `imeBridgePath()` 按 `PHP_OS_FAMILY` 选库；`composer.json` 新增 `build:ime` 并纳入 `build` 聚合。macOS `composer build:ime` 编译+符号导出验证通过 |
+| L | 「全面转向自绘」简化可行性审计 | ✅ complete | 依赖面勘察：原生 `Fields/*` + `*Control` 被 4 测试 + 多个示例 + IME 覆盖层（`Surface.php:1094` / `TextAreaSpec.$control`）引用；自绘 Spec 缺 DatePicker/FilePicker/Password/Number。结论：当前为混合架构，不可直接删除 |
+| M | 补自绘 Spec 缺口（DatePicker/FilePicker/Password/Number） | ✅ complete | `Number`/`Password`/`Date`/`File` 四组 Spec+Renderer 全部加入并注册（`date_picker`/`file_picker` 画成只读字段+右侧 chevron，点击由 Surface `onClick` 调 `DatePickerDialog`/`FilePickerDialog`）。新增 `src/Pickers/FilePickerDialog.php` 补 OS 文件框（libui `Dialogs::openFile()` 封装），与 `src/Pickers/` 家族对称。5 文件 `php85 -l` 全过，registry headless 注册验证通过 |
+| N | 解耦 IME 覆盖层（浮动于绘制矩形而非原生控件） | ⏸ pending | 将 `Surface` 的 IME 路径从依赖 `TextAreaControl` 改为浮动于自绘 rect；或决定保留原生文本控件 |
+| O | 迁移示例/测试到自绘 Spec | ⏸ pending | `test-fields.php`/`test-widgets.php`/`all-components.php`/`surface-controls-demo.php` + `FieldsTest/WidgetsTest/InputControlsTest/EditControlsTest` 改为用 Spec |
+| P | 删除原生封装（Fields/* + *Control + Generated 控件类） | ⏸ pending | 仅在 M/N/O 完成后执行；上游 `Generated\*` 走 patches/vendor 机制 |

@@ -447,3 +447,95 @@ public function getCursor(): int
 
 ### 未 commit 的修改
 - `composer.json`（新增 `build:ime` + 聚合 `build`）
+
+---
+
+## Session: 2026-07-13 — 「全面转向自绘」简化可行性审计
+
+### 用户意图
+参考自绘架构分析，要求"先做精简"：去除原生封装（`src/Fields/*`、`TextAreaControl`/`SearchFieldControl`/`ComboboxControl`/`ToggleSwitch`、上游 `Generated\*` 控件类）。
+
+### 审计结论（不能直接删）
+1. **IME 耦合（最危险）**：`Surface.php:1094` IME 路径依赖 `TextAreaControl` 持有 spec；`TextAreaSpec.$control` 反向引用原生控件。覆盖层浮动于原生控件之上 —— 删原生控件即删刚完成的 IME 功能。
+2. **示例/测试引用**：4 测试（`FieldsTest`/`WidgetsTest`/`InputControlsTest`/`EditControlsTest`）+ 多示例（`test-fields`、`test-widgets`、`all-components`、`surface-controls-demo`、`test-circle-progress`、`renderer-button-demo`）引用原生封装。
+3. **Spec 覆盖缺口**：自绘 Spec 有 TextField/TextArea/SearchField/Checkbox/Switch/Select/RadioGroup/Slider/Progress… 但缺 **DatePicker / FilePicker / Password / Number** 四个 Field 的自绘等价物。
+
+### 安全分阶段路径（见 task_plan Phase L–P）
+- M：补 4 个缺失 Spec
+- N：IME 覆盖层解耦（浮动于绘制矩形）或保留原生文本控件
+- O：迁移示例/测试到 Spec
+- P：最后才删除原生封装
+
+### 当前状态
+- 仅完成审计（Phase L ✅）；未做任何删除
+- 已写入 `findings.md`（简化可行性审计）+ `task_plan.md`（Phase M–P）+ 本日志
+- 待用户确认：是否进入 M–P 分阶段，或仅维持混合架构
+
+### 未 commit 的修改
+- `findings.md`（新增审计小节）
+- `task_plan.md`（新增 Phase L–P）
+- `progress.md`（本日志）
+
+---
+
+## Session: 2026-07-13（续）— Phase M：补自绘 Spec 缺口（首批 Number/Password）
+
+### 决策
+用户选"分步纯自绘迁移 (M→P)"。Phase M 目标是补齐 `src/Fields/` 中缺失自绘 Spec 的 Field，使原生封装可被替代。
+
+### 本批完成（纯增量，零破坏）
+- 新增 `src/Rendering/WidgetRenderer/NumberSpec.php` — `type()='number_field'`，含 `min/max/step` 提示字段
+- 新增 `NumberRenderer.php` — 几何完全镜像 `TextFieldRenderer`，数值过滤由 control 负责
+- 新增 `PasswordSpec.php` — `type()='password_field'`，含 `reveal` 属性（peek 切换）
+- 新增 `PasswordRenderer.php` — 值以 `•` 掩码（UTF-8 安全 `mb_strlen`），`reveal=true` 时显原值
+- `RendererRegistry::default()` 注册 `number_field` / `password_field`
+
+### 验证
+- 5 文件 `php85 -l` 全部 No syntax errors
+- `read_lints` 对 WidgetRenderer 目录 0 诊断
+- headless 加载 `RendererRegistry::default()`：`number_field`/`password_field`/`text_field` 均 registered（无需 FFI）
+
+### 待决（Phase M 余下）
+- `DatePickerField` / `FilePickerField`：本质是 OS 对话框（modal Picker / 系统文件框），非可绘制的 Area 内控件。**建议保留原生封装**，或在自绘世界表示为"点击触发 Picker 的按钮"（需设计决策）。这影响 Phase P 能否完全删 `src/Fields/`。
+
+### 下一步
+- 确认 DatePicker/FilePicker 处置 → 完成后进入 Phase N（解耦 IME 覆盖层，从依赖 `TextAreaControl` 改为浮于绘制矩形）
+
+### 未 commit 的修改
+- `src/Rendering/WidgetRenderer/NumberSpec.php`（新增）
+- `src/Rendering/WidgetRenderer/NumberRenderer.php`（新增）
+- `src/Rendering/WidgetRenderer/PasswordSpec.php`（新增）
+- `src/Rendering/WidgetRenderer/PasswordRenderer.php`（新增）
+- `src/Rendering/WidgetRenderer/RendererRegistry.php`（注册两项）
+
+---
+
+## Session: 2026-07-13（续2）— Phase M 收尾：DatePicker/FilePicker 自绘 Spec + FilePickerDialog
+
+### 决策回放
+用户选「自绘为点击触发 Picker 的按钮」——在 Surface 里画按钮，点击调起 `src/Pickers/` 模态框。勘察发现：`src/Pickers/` 仅有 Color/Date/Font/Time 四框，**无 FilePicker**；原生 `FilePickerField` 直接走 `\Libui\Dialogs($parent)->openFile()`。
+
+### 本批完成（纯增量，零破坏）
+- `DatePickerSpec.php`（type=`date_picker`）+ `DatePickerRenderer.php`：只读字段样式（surface 填充 + primary/track 边框），右侧 chevron 用两条 `StrokeLine`；按下叠加 `color.selection`
+- `FilePickerSpec.php`（type=`file_picker`）+ `FilePickerRenderer.php`：同上，文本显示路径/占位
+- `src/Pickers/FilePickerDialog.php`：**新增**，封装 `\Libui\Dialogs($parent)->openFile()`，与 `DatePickerDialog` 等对称，API 为 `FilePickerDialog::pick(Window $parent): ?string`
+- `RendererRegistry::default()` 注册 `date_picker` / `file_picker`
+
+### 点击→Picker 接线约定
+Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface->onClick('nodeId', fn () => DatePickerDialog::pick($window))` / `FilePickerDialog::pick($window)`。`DatePickerSpec`/`FilePickerSpec` 文档注释已写明该约定。
+
+### 验证
+- 6 文件 `php85 -l` 全部 No syntax errors（含 `RendererRegistry.php`）
+- `read_lints` 对 WidgetRenderer 目录 0 诊断
+- headless 加载 `RendererRegistry::default()`：`date_picker`/`file_picker`/`text_field`/`number_field`/`password_field` 均 registered（无需 FFI）
+
+### Phase M 状态
+✅ 四组缺失 Spec（Number/Password/Date/File）全部补齐，原生 `Fields/*` 的可自绘替代面已覆盖。下一步进入 **Phase N（解耦 IME 覆盖层）**——把 `Surface` 的 IME 路由从依赖原生 `TextAreaControl` 改为浮于绘制矩形（最风险一步，会动到刚完成的 IME 功能）。
+
+### 未 commit 的修改
+- `src/Rendering/WidgetRenderer/DatePickerSpec.php`（新增）
+- `src/Rendering/WidgetRenderer/DatePickerRenderer.php`（新增）
+- `src/Rendering/WidgetRenderer/FilePickerSpec.php`（新增）
+- `src/Rendering/WidgetRenderer/FilePickerRenderer.php`（新增）
+- `src/Pickers/FilePickerDialog.php`（新增）
+- `src/Rendering/WidgetRenderer/RendererRegistry.php`（注册两项）

@@ -66,6 +66,10 @@ final class RendererRegistry
         $registry->register(new SliderRenderer());
         $registry->register(new ProgressRenderer());
         $registry->register(new TextFieldRenderer());
+        $registry->register(new NumberRenderer());
+        $registry->register(new PasswordRenderer());
+        $registry->register(new DatePickerRenderer());
+        $registry->register(new FilePickerRenderer());
         $registry->register(new SelectRenderer());
         $registry->register(new ListRowRenderer());
         $registry->register(new TableRowRenderer());
