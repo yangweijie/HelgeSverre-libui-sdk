@@ -101,3 +101,34 @@
 | N | IME 性能优化 + （可选）解耦原生控件 | ✅ complete | 性能优化（用户实测"不卡了"确认生效）：① IME 调试日志门控到 `UI2_DEBUG_IME=1`（去掉每键 ~5 次 `fflush(STDERR)` + 每帧 `withState` 写），② bridge cdef 每实例只解析一次（缓存 `$imeBridgeCdef`）。另修 `imeDbg()` 可见性 bug（`private`→`public`，否则 `SurfaceDelegate` 调用触发致命错误导致多行文本框不显示）。**深层"去原生控件"重写暂不做**：去掉原生 NSTextView 即丧失中文 IME 能力 |
 | O | 迁移示例/测试到自绘 Spec | ✅ complete | 示例（`test-fields.php`）早已自绘；`tests/FieldsTest.php` 现已收尾：由测原生 `Fields\*`（断言 `root() instanceof Control`/`value()`）改写为测**自绘 Spec 值对象** + 断言每个字段 `type()` 在 `RendererRegistry::default()` 已注册（"原生字段有自绘 renderer 接管"）。20 项全过，headless 无需 FFI。原生 `src/Fields/*` 仍保留（Phase P 被 IME 阻塞），但测试已脱离原生 API，Phase P 落地即无覆盖缺口。`tests/FieldsTest.php` 不再引用原生 `Fields\*` |
 | P | 删除原生封装（Fields/* + *Control + Generated 控件类） | ⏸ blocked | **被 IME 阻塞**：删除 `*Control`（含 `TextAreaControl`，IME 原生 NSTextView 覆盖层宿主）即丧失中文输入能力（findings 已结论）。需先定 IME 路线（保留原生覆盖层 / 或 Phase N「去原生」重写）才能推进。`tests/FieldsTest.php` 随此阶段一并处理（转 Spec 值测试或删除） |
+
+## ChartV2 示例 — 任务计划
+
+> 目标：基于 `src/ChartV2/` 组件创建自绘图表示例，替代旧的 `chart-demo.php`
+
+| Phase | 内容 | 状态 | 备注 |
+|-------|------|------|------|
+| C1 | 创建 `examples/chart-v2-demo.php`（柱状/折线/面积/饼图/散点切换 + 随机数据 + 主题 + 配色 + 数值标签） | ✅ complete | 179 行 |
+| C2 | 删除旧 `examples/chart-demo.php`（基于 `src/Chart/` 的旧示例） | ✅ complete | |
+| C3 | 修复 ChartWidget：Area nullable 构造 + bindArea 覆写 + getData 方法 | ✅ complete | `src/ChartV2/ChartWidget.php` |
+| C4 | 修复 ChartRenderer 6 个 bug | ✅ complete | 见下方错误记录 |
+
+### ChartRenderer 修复记录
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| `ChartData` 类型不匹配 | `ChartRenderer` 在 `WidgetRenderer` 命名空间，没导入 `ChartV2\ChartData` | 添加 `use ChartV2\ChartData` |
+| `color.fontFamily` token 不存在 | `fontFromTokens()` 错误地用 `$tokens->color()` 读字体族 | 改为硬编码字体族字符串 |
+| `$font->size` 属性不存在 | `FontDescriptor` 的 size 是方法不是属性 | 改为 `$font->size()` |
+| `FillRoundedRect` 参数类型 int→Color | `getPaletteColor` 返回 int，FillRoundedRect 需要 Color | 用 `Color::rgb()` 包装 |
+| `DrawTextAlign` 参数类型不匹配 | `drawTextCommand` 声明 `int` 但传入 `DrawTextAlign` 枚举 | 改为 `int\|DrawTextAlign` 联合类型 |
+| `StrokeCircle` 类未导入 | 同命名空间问题，解析到不存在的 `WidgetRenderer\StrokeCircle` | 添加 `use Rendering\StrokeCircle` |
+| `RenderCommandList` 无 `width`/`height` | 缓存比较访问不存在属性 → 抛异常 → 后续绘制全部失败 | 改用独立 `$cachedW/$cachedH` 变量 |
+| `showValueLabels` 未实现 | `ChartData` 有字段但 `ChartRenderer` 从没读取 | 在 bar/line/scatter 渲染器中添加数值标签 |
+| 重新配色无效 | `makeBarData()` 给 series 设了固定颜色，`$series->color ?? palette` 优先用 series 颜色 | 按钮改为直接修改 `series->color` |
+
+### 关键发现
+- **`static` 闭包 + 对象引用**：`static function () use ($chart)` 捕获对象引用，方法调用正常工作
+- **命名空间同名冲突**：子命名空间（如 `WidgetRenderer`）中的类如果不显式导入父命名空间的同名类，PHP 解析到子命名空间 → 类似 `StrokeCircle` 找不到
+- **`FontDescriptor` 属性 vs 方法**：`size()` 是方法不是属性，PHP 8.x 严格模式下会报 `Undefined property`
+- **渲染器缓存**：`RenderCommandList` 是纯数据对象，不应承载缓存元数据（width/height），应在持有者（ChartWidget）中跟踪

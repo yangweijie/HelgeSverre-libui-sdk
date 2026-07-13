@@ -40,17 +40,28 @@ final class ChartWidget extends AreaDelegate
     private ?array $hover = null; // ['i' => int, 'j' => int] for cartesian, ['slice' => int] for pie
     private array $hoverPx = [0.0, 0.0];
     private ?RenderCommandList $cachedCommands = null;
+    private float $cachedW = 0.0;
+    private float $cachedH = 0.0;
 
     /**
      * @param Area         $area   The Area to render into
      * @param ChartData    $data   Chart data model
      * @param DesignTokens $tokens Design tokens for theme
      */
-    public function __construct(Area $area, ChartData $data, DesignTokens $tokens)
+    public function __construct(?Area $area, ChartData $data, DesignTokens $tokens)
     {
-        $this->area = $area;
         $this->data = $data;
         $this->tokens = $tokens;
+        if ($area !== null) {
+            $this->area = $area;
+            parent::bindArea($area);
+        }
+    }
+
+    /** Override to keep local $this->area in sync with parent's. */
+    public function bindArea(Area $area): void
+    {
+        $this->area = $area;
         parent::bindArea($area);
     }
 
@@ -108,6 +119,12 @@ final class ChartWidget extends AreaDelegate
         return $this;
     }
 
+    /** Get the data model for direct mutation */
+    public function getData(): ChartData
+    {
+        return $this->data;
+    }
+
     /** Configure the data model */
     public function configure(callable $fn): self
     {
@@ -127,10 +144,12 @@ final class ChartWidget extends AreaDelegate
         }
 
         // Build or cache render commands
-        if ($this->cachedCommands === null || $this->cachedCommands->width !== $W || $this->cachedCommands->height !== $H) {
+        if ($this->cachedCommands === null || $this->cachedW !== $W || $this->cachedH !== $H) {
             $renderer = new ChartWidgetRenderer();
             $spec = new ChartSpec($this->data);
             $this->cachedCommands = $renderer->render($spec, $this->tokens, $W, $H);
+            $this->cachedW = $W;
+            $this->cachedH = $H;
         }
 
         // Execute commands

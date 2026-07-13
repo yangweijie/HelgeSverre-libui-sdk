@@ -636,3 +636,49 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 - **单 Area 全自绘**是游戏类布局的最佳方案
 - **Surface 适合表单 UI**，不适合需要固定宽度侧边栏的游戏布局
 - **未来方向**：为 Surface 增加 `CanvasSpec`，支持在 LayoutNode 树中嵌入自定义绘制回调
+
+---
+
+## 2026-07-14 — ChartV2 自绘图表示例
+
+### C1: 创建 chart-v2-demo.php
+- 基于 `src/ChartV2/` 组件创建新示例，替代旧的 `chart-demo.php`（基于 `src/Chart/`）
+- 功能：5 种图表类型切换（柱状/折线/面积/饼图/散点）、随机数据、明暗主题、重新配色、数值标签
+- 用法：`ChartWidget`（AreaDelegate）+ `ChartData` + `ChartSeries` + `DesignTokens`
+
+### C2: 删除旧 chart-demo.php
+- 删除 `examples/chart-demo.php`（基于旧 `Chart` 类，不再维护）
+
+### C3: ChartWidget 修复
+- `Area` 参数改为 nullable（解决 Chicken-and-egg：ChartWidget 需要 Area，Area 需要 delegate）
+- 覆写 `bindArea()` 确保本地 `$this->area` 和父类 AreaDelegate 的 `$this->area` 同步
+- 添加 `getData()` 方法允许外部直接修改 series 数据
+
+### C4: ChartRenderer 9 个 bug 修复
+1. **ChartData 导入缺失** — `ChartRenderer` 在 `WidgetRenderer` 命名空间，`use ChartV2\ChartData` 缺失
+2. **`color.fontFamily` token 不存在** — `fontFromTokens()` 错误地用 `$tokens->color('color.fontFamily')`
+3. **`$font->size` 属性不存在** — `FontDescriptor::size()` 是方法不是属性
+4. **`FillRoundedRect` 颜色参数类型** — `getPaletteColor` 返回 int，FillRoundedRect 需要 Color
+5. **`DrawTextAlign` 参数类型** — `drawTextCommand` 声明 int 但传入枚举
+6. **`StrokeCircle` 类未导入** — 子命名空间同名类冲突
+7. **`RenderCommandList` 无 width/height** — 缓存比较访问不存在属性 → 异常 → 后续绘制全部失败
+8. **`showValueLabels` 未实现** — 在 bar/line/scatter 渲染器中添加数值标签
+9. **重新配色无效** — `$series->color ?? palette` 优先用 series 固定颜色，palette 永远不生效
+
+### 修复的错误
+| 错误 | 根因 | 修复 |
+|------|------|------|
+| `Cannot use positional argument after argument unpacking` | PHP 8.5 不允许 `...$arr, $other` | 合并到 `array_merge()` |
+| `Argument #1 must be type AreaDelegate` | `new Area(new class {})` 匿名类不是 AreaDelegate | ChartWidget nullable Area + 两阶段初始化 |
+| `Token path not found: color.fontFamily` | fontFromTokens 用错 token | 硬编码字体族 |
+| `Undefined property: FontDescriptor::$size` | 属性 vs 方法混淆 | `$font->size()` |
+| `FillRoundedRect: Argument #6 must be type Color, int` | getPaletteColor 返回 int | `Color::rgb()` 包装 |
+| `Class "WidgetRenderer\StrokeCircle" not found` | 命名空间同名冲突 | 显式 use 导入 |
+| `$this->cachedCommands->width` 抛异常 | RenderCommandList 无 width 属性 | 独立 `$cachedW/$cachedH` |
+| 散点图不显示 | StrokeCircle 未导入 → 静默异常 | 同上 |
+| 重新配色无效 | series 固定颜色优先于 palette | 按钮直接修改 series->color |
+
+### 关键发现
+- **命名空间同名冲突**：子命名空间中的类如果不显式导入父命名空间同名类，PHP 解析到子命名空间 → 类似 `StrokeCircle` 找不到
+- **渲染器缓存应在持有者中**：`RenderCommandList` 是纯数据对象，不应承载缓存元数据
+- **`$series->color ?? palette` 优先级**：series 显式颜色 > palette 降级，需要在应用层处理覆盖逻辑

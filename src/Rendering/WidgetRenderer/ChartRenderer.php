@@ -11,6 +11,7 @@ use Libui\Text\Attribute;
 use Libui\Text\AttributedString;
 use Libui\Text\FontDescriptor;
 use Libui\Text\TextLayout;
+use Yangweijie\Ui2\ChartV2\ChartData;
 use Yangweijie\Ui2\ChartV2\ChartSeries;
 use Yangweijie\Ui2\ChartV2\Scale;
 use Yangweijie\Ui2\Rendering\DesignTokens;
@@ -21,6 +22,8 @@ use Yangweijie\Ui2\Rendering\FillPolygon;
 use Yangweijie\Ui2\Rendering\FillRoundedRect;
 use Yangweijie\Ui2\Rendering\RenderCommand;
 use Yangweijie\Ui2\Rendering\RenderCommandList;
+use Yangweijie\Ui2\Rendering\StrokeArc;
+use Yangweijie\Ui2\Rendering\StrokeCircle;
 use Yangweijie\Ui2\Rendering\StrokeLine;
 
 /**
@@ -224,10 +227,10 @@ final class ChartRenderer implements WidgetRenderer
         $seriesType = $data->type;
 
         match ($seriesType) {
-            'line' => $this->drawLineSeries($commands, $series, $plot, $yMin, $yMax, $color, $tokens),
-            'bar'  => $this->drawBarSeries($commands, $series, $plot, $yMin, $yMax, $color, $effectiveCount, $tokens),
-            'area' => $this->drawAreaSeries($commands, $series, $plot, $yMin, $yMax, $color, $tokens),
-            'scatter' => $this->drawScatterSeries($commands, $series, $plot, $yMin, $yMax, $color, $tokens),
+            'line' => $this->drawLineSeries($commands, $series, $plot, $yMin, $yMax, $color, $data, $tokens),
+            'bar'  => $this->drawBarSeries($commands, $series, $plot, $yMin, $yMax, $color, $effectiveCount, $data, $tokens),
+            'area' => $this->drawAreaSeries($commands, $series, $plot, $yMin, $yMax, $color, $data, $tokens),
+            'scatter' => $this->drawScatterSeries($commands, $series, $plot, $yMin, $yMax, $color, $data, $tokens),
             default => null,
         };
 
@@ -235,7 +238,7 @@ final class ChartRenderer implements WidgetRenderer
     }
 
     /** @return list<RenderCommand> */
-    private function drawLineSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, DesignTokens $tokens): void
+    private function drawLineSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, ChartData $data, DesignTokens $tokens): void
     {
         $plotX = $plot[0];
         $plotY = $plot[1];
@@ -260,13 +263,21 @@ final class ChartRenderer implements WidgetRenderer
                 $commands[] = new FillCircle($xPx, $yPx, $series->pointRadius, $color);
             }
 
+            // Value label above point
+            if ($data->showValueLabels) {
+                $labelText = Scale::formatTick($v, 0);
+                $labelFont = $this->fontFromTokens($tokens, 10.0);
+                $textColor = $this->getTextColor($data, $tokens);
+                $commands[] = $this->drawTextCommand($labelText, $labelFont, $xPx, $yPx - 14.0, $textColor, DrawTextAlign::Center);
+            }
+
             $prevX = $xPx;
             $prevY = $yPx;
         }
     }
 
     /** @return list<RenderCommand> */
-    private function drawBarSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, int $effectiveCount, DesignTokens $tokens): void
+    private function drawBarSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, int $effectiveCount, ChartData $data, DesignTokens $tokens): void
     {
         $plotX = $plot[0];
         $plotY = $plot[1];
@@ -301,11 +312,19 @@ final class ChartRenderer implements WidgetRenderer
             }
 
             $commands[] = new FillRoundedRect($barX, $barY, $barWidth, $barH, 4.0, $color);
+
+            // Value label above bar
+            if ($data->showValueLabels) {
+                $labelText = Scale::formatTick($v, 0);
+                $labelFont = $this->fontFromTokens($tokens, 10.0);
+                $textColor = $this->getTextColor($data, $tokens);
+                $commands[] = $this->drawTextCommand($labelText, $labelFont, $barX + $barWidth / 2.0, $barY - 14.0, $textColor, DrawTextAlign::Center);
+            }
         }
     }
 
     /** @return list<RenderCommand> */
-    private function drawAreaSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, DesignTokens $tokens): void
+    private function drawAreaSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, ChartData $data, DesignTokens $tokens): void
     {
         $plotX = $plot[0];
         $plotY = $plot[1];
@@ -337,11 +356,11 @@ final class ChartRenderer implements WidgetRenderer
         }
 
         // Draw the line on top
-        $this->drawLineSeries($commands, $series, $plot, $yMin, $yMax, $color, $tokens);
+        $this->drawLineSeries($commands, $series, $plot, $yMin, $yMax, $color, $data, $tokens);
     }
 
     /** @return list<RenderCommand> */
-    private function drawScatterSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, DesignTokens $tokens): void
+    private function drawScatterSeries(array &$commands, ChartSeries $series, array $plot, float $yMin, float $yMax, Color $color, ChartData $data, DesignTokens $tokens): void
     {
         $plotX = $plot[0];
         $plotY = $plot[1];
@@ -355,6 +374,14 @@ final class ChartRenderer implements WidgetRenderer
 
             $commands[] = new FillCircle($xPx, $yPx, $series->pointRadius, $color);
             $commands[] = new StrokeCircle($xPx, $yPx, $series->pointRadius, $color, StrokeParams::solid(1.5));
+
+            // Value label above point
+            if ($data->showValueLabels) {
+                $labelText = Scale::formatTick($v, 0);
+                $labelFont = $this->fontFromTokens($tokens, 10.0);
+                $textColor = $this->getTextColor($data, $tokens);
+                $commands[] = $this->drawTextCommand($labelText, $labelFont, $xPx, $yPx - 14.0, $textColor, DrawTextAlign::Center);
+            }
         }
     }
 
@@ -456,7 +483,7 @@ final class ChartRenderer implements WidgetRenderer
             $color = $series->color ?? $this->getPaletteColor($spec, $data, $tokens, $i);
 
             // Legend indicator
-            $commands[] = new FillRoundedRect($x, $y, 12.0, 12.0, 2.0, $color);
+            $commands[] = new FillRoundedRect($x, $y, 12.0, 12.0, 2.0, Color::rgb($color));
 
             // Legend label
             $str = new AttributedString();
@@ -472,10 +499,10 @@ final class ChartRenderer implements WidgetRenderer
     }
 
     /** Create a DrawText command for a tick label */
-    private function drawTextCommand(string $text, FontDescriptor $font, float $x, float $y, Color $color, int $align): DrawText
+    private function drawTextCommand(string $text, FontDescriptor $font, float $x, float $y, Color $color, int|DrawTextAlign $align = DrawTextAlign::Left): DrawText
     {
         $str = new AttributedString();
-        $str->append($text, Attribute::fromColor($color), Attribute::size($font->size));
+        $str->append($text, Attribute::fromColor($color), Attribute::size($font->size()));
         $layout = new TextLayout($str, $font, 100.0, $align);
 
         return new DrawText($layout, $x, $y);
@@ -483,7 +510,7 @@ final class ChartRenderer implements WidgetRenderer
 
     private function fontFromTokens(DesignTokens $tokens, float $size): FontDescriptor
     {
-        return new FontDescriptor($tokens->color('color.fontFamily'), $size, \Libui\Generated\Enum\TextWeight::Medium);
+        return new FontDescriptor('Inter, -apple-system, sans-serif', $size, \Libui\Generated\Enum\TextWeight::Medium);
     }
 
     private function getBackgroundColor(ChartData $data, DesignTokens $tokens): Color
