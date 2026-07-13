@@ -324,3 +324,59 @@ public function getCursor(): int
 - `src/Widgets/Surface.php` — 重写 `handleImeFocus` + debug logging + callback GC 修复
 - `src/Widgets/TextAreaControl.php` — `getCursor`/`setCursor`/`setValueWithCursor` + debug logging
 - `src/Rendering/WidgetRenderer/TextAreaRenderer.php` — debug logging
+
+---
+
+## Session: 2026-07-13 — 表单字段 IME 覆盖层「幽灵重叠」修复（searchField / textField）
+
+### 问题链（用户截图 + 日志驱动，4 轮迭代）
+表单字段（searchField "sf"、textField "tf"）在 Surface 上用浮动 NSTextView 覆盖层承载中文输入。
+发现四类互相叠加的现象：
+1. **销毁未执行 → 幽灵重叠**：sf 输入 → 滚动（无重叠）→ 点 tf（重叠）→ 回 sf（仍重叠）
+2. **首焦不可见**：sf 第一次输入看不见，切到 tf 再切回才看到
+3. **输入字比显示字大**：覆盖层字号与渲染字号不一致
+4. **滚动跟随 + 重叠**：滚动时覆盖层随内容一起滚，且出现重叠
+
+### 诊断关键（scroll7 / scroll8 / scroll9.log）
+- `NSLog` 速率限制丢弃诊断日志 → 改用 `fprintf(stderr)`（与 PHP `fwrite(STDERR)` 同流，可靠）
+- **scroll8.log 决定性证据**：`BEFORE has_textview=1` 已打印，但**无 `enter`/`AFTER`** → `ime_destroy_textview` 从未执行
+- 阻塞点：`detachImeTextview()` 中在 destroy 之前调用的 `ime_clear_textview_first_responder` 会**卡死 / 重入** AppKit focus 机制，导致后续 destroy 永远跑不到
+- create 时 `ime_create_textview` 有 "create swept 1 stray" 日志（line 1603）→ 存在残留在父视图树上的旧覆盖层
+
+### 修复（四重）
+#### 1. 字号参数化（消除「输入比显示大」）
+- `bridge/ime_bridge.m` 签名扩展：`ime_create_textview(..., double font_size, const char* initial_text)`
+- 桥内：`CGFloat fs = (font_size>0)?font_size:14.0; NSFont* font=[NSFont systemFontOfSize:fs];` + `setFont:` + `setTypingAttributes:@{NSFontAttributeName:font}`
+- PHP 侧传递真实字号：`$fontSize = min($innerH*0.5, 14.0);`（与 `TextFieldRenderer/SearchFieldRenderer` 的 `min($height*0.5,14.0)` 一致）
+- **根因**：桥内硬编码 14，短字段实际 <14 → 输入比显示大
+
+#### 2. 销毁顺序重排 + 移除 first-responder 调用（消除「幽灵重叠」）
+- `detachImeTextview()` 改为：**先**在隔离 try/catch 中 destroy（BEFORE/AFTER `ime_has_textview()` + `fwrite`/`fflush`），**后**清理 notify/tab callback
+- 移除 `ime_clear_textview_first_responder`（`removeFromSuperview` 已隐含 resign，单独调用会重入 focus 机制卡死）
+
+#### 3. 递归整窗清扫（消除「残留 ghost」）
+- `collectImeViews(NSView* root, NSMutableArray* out)` 递归收集某根下所有 `IMENSTextView`
+- `ime_destroy_textview` 重写：从存活 view 的 window.contentView 派生 sweepRoot（回退 superview / g_ime_parent_view），先移除已知全局 view，再递归清扫子树，强制 `setNeedsDisplay` + `displayIfNeeded` + `CATransaction flush`
+- create 时 stray sweep 同样走 `collectImeViews`
+
+#### 4. 逐帧重定位 + 首焦可见 + typingAttributes 统一
+- `Surface::draw()` 末尾每帧调用 `$this->surface->repositionImeOverlay();`（修复首焦不可见 + 滚动跟随）
+- **最后一项不一致（字符高度）**：初始 attributed string 无 font 属性，typing 属性有 → 历史存储字 vs 新输入字高度不一致
+- 修复：初始 attributed string 也带 `NSFontAttributeName: font`（`NSDictionary* textAttrs=@{NSFontAttributeName:font};`）
+
+### 文件变更
+- `bridge/ime_bridge.m` — 签名加 `font_size`/`initial_text`；`font` 参数化；`typingAttributes` 设置；初始 attributed string 带 font；递归 `collectImeViews`；`ime_destroy_textview` 重写为整窗清扫；所有关键生命周期日志改 `fprintf(stderr)`
+- `bridge/ime_bridge.dylib` — 重新编译至 `bridge/ime_bridge.dylib` + `/tmp/ime_bridge.dylib`
+- `src/Widgets/Surface.php` — cdef 更新；create 传 `$fontSize` + `repositionImeOverlay()`；`detachImeTextview()` 重排；`draw()` 末尾逐帧 `repositionImeOverlay()`
+- `src/Rendering/WidgetRenderer/SearchFieldRenderer.php` / `TextFieldRenderer.php` — 确认渲染字号 `min($height*0.5,14.0)`
+
+### 验证
+- `php85 -l src/Widgets/Surface.php` → No syntax errors
+- `clang -dynamiclib -fobjc-arc -framework Foundation -framework AppKit -framework QuartzCore bridge/ime_bridge.m -o bridge/ime_bridge.dylib` → 编译成功；`cp` 到 `/tmp/ime_bridge.dylib`
+- 用户截图确认：sf 输入 / 滚动 / 切 tf / 回 sf 全流程无重叠，字符高度一致，首焦可见
+- 测试 harness：`UI2_DEBUG_MOUSE=1 php85 examples/surface-controls-demo.php 2> /tmp/scrollN.log`
+
+### 当前未 commit 的修改
+- `bridge/ime_bridge.m` / `bridge/ime_bridge.dylib` — 整窗清扫 + 字号参数化（最新）
+- `src/Widgets/Surface.php` — IME 生命周期重排 + 逐帧重定位
+- `src/Rendering/WidgetRenderer/SearchFieldRenderer.php` / `TextFieldRenderer.php` — （确认，无改动）

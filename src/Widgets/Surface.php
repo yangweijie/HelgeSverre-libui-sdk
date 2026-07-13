@@ -490,7 +490,7 @@ class Surface extends Composite
         }
 
         $ffi_bridge = \FFI::cdef('
-            void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, const char* initial_text);
+            void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, double font_size, const char* initial_text);
             void ime_destroy_textview(void);
             void ime_set_notify_callback(void (*callback)(const char*, int));
             void ime_clear_notify_callback(void);
@@ -517,13 +517,22 @@ class Surface extends Composite
             ? $node->spec->control->getCursor()
             : (property_exists($node->spec, 'cursor') ? $node->spec->cursor : 0);
 
-        // Create the NSTextView in the bridge
+        // Create the NSTextView in the bridge. Font size MUST match the renderer's
+        // single-line field font (min(h*0.5, 14)) so the live overlay text is the
+        // same size as the drawn text — otherwise the input looks "bigger".
+        $fontSize = min($innerH * 0.5, 14.0);
         $ffi_bridge->ime_create_textview(
             $areaNsViewPtr,
             $innerX, $innerY, $innerW, $innerH,
             $vcenter,
+            $fontSize,
             $initialText
         );
+
+        // Reposition immediately using the (now laid-out) rect. Draw() also
+        // repositions every frame, so even if the first focus computed a stale
+        // rect the overlay snaps to the correct spot on the next paint.
+        $this->repositionImeOverlay();
 
         // Make the NSTextView the first responder so it receives keyboard input.
         $ffi_bridge->ime_make_textview_first_responder();
@@ -608,23 +617,49 @@ class Surface extends Composite
     /** Destroy the IME NSTextView and clear the bridge FFI reference. */
     private function detachImeTextview(): void
     {
-        if ($this->imeBridgeFfi !== null) {
-            try {
-                $this->imeBridgeFfi->ime_clear_notify_callback();
-                $this->imeBridgeFfi->ime_clear_tab_callback();
-                $this->imeBridgeFfi->ime_clear_textview_first_responder();
-                $this->imeBridgeFfi->ime_destroy_textview();
-            } catch (\Error|\Throwable $e) {
-                fwrite(STDERR, "[Surface] Warning: IME destroy error: " . $e->getMessage() . "\n");
-            }
-            $this->imeBridgeFfi = null;
-            $this->imeNotifyCallback = null;
-            $this->imeNotifyFn = null;
-            $this->imeTabCallback = null;
-            $this->imeTabFn = null;
-            $this->imeComposingText = '';
-            $this->imeNodeId = null;
+        $ffi = $this->imeBridgeFfi;
+        if ($ffi === null) {
+            return;
         }
+
+        // Destroy the overlay view FIRST — this is the critical step that prevents
+        // a ghost overlay (and the overlap it causes). A hang or throw in the
+        // callback / first-responder cleanup below must NEVER block this, so it
+        // runs in its own guarded block before anything else.
+        try {
+            $before = $ffi->ime_has_textview();
+            fwrite(STDERR, "[Surface] detachImeTextview: BEFORE has_textview=" . var_export($before, true) . "\n");
+            fflush(STDERR);
+            $ffi->ime_destroy_textview();
+            $after = $ffi->ime_has_textview();
+            fwrite(STDERR, "[Surface] detachImeTextview: AFTER has_textview=" . var_export($after, true) . "\n");
+            fflush(STDERR);
+        } catch (\Error|\Throwable $e) {
+            fwrite(STDERR, "[Surface] Warning: IME destroy error: " . $e->getMessage() . "\n");
+            fflush(STDERR);
+        }
+
+        // Best-effort cleanup of callbacks. Each is isolated so a failure in one
+        // cannot prevent the others (or re-raise). Note: we deliberately do NOT
+        // call ime_clear_textview_first_responder here — removing the view via
+        // removeFromSuperview already resigns it, and calling it separately can
+        // re-enter the focus machinery and block/hang the detach.
+        foreach (['ime_clear_notify_callback', 'ime_clear_tab_callback'] as $clearFn) {
+            try {
+                $ffi->{$clearFn}();
+            } catch (\Error|\Throwable $e) {
+                fwrite(STDERR, "[Surface] Warning: IME {$clearFn} error: " . $e->getMessage() . "\n");
+                fflush(STDERR);
+            }
+        }
+
+        $this->imeBridgeFfi = null;
+        $this->imeNotifyCallback = null;
+        $this->imeNotifyFn = null;
+        $this->imeTabCallback = null;
+        $this->imeTabFn = null;
+        $this->imeComposingText = '';
+        $this->imeNodeId = null;
     }
 
     /**
@@ -768,6 +803,13 @@ final class SurfaceDelegate extends AreaDelegate
             $this->paintScrim($ctx, $w, $h);
             $this->paint($ctx, $overlay);
         }
+
+        // Keep the live IME NSTextView overlay glued to its field. Doing this on
+        // every frame means the overlay snaps to the correct rect as soon as the
+        // layout is established — this fixes the "first focus shows nothing" case
+        // (the rect wasn't ready when focus fired) and tracks the field through
+        // any scroll/redraw without an explicit scroll handler.
+        $this->surface->repositionImeOverlay();
     }
 
     /** Dim the whole area behind a modal overlay. */

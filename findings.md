@@ -258,3 +258,30 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 2. 如果 callback 为 NULL → 检查 FFI callback 签名匹配
 3. 如果 observer 未触发 → 检查 NSTextView 是否实际接收输入
 4. 如果 NSTextView 已释放 → 检查 retain cycle
+
+---
+
+## 表单字段 IME 覆盖层（2026-07-13，searchField / textField）
+
+### 架构
+- Surface 上的文本字段（SearchField / TextField）用浮动 `NSTextView`（`IMENSTextView` 子类）覆盖层承载中文输入，渲染文本在编辑期间隐藏（`imeActive` 由 `isImeTextviewActive()` / `ime_has_textview()` 派生）
+- 覆盖层是独立 NSView，**不在 libui 的 Box/Form 布局内**，靠绝对坐标 `repositionImeOverlay()` 贴合字段矩形
+
+### 幽灵重叠根因
+- `detachImeTextview()` 若在 destroy **之前**调用 `ime_clear_textview_first_responder`，会重入/卡死 AppKit focus 机制 → `ime_destroy_textview` 永远执行不到 → 旧 NSTextView 残留成 ghost → 滚动/切焦点时重叠
+- **关键验证手法**：在 destroy 前后各打 `ime_has_textview()` 到 stderr；若"BEFORE=1 但无 AFTER"即证明 destroy 未执行
+
+### 字号一致性
+- 覆盖层字号**必须**等于渲染字号：`min($innerH*0.5, 14.0)`，桥内不能硬编码 14（短字段实际 <14 → 输入比显示大）
+- 初始 `attributedString` 也要带 `NSFontAttributeName`，否则历史存储字 vs 新输入字高度不一致
+
+### 递归清扫
+- 单点 `removeFromSuperview` 不足以清除嵌套残留 → `collectImeViews()` 递归收集某根下所有 `IMENSTextView`，从存活 view 的 `window.contentView` 派生 sweepRoot 整窗清扫
+- 清扫后强制 `setNeedsDisplay` + `displayIfNeeded` + `[CATransaction flush]` 立即刷新
+
+### 日志可靠性
+- AppKit `NSLog` 有速率限制，密集生命周期日志会被丢弃 → 诊断用 **`fprintf(stderr)`**，与 PHP `fwrite(STDERR)` 同流、可靠有序
+
+### detach 重排法则
+- destroy **先于** callback 清理；每段清理独立 try/catch 隔离，避免一处异常阻断其余
+- `removeFromSuperview` 已隐含 resignFirstResponder，**不要**再单独调 first-responder 清退（会重入 focus 机制）

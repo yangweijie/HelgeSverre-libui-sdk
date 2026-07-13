@@ -70,4 +70,5 @@
 | F | Demo 更新：fromFile/fromPng 演示 | ✅ complete | `examples/surface-controls-demo.php` |
 | G | 状态管理（Elm Architecture）：Model/Msg/Effect/UpdateResult/AppRuntime 抽象 | ✅ complete | `src/State/` × 5 个文件 |
 | H | UI 声明（DSL）：.native XML → LayoutNode 编译器（NativeLoader + 19 个 Spec） | ✅ complete | `src/Compiler/` × 2 文件 + `examples/counter.native` |
-| I | TextArea IME 中文输入回显修复（五重 bug：segfault + withState 丢失 control + stale value + callback GC + observer block-based） | ⏳ in_progress | `Surface.php` + `TextAreaControl.php` + `ime_bridge.m` — 已修复 segfault、spec 丢失、callback GC。回调 GC 修复：将局部变量提升为实例属性。待用户手动验证 placeholder 是否消失 |
+| I | TextArea IME 中文输入回显修复（五重 bug：segfault + withState 丢失 control + stale value + callback GC + observer block-based） | ✅ complete | `Surface.php` + `TextAreaControl.php` + `ime_bridge.m` — segfault / spec 丢失 / callback GC 全修复，用户确认中文回显正常 |
+| J | 表单字段 IME 覆盖层（searchField/textField）"幽灵重叠"修复（四重 bug：销毁未执行 + 字号不一致 + 首焦不可见 + 滚动跟随） | ✅ complete | `Surface.php` + `ime_bridge.m` + `TextFieldRenderer/SearchFieldRenderer` — 递归整窗清扫、字号参数化、逐帧重定位、typingAttributes 统一。用户截图确认全部正常 |

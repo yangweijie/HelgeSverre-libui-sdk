@@ -29,6 +29,12 @@ static NSObject* g_ime_textchanged_observer = nil;
 // Forward declaration (static, defined later)
 static void ime_textViewDidChange(NSNotification* notification);
 
+// Forward declaration so ime_destroy_textview can verify removal.
+int ime_has_textview(void);
+
+// Forward declaration: recursively collects stray IMENSTextView overlays.
+static void collectImeViews(NSView* root, NSMutableArray* out);
+
 // ── Custom NSTextView subclass for IME ────────────────────────────────────
 // Overrides keyDown: to handle Tab/Shift+Tab as focus navigation instead of
 // inserting tab characters. Other keys pass through to super.
@@ -67,22 +73,46 @@ static void ime_textViewDidChange(NSNotification* notification);
 //                          vertically center the text (the renderer draws these
 //                          centered). 0 for multi-line TextArea (top-aligned).
 //   initial_text         — initial text content (UTF-8, null-terminated).
-void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, const char* initial_text) {
-    // Destroy any existing text view first
-    if (g_ime_text_view) {
-        [g_ime_text_view removeFromSuperview];
+void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, double font_size, const char* initial_text) {
+    NSView* areaView = (__bridge NSView*)area_ns_view;
+
+    // Remove any stray IMENSTextView instances already mounted anywhere under
+    // this parent. A previous destroy can fail to remove its view (e.g. it lost
+    // its parent reference or crashed), leaving a ghost that stays put while the
+    // surface scrolls — producing the "two stacked text layers" overlap after the
+    // field is re-focused. Sweeping here guarantees exactly ONE overlay is live.
+    @try {
+        unsigned long swept = 0;
+        NSMutableArray* strays = [NSMutableArray array];
+        collectImeViews(areaView, strays);
+        for (NSView* sub in strays) {
+            NSTextStorage* ts = [((NSTextView*)sub) textStorage];
+            if (ts) [ts setAttributedString:[[NSAttributedString alloc] initWithString:@""]];
+            [sub setAlphaValue:0.0];
+            [sub setHidden:YES];
+            [sub removeFromSuperview];
+            swept++;
+        }
+        if (swept > 0) {
+            fprintf(stderr, "[IME] ime_create_textview: swept %lu stray overlay(s) from parent=%p\n", swept, (__bridge void*)areaView);
+        }
         g_ime_text_view = nil;
         g_ime_notify_callback = NULL;
         g_ime_tab_callback = NULL;
+    } @catch (NSException* e) {
+        fprintf(stderr, "[IME] ime_create_textview: stray sweep error: %s\n", [[e description] UTF8String]);
     }
-
-    NSView* areaView = (__bridge NSView*)area_ns_view;
 
     // Create NSTextView at the TextArea's content rect. This positions the
     // IME popup and the (invisible) text at the correct location within the
     // TextArea so the user sees input aligned with the rendered text.
+    // font_size matches the renderer's single-line field font (min(h*0.5, 14)),
+    // so the overlay text is the SAME size as the drawn text (no "bigger input").
+    CGFloat fs = (font_size > 0.0) ? (CGFloat)font_size : 14.0;
     IMENSTextView* textView = [[IMENSTextView alloc] initWithFrame:NSMakeRect(x, y, w, h)];
-    [textView setFont:[NSFont systemFontOfSize:14.0]];
+    NSFont* font = [NSFont systemFontOfSize:fs];
+    [textView setFont:font];
+    [textView setTypingAttributes:@{NSFontAttributeName: font}];
     [textView setDrawsBackground:NO];
     [textView setRichText:NO];
     [textView setVerticallyResizable:NO];
@@ -97,17 +127,21 @@ void ime_create_textview(void* area_ns_view, double x, double y, double w, doubl
     // from the top of its frame. Without an inset the IME text appears shifted
     // up / clipped. Center it vertically by pushing the text container down.
     if (vcenter) {
-        NSFont* f = [textView font];
-        CGFloat lineHeight = [[textView layoutManager] defaultLineHeightForFont:f];
+        CGFloat lineHeight = [[textView layoutManager] defaultLineHeightForFont:font];
         CGFloat inset = (h - lineHeight) / 2.0;
         if (inset < 0) inset = 0;
         [textView setTextContainerInset:NSMakeSize(0, inset)];
     }
 
-    // Set initial text
+    // Set initial text with the SAME font attributes so existing characters and
+    // newly-typed characters always use identical font metrics. Without this,
+    // characters added after re-focusing use typingAttributes that may differ
+    // from the plain attributed string we previously loaded.
     NSString* initialStr = [NSString stringWithUTF8String:initial_text];
+    NSDictionary* textAttrs = @{NSFontAttributeName: font};
+    NSAttributedString* attrStr = [[NSAttributedString alloc] initWithString:initialStr attributes:textAttrs];
     NSTextStorage* ts = [textView textStorage];
-    [ts setAttributedString:[[NSAttributedString alloc] initWithString:initialStr]];
+    [ts setAttributedString:attrStr];
     [textView setSelectedRange:NSMakeRange([initialStr length], 0)];
 
     // Add NSTextView as a subview of the Area NSView (on top)
@@ -183,24 +217,64 @@ void ime_clear_tab_callback(void) {
     g_ime_tab_callback = NULL;
 }
 
+// Recursively collect every IMENSTextView living anywhere under `root` (including
+// nested subview hierarchies). Used by the destroy sweep so a dangling/stale cached
+// parent can never leave a ghost overlay behind.
+static void collectImeViews(NSView* root, NSMutableArray* out) {
+    if (root == nil) return;
+    for (NSView* sub in [root subviews]) {
+        if ([sub isKindOfClass:[IMENSTextView class]]) {
+            [out addObject:sub];
+        }
+        collectImeViews(sub, out);
+    }
+}
+
 // Destroy the global NSTextView, remove notification observer, and nil it.
 void ime_destroy_textview(void) {
+    fprintf(stderr, "[IME] ime_destroy_textview: enter (g_ime_text_view=%p parent=%p)\n",
+            (__bridge void*)g_ime_text_view, (__bridge void*)g_ime_parent_view);
     NSNotificationCenter* nc = [NSNotificationCenter defaultCenter];
-    if (g_ime_changed_observer) {
-        [nc removeObserver:g_ime_changed_observer];
-        g_ime_changed_observer = nil;
-    }
-    if (g_ime_textchanged_observer) {
-        [nc removeObserver:g_ime_textchanged_observer];
-        g_ime_textchanged_observer = nil;
+    @try {
+        if (g_ime_changed_observer) {
+            [nc removeObserver:g_ime_changed_observer];
+            g_ime_changed_observer = nil;
+        }
+        if (g_ime_textchanged_observer) {
+            [nc removeObserver:g_ime_textchanged_observer];
+            g_ime_textchanged_observer = nil;
+        }
+    } @catch (NSException* e) {
+        fprintf(stderr, "[IME] ime_destroy_textview: observer removal error: %s\n", [[e description] UTF8String]);
     }
 
-    // Capture the parent up-front. We remove by enumerating its subviews too, so
-    // the overlay is gone even if g_ime_text_view was somehow lost (the previous
-    // early-return-on-nil path could leave the NSTextView in place as a ghost).
-    NSView* parent = g_ime_parent_view;
+    // Pick the ROOT of the subtree to sweep:
+    //   - Prefer the live view's WINDOW contentView (covers the whole hierarchy,
+    //     so even an overlay whose immediate superview was replaced is found).
+    //   - Else the live view's immediate superview.
+    //   - Else the cached g_ime_parent_view.
+    // This makes removal robust to parent/view hierarchy changes between create
+    // and destroy (the core cause of the "ghost overlay" overlap).
+    NSView* sweepRoot = nil;
+    NSWindow* win = nil;
+    if (g_ime_text_view) {
+        win = [g_ime_text_view window];
+        if (win && [win contentView]) {
+            sweepRoot = [win contentView];
+        } else {
+            sweepRoot = [g_ime_text_view superview];
+        }
+        fprintf(stderr, "[IME] ime_destroy_textview: live window=%p contentView=%p superview=%p\n",
+                (__bridge void*)win, (__bridge void*)(win ? [win contentView] : nil),
+                (__bridge void*)[g_ime_text_view superview]);
+    }
+    if (sweepRoot == nil) {
+        sweepRoot = g_ime_parent_view;
+    }
 
-    // 1) Remove the known global view (if still set).
+    // 1) Remove the known global view (if still set) — do this first so it is
+    //    gone even if the sweep root resolves to something unexpected.
+    unsigned long removed = 0;
     if (g_ime_text_view) {
         NSTextStorage* ts = [g_ime_text_view textStorage];
         if (ts) [ts setAttributedString:[[NSAttributedString alloc] initWithString:@""]];
@@ -208,17 +282,15 @@ void ime_destroy_textview(void) {
         [g_ime_text_view setAlphaValue:0.0];
         [g_ime_text_view setHidden:YES];
         [g_ime_text_view removeFromSuperview];
+        removed++;
     }
 
-    // 2) Sweep the parent for any stray IMENSTextView instances and remove them.
-    //    Belt-and-suspenders against a dangling overlay after scrolling/blur.
-    if (parent) {
+    // 2) Recursively sweep the whole subtree for any stray IMENSTextView and
+    //    remove them. Belt-and-suspenders against a dangling overlay after
+    //    scrolling / blur / parent replacement.
+    if (sweepRoot) {
         NSMutableArray* strays = [NSMutableArray array];
-        for (NSView* sub in [parent subviews]) {
-            if ([sub isKindOfClass:[IMENSTextView class]]) {
-                [strays addObject:sub];
-            }
-        }
+        collectImeViews(sweepRoot, strays);
         for (NSView* sub in strays) {
             NSTextStorage* ts = [((NSTextView*)sub) textStorage];
             if (ts) [ts setAttributedString:[[NSAttributedString alloc] initWithString:@""]];
@@ -226,27 +298,32 @@ void ime_destroy_textview(void) {
             [sub setAlphaValue:0.0];
             [sub setHidden:YES];
             [sub removeFromSuperview];
+            removed++;
         }
-        NSLog(@"[IME] ime_destroy_textview: removed %lu IME view(s), parent=%p",
-              (unsigned long)(g_ime_text_view ? 1 : 0) + [strays count], (__bridge void*)parent);
+        fprintf(stderr, "[IME] ime_destroy_textview: removed %lu IME view(s), sweepRoot=%p\n",
+                removed, (__bridge void*)sweepRoot);
+
+        // Force the root view to invalidate its layer backing store so any cached
+        // subview bitmap is discarded. removeFromSuperview schedules a layer tree
+        // change; CATransaction flush commits it to the render server.
+        @try {
+            [sweepRoot setNeedsDisplay:YES];
+            [sweepRoot displayIfNeeded];
+            [CATransaction flush];
+        } @catch (NSException* e) {
+            fprintf(stderr, "[IME] ime_destroy_textview: flush error: %s\n", [[e description] UTF8String]);
+        }
     } else {
-        NSLog(@"[IME] ime_destroy_textview: no parent view captured (g_ime_text_view=%p)", (__bridge void*)g_ime_text_view);
+        fprintf(stderr, "[IME] ime_destroy_textview: NO SWEEP ROOT captured (g_ime_text_view=%p) — overlay may leak!\n", (__bridge void*)g_ime_text_view);
     }
 
     g_ime_text_view = nil;
     g_ime_notify_callback = NULL;
     g_ime_tab_callback = NULL;
     g_ime_suppress_notify = NO;
-
-    // Force the parent view to invalidate its layer backing store so any cached
-    // subview bitmap is discarded. removeFromSuperview schedules a layer tree
-    // change; CATransaction flush commits it immediately to the render server.
-    if (parent) {
-        [parent setNeedsDisplay:YES];
-        [parent displayIfNeeded];
-        [CATransaction flush];
-    }
     g_ime_parent_view = nil;
+    fprintf(stderr, "[IME] ime_destroy_textview: done (has_textview=%d)\n",
+            ime_has_textview());
 }
 
 // Get the global NSTextView pointer (for use in callbacks / queries).
