@@ -72,3 +72,4 @@
 | H | UI 声明（DSL）：.native XML → LayoutNode 编译器（NativeLoader + 19 个 Spec） | ✅ complete | `src/Compiler/` × 2 文件 + `examples/counter.native` |
 | I | TextArea IME 中文输入回显修复（五重 bug：segfault + withState 丢失 control + stale value + callback GC + observer block-based） | ✅ complete | `Surface.php` + `TextAreaControl.php` + `ime_bridge.m` — segfault / spec 丢失 / callback GC 全修复，用户确认中文回显正常 |
 | J | 表单字段 IME 覆盖层（searchField/textField）"幽灵重叠"修复（四重 bug：销毁未执行 + 字号不一致 + 首焦不可见 + 滚动跟随） | ✅ complete | `Surface.php` + `ime_bridge.m` + `TextFieldRenderer/SearchFieldRenderer` — 递归整窗清扫、字号参数化、逐帧重定位、typingAttributes 统一。用户截图确认全部正常 |
+| K | ime_bridge 跨平台（Windows/Linux）+ 接入构建系统 | ✅ complete | `bridge/ime_bridge_win.c`(EDIT) + `bridge/ime_bridge_linux.c`(GTK3) 三平台同符号；`Surface.php` 加 `imeBridgePath()` 按 `PHP_OS_FAMILY` 选库；`composer.json` 新增 `build:ime` 并纳入 `build` 聚合。macOS `composer build:ime` 编译+符号导出验证通过 |

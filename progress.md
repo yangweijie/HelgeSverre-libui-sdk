@@ -380,3 +380,70 @@ public function getCursor(): int
 - `bridge/ime_bridge.m` / `bridge/ime_bridge.dylib` — 整窗清扫 + 字号参数化（最新）
 - `src/Widgets/Surface.php` — IME 生命周期重排 + 逐帧重定位
 - `src/Rendering/WidgetRenderer/SearchFieldRenderer.php` / `TextFieldRenderer.php` — （确认，无改动）
+
+---
+
+## Session: 2026-07-13 — ime_bridge 增加 Windows / Linux 支持
+
+### 目标
+让 IME 覆盖层（`Surface` 的 TextField / SearchField / TextArea）在三个平台都能用，沿用项目既有桥接结构（`.m` + `_win.c` + `_linux.c`）。
+
+### 新增文件
+- `bridge/ime_bridge_win.c` — Win32 实现：Unicode `EDIT` 控件作为 libui Area HWND 的子窗口
+  - 单/多行：`vcenter!=0` → 单行；`vcenter==0` → `ES_MULTILINE`（TextArea）
+  - IME：Win32 EDIT 原生处理组合输入；`WM_IME_START/ENDCOMPOSITION` 跟踪 `g_composing`
+  - 文本变更：子类化 EDIT + 父类，父类 `WM_COMMAND/EN_CHANGE` 转发到 notify 回调（UTF-8 ↔ UTF-16 转换）
+  - Tab：EDIT 子类吞掉 `VK_TAB` 调 tab 回调（Shift 判定用 `GetKeyState`）
+  - 字体：`CreateFontW` 按 `font_size` 现实 DPI 计算；句柄存 `g_font`，destroy 时释放
+  - 焦点：`SetFocus` / 清焦点回 parent
+  - 符号用 `__declspec(dllexport)`，与 PHP cdef 同名
+- `bridge/ime_bridge_linux.c` — GTK3 实现：无边框 `GtkWindow`（popup 类型）覆盖在字段屏幕矩形上
+  - 单/多行：`GtkEntry` / `GtkTextView`（buffer `changed` 信号）
+  - IME：GTK IM context 原生；`g_composing` 暂为 best-effort（FALSE）
+  - 文本变更：`changed` 信号 → `fire_notify`（UTF-8 直接匹配）
+  - Tab：`key-press-event` 吞 `GDK_KEY_Tab` / `ISO_Left_Tab`
+  - 坐标：Area 相对 → 屏幕坐标（`gdk_window_get_origin` + 分配偏移）
+  - 字体：CSS provider（避免 `gtk_widget_override_font` 弃用警告）
+  - 焦点：`gtk_widget_grab_focus`
+
+### 修改文件
+- `src/Widgets/Surface.php`
+  - 文档块改为跨平台说明（NSTextView / EDIT / GTK entry 三者）
+  - 加载逻辑：`imeBridgePath()` 按 `PHP_OS_FAMILY` 选 `ime_bridge.dylib`（含 `/tmp` 回退）/ `.so` / `.dll`；cdef 保持**完全不变**（三平台符号一致）
+  - 新增 `private static function imeBridgePath(): ?string`
+- `bridge/README.md` — 新增「IME Bridge」段：三平台 build 命令 + 统一 API 表
+
+### 验证
+- `php85 -l src/Widgets/Surface.php` → No syntax errors
+- Linux 桥：`gcc -shared -fPIC $(pkg-config --cflags --libs gtk+-3.0) bridge/ime_bridge_linux.c -o /tmp/ime_bridge_linux_test.so` 编译 + 链接成功，`nm` 确认导出 `ime_create_textview` / `ime_destroy_textview` / `ime_set_notify_callback` / `ime_set_view_frame` 等符号
+- Windows 桥：macOS 无 `windows.h` 无法编译；逐行审查 + 花括号配平检查通过，模式与既有 `webview_bridge_win.c` / `context_menu_win.c` 一致
+- 待目标平台编译验证：Windows（MSVC/MinGW）、Linux（GTK3 dev 安装后 `gcc -shared`）
+
+### 未 commit 的修改
+- `bridge/ime_bridge_win.c`（新增，未编译）
+- `bridge/ime_bridge_linux.c`（新增，已编译验证）
+- `src/Widgets/Surface.php`（平台加载）
+- `bridge/README.md`（文档）
+
+---
+
+## Session: 2026-07-13 — ime_bridge 接入项目构建系统
+
+### 目标
+把 IME 桥接编译纳入 `composer` 构建流程，与既有 `build:bridge`（WebView 桥）一致，让用户一行命令即可在三平台编译 `ime_bridge`。
+
+### 改动（`composer.json`）
+- 新增 `build:ime` 脚本：沿用 `build:bridge` 的 `PHP_OS_FAMILY` 分派 + `@php -r passthru(...)` 模式
+  - macOS：`clang -dynamiclib -fobjc-arc -framework Foundation -framework AppKit -framework QuartzCore bridge/ime_bridge.m -o bridge/ime_bridge.dylib`
+  - Linux：`gcc -shared -fPIC bridge/ime_bridge_linux.c -o bridge/ime_bridge.so $(pkg-config --cflags --libs gtk+-3.0)`（`$(...)` 用 `\` 转义，防外层 shell 提前展开）
+  - Windows：`gcc -shared bridge/ime_bridge_win.c -o bridge/ime_bridge.dll -luser32 -lgdi32`
+- 聚合 `build` 脚本追加 `@composer build:ime`（现顺序：`build:pebview` → `build:bridge` → `build:ime`）
+
+### 验证
+- `php -l composer.json` → JSON OK；`build:ime` 存在于 scripts；`build` 聚合含三项
+- 本机 `composer build:ime` 成功：生成 `bridge/ime_bridge.dylib`（72KB，13:32 时间戳）
+- `nm -gU bridge/ime_bridge.dylib` → 确认导出 `_ime_create_textview` / `_ime_destroy_textview` / `_ime_set_notify_callback`（Mach-O 用 `-gU` 而非 `-D`）
+- Windows/Linux 分支需在对应目标平台实编译验证（命令结构与 `build:bridge` 一致）
+
+### 未 commit 的修改
+- `composer.json`（新增 `build:ime` + 聚合 `build`）

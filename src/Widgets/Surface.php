@@ -72,10 +72,12 @@ class Surface extends Composite
     private LayoutNode $root;
     private FocusManager $focus;
 
-    /** IME text view: an NSTextView added to the Area's NSScrollView for IME input.
-     * Managed via the bridge (ime_bridge.dylib). Created when a TextAreaSpec is
-     * focused, destroyed when focus leaves. The NSTextView is transparent and
-     * receives all keyboard input (IME, arrow keys, backspace).
+    /** IME text overlay: a native editable text widget placed over the field's
+     * screen rect so IME / CJK composition is handled by the OS. The overlay is
+     * a transparent NSTextView (macOS, ime_bridge.m), a Win32 EDIT control
+     * (Windows, ime_bridge_win.c), or a GTK entry/view (Linux, ime_bridge_linux.c)
+     * — all exposed through the same FFI cdef. Created when an IME-capable field
+     * is focused, destroyed when focus leaves.
      */
      private ?\FFI $imeBridgeFfi = null;
 
@@ -479,14 +481,11 @@ class Surface extends Composite
         $areaNsViewInt = Ffi::get()->uiControlHandle(Ffi::control($this->area->handle()));
         $areaNsViewPtr = Ffi::get()->cast('void*', $areaNsViewInt);
 
-        // Load the bridge dylib
-        $bridgePath = __DIR__ . '/../../bridge/ime_bridge.dylib';
-        if (!\is_file($bridgePath)) {
-            $bridgePath = '/tmp/ime_bridge.dylib';
-            if (!\is_file($bridgePath)) {
-                fwrite(STDERR, "[Surface] Warning: ime_bridge.dylib not found, IME skipped\n");
-                return;
-            }
+        // Load the platform-specific bridge library (same FFI cdef on all OSes).
+        $bridgePath = self::imeBridgePath();
+        if ($bridgePath === null) {
+            fwrite(STDERR, "[Surface] Warning: ime_bridge not available on this platform, IME skipped\n");
+            return;
         }
 
         $ffi_bridge = \FFI::cdef('
@@ -592,7 +591,8 @@ class Surface extends Composite
             }
         };
         // PHP FFI auto-converts a Closure into a C function pointer when the
-        // cdef parameter is declared as a function-pointer type (see ime_bridge.m).
+        // cdef parameter is declared as a function-pointer type (see ime_bridge.m /
+        // ime_bridge_win.c / ime_bridge_linux.c).
         // Retain the closure in $this->imeNotifyFn so the GC doesn't free it.
         $this->imeNotifyFn = $notifyFn;
         $ffi_bridge->ime_set_notify_callback($notifyFn);
@@ -754,6 +754,32 @@ class Surface extends Composite
     public function onScrollContainerScrolled(string $scrollViewportId): void
     {
         $this->repositionImeOverlay();
+    }
+
+    /**
+     * Resolve the platform-specific IME bridge library path.
+     *
+     * Returns the first existing candidate, or null when no build is present.
+     * The same FFI cdef is used regardless of platform, so callers do not need
+     * to care which OS they are on.
+     *
+     * @return string|null
+     */
+    private static function imeBridgePath(): ?string
+    {
+        $base = \dirname(__DIR__, 2) . '/bridge';
+        $candidates = match (\PHP_OS_FAMILY) {
+            'Darwin'  => [$base . '/ime_bridge.dylib', '/tmp/ime_bridge.dylib'],
+            'Linux'   => [$base . '/ime_bridge.so'],
+            'Windows' => [$base . '/ime_bridge.dll'],
+            default   => [],
+        };
+        foreach ($candidates as $path) {
+            if (\is_file($path)) {
+                return $path;
+            }
+        }
+        return null;
     }
 }
 
