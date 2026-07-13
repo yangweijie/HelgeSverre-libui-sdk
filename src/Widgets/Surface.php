@@ -9,7 +9,6 @@ use Libui\AreaDelegate;
 use Libui\Color;
 use Libui\Control;
 use Libui\Ffi;
-use Libui\MultilineEntry;
 use Libui\Draw\DrawContext;
 use Libui\Draw\Matrix;
 use Libui\Draw\Path;
@@ -73,23 +72,25 @@ class Surface extends Composite
     private LayoutNode $root;
     private FocusManager $focus;
 
-    /** Hidden native MultilineEntry used as an IME proxy for the focused TextArea. */
-    private ?MultilineEntry $imeEntry = null;
+    /** IME text view: an NSTextView added to the Area's NSScrollView for IME input.
+     * Managed via the bridge (ime_bridge.dylib). Created when a TextAreaSpec is
+     * focused, destroyed when focus leaves. The NSTextView is transparent and
+     * receives all keyboard input (IME, arrow keys, backspace).
+     */
+     private ?\FFI $imeBridgeFfi = null;
 
-    /** Layout node of the focused TextArea, used to position the IME popup. */
-    private ?LayoutNode $imeProxyNode = null;
+    /** @var \FFI\CData|null IME notify callback — must be retained or GC kills it */
+    private ?\FFI\CData $imeNotifyCallback = null;
 
-    /** Cached NSView pointer of the Surface's Area — used to restore focus after IME composition ends. */
-    private ?\FFI\CData $areaNsViewPtr = null;
+    /** @var \FFI\CData|null IME tab callback — must be retained or GC kills it */
+    private ?\FFI\CData $imeTabCallback = null;
 
-    /** Cached bridge FFI handle — used to check IME composition state in onChanged callback. */
-    private ?\FFI $imeBridgeFfi = null;
-    /** Flag indicating that the composition end has been processed (prevents re-entry) */
-    private bool $imeCompositionProcessed = false;
-    /** Optional IME proxy text value — cached before ime_unmark_text() to avoid stale reads */
-    private ?string $imeCachedText = null;
-    /** Guard against recursive onChanged from ime_unmark_text() */
-    private bool $imeUnmarking = false;
+    /** @var callable|null IME notifyFn — must be retained or GC kills it */
+    private $imeNotifyFn = null;
+
+    /** @var callable|null IME tabFn — must be retained or GC kills it */
+    private $imeTabFn = null;
+
 
     /** Optional modal overlay tree painted on top of (and capturing events from) the root. */
     private ?LayoutNode $overlay = null;
@@ -283,12 +284,6 @@ class Surface extends Composite
         return $this->overlay ?? $this->root;
     }
 
-    /** Check whether the IME proxy MultilineEntry is currently active. */
-    public function imeProxyActive(): bool
-    {
-        return $this->imeEntry !== null;
-    }
-
     /** Register a single-click handler for the node with the given id. */
     public function onClick(string $nodeId, callable $fn): static
     {
@@ -413,13 +408,13 @@ class Surface extends Composite
 
     /**
      * Handle IME focus change: when focus moves to a TextAreaSpec node,
-     * create a native MultilineEntry as an IME proxy. The OS IME
-     * composition window appears at the MultilineEntry's position, and the
-     * typed text is synced to the TextArea.
+     * create a native NSTextView inside the Area's NSScrollView as the IME
+     * first responder. The OS IME popup appears at the TextArea's position,
+     * and text changes are synced back to the TextArea via NSTextViewDidChangeNotification.
      *
      * libui's AreaKeyEvent->Key is a single `char` (1 byte), capturing only
      * ASCII (0-127). Multi-byte UTF-8 characters (Chinese, emoji) are lost.
-     * The native MultilineEntry receives full Unicode input via the OS IME.
+     * The NSTextView receives full Unicode input via the OS IME.
      *
      * @param string|null $old The node id that lost focus
      * @param string|null $new The node id that gained focus
@@ -427,8 +422,15 @@ class Surface extends Composite
     private function handleImeFocus(?string $old, ?string $new): void
     {
         fwrite(STDERR, "[Surface] handleImeFocus: old=" . ($old ?? 'null') . ", new=" . ($new ?? 'null') . "\n");
-        // Destroy any existing IME entry
-        $this->detachImeEntry();
+
+        // If focus is leaving the current TextArea, detach the text view.
+        if ($old !== null) {
+            $oldNode = LayoutNode::find($this->rootLayout(), $old);
+            if ($oldNode !== null && $oldNode->spec instanceof TextAreaSpec) {
+                fwrite(STDERR, "[Surface] handleImeFocus: detaching IME text view\n");
+                $this->detachImeTextview();
+            }
+        }
 
         if ($new === null) {
             return;
@@ -441,275 +443,137 @@ class Surface extends Composite
             return;
         }
 
-        fwrite(STDERR, "[Surface] handleImeFocus: TextAreaSpec found, creating IME proxy\n");
+        fwrite(STDERR, "[Surface] handleImeFocus: TextAreaSpec found, creating IME text view\n");
 
-        // Remember the focused TextArea's node for IME popup positioning
-        $this->imeProxyNode = $node;
-
-        $ffi = Ffi::get();
-
-        // Create the IME proxy
-        $this->imeEntry = new MultilineEntry();
-        $this->imeEntry->setText($node->spec->value ?? '');
-
-        // Get the parent container of the Surface's Area (should be a Box)
-        $parentHandle = $ffi->uiControlParent($this->area->asControl());
-
-        if ($parentHandle === null) {
-            // No parent found — cannot position the IME entry. Log and skip.
-            fwrite(STDERR, "[Surface] Warning: no parent container for IME entry\n");
+        // Get the TextArea's layout rect (in Surface-local coordinates)
+        $rect = $this->screenRectOf($node->id);
+        if ($rect === null) {
+            fwrite(STDERR, "[Surface] Warning: cannot get rect for TextArea {$node->id}\n");
             return;
         }
+        [$tx, $ty, $tw, $th] = $rect;
 
-        // Cast uiControl* to uiBox* — uiBoxAppend requires the exact type.
-        $parentBox = $ffi->cast('uiBox*', $parentHandle);
+        // Calculate the inner content rect (accounting for TextAreaRenderer PAD=8.0)
+        $pad = 8.0;
+        $innerX = $tx + $pad;
+        $innerY = $ty + $pad;
+        $innerW = $tw - 2 * $pad;
+        $innerH = $th - 2 * $pad;
 
-        // Add the MultilineEntry to the parent container using FFI
-        // uiBoxAppend(parent, child, stretchy=0) — non-stretchy, minimal size
-        try {
-            $ffi->uiBoxAppend($parentBox, $this->imeEntry->asControl(), 0);
-        } catch (\Error|\Throwable) {
-            // Parent might not be a Box — try as a Window via uiWindowInsertChildAt
-            fwrite(STDERR, "[Surface] Warning: parent is not a Box, cannot add IME entry\n");
-            return;
-        }
+        // Get the Area NSView (which is an NSScrollView) via uiControlHandle
+        $areaNsViewInt = Ffi::get()->uiControlHandle(Ffi::control($this->area->handle()));
+        $areaNsViewPtr = Ffi::get()->cast('void*', $areaNsViewInt);
 
-        // The MultilineEntry must be visible and receive keyboard focus
-        // to get IME input. It's made 1x1 and transparent so the user
-        // doesn't notice it. The IME popup will appear near the TextArea
-        // because the Surface captures pointer events and forwards them.
-        //
-        // To make the IME popup appear at the right position, we need
-        // uiControlFocus + uiControlMoveTo, which are not available in
-        // this libui version. As a workaround, the entry is left at its
-        // default position — the IME popup may appear in the wrong place,
-        // but Chinese/emoji characters will still be captured and synced.
-        $this->imeEntry->show();
-        fwrite(STDERR, "[Surface] IME proxy shown\n");
-
-        // Focus the IME proxy via the Cocoa bridge so the OS IME popup appears.
-        // uiControlFocus doesn't exist in this libui version, so we use the
-        // native bridge dylib to call becomeFirstResponder on the NSView.
-        $this->focusImeEntry();
-        fwrite(STDERR, "[Surface] IME proxy focused\n");
-
-        // Sync text changes from the MultilineEntry to the TextArea
-        $this->imeEntry->onChanged(function () use ($node): void {
-            try {
-                // Always read text from MultilineEntry — this is the simplest
-                // and most reliable approach. The text may include pinyin prefix
-                // during composition, but at least the TextArea will update.
-                $text = $this->imeEntry->text();
-                fwrite(STDERR, "[Surface] IME onChanged: text=\"" . $text . "\" imeBridgeFfi=" . ($this->imeBridgeFfi !== null ? 'yes' : 'no') . " entry=" . ($this->imeEntry !== null ? 'yes' : 'no') . " nsview=" . ($this->areaNsViewPtr !== null ? 'yes' : 'no') . " unmarking=" . ($this->imeUnmarking ? 'yes' : 'no') . "\n");
-
-                // Try to unmark text if composition just ended (clears pinyin prefix).
-                // This is best-effort — if it fails, we still update with raw text.
-                fwrite(STDERR, "[Surface] IME onChanged: entering try block\n");
-                if ($this->imeBridgeFfi !== null
-                    && $this->imeEntry !== null
-                    && $this->areaNsViewPtr !== null
-                    && !$this->imeUnmarking) {
-                    try {
-                        fwrite(STDERR, "[Surface] IME onChanged: getting control\n");
-                        $control = Ffi::control($this->imeEntry->handle());
-                        fwrite(STDERR, "[Surface] IME onChanged: getting handle\n");
-                        $ime_ns_view = Ffi::get()->uiControlHandle($control);
-                        fwrite(STDERR, "[Surface] IME onChanged: casting\n");
-                        $ime_ns_view_ptr = Ffi::get()->cast('void*', $ime_ns_view);
-                        fwrite(STDERR, "[Surface] IME onChanged: ime_get_text_view\n");
-                        $text_view_ptr = $this->imeBridgeFfi->ime_get_text_view($ime_ns_view_ptr);
-                        fwrite(STDERR, "[Surface] IME onChanged: text_view_ptr=" . var_export($text_view_ptr, true) . "\n");
-                        // Check if pointer is actually NULL (CData object but value=0).
-                        // FFI NULL pointers are still CData objects, so !== null won't catch them.
-                        $isNull = false;
-                        try {
-                            $isNull = (int) $text_view_ptr === 0;
-                        } catch (\Throwable $_) {
-                            $isNull = true;
-                        }
-                        fwrite(STDERR, "[Surface] IME onChanged: text_view_ptr_is_null=" . ($isNull ? 'yes' : 'no') . "\n");
-                        if (!$isNull
-                            && $this->imeBridgeFfi->ime_is_composing($text_view_ptr) === 0) {
-                            // Composition ended — unmark BEFORE updating TextArea.
-                            // This clears the marked text so the next onChanged
-                            // reads clean text without pinyin prefix.
-                            fwrite(STDERR, "[Surface] IME onChanged: calling unmark\n");
-                            $this->imeUnmarking = true;
-                            $this->imeBridgeFfi->ime_unmark_text($text_view_ptr);
-                            $this->imeUnmarking = false;
-                            fwrite(STDERR, "[Surface] IME onChanged: unmarked\n");
-                        }
-                    } catch (\Error|\Throwable $e) {
-                        fwrite(STDERR, "[Surface] IME onChanged: unmark error: " . get_class($e) . " - " . $e->getMessage() . "\n");
-                    }
-                }
-                fwrite(STDERR, "[Surface] IME onChanged: AFTER try block, entering cond check\n");
-
-                // Only update TextArea if text is non-empty and changed.
-                // Skip empty text to avoid overwriting correct value.
-                fwrite(STDERR, "[Surface] IME onChanged: checking cond text=\"" . $text . "\" (" . strlen($text) . " bytes, " . mb_strlen($text) . " chars) spec-value=\"" . $node->spec->value . "\" (" . strlen($node->spec->value) . " bytes) eq=" . ($text === $node->spec->value ? 'YES' : 'NO') . " empty=" . ($text === '' ? 'YES' : 'NO') . " control=" . ($node->spec->control !== null ? 'yes' : 'no') . "\n");
-                if ($text !== '' && $text !== $node->spec->value) {
-                    fwrite(STDERR, "[Surface] IME onChanged: text=\"" . $text . "\" spec-value=\"" . $node->spec->value . "\" control=" . ($node->spec->control !== null ? 'yes' : 'no') . "\n");
-                    // Update TextAreaControl's state (value + cursor + autoscroll + redraw).
-                    // This keeps $this->value in sync with the spec, so syncSpec/autoscroll
-                    // use correct data.
-                    if ($node->spec->control !== null) {
-                        $node->spec->control->setValue($text);
-                        fwrite(STDERR, "[Surface] IME onChanged: via control->setValue, value=\"" . $node->spec->control->getValue() . "\"\n");
-                    } else {
-                        // Fallback: update spec directly (no control back-ref).
-                        $node->spec = new TextAreaSpec(
-                            value: $text,
-                            placeholder: $node->spec->placeholder,
-                            enabled: $node->spec->enabled,
-                            focused: $node->spec->focused,
-                            hovered: $node->spec->hovered,
-                            radius: $node->spec->radius,
-                            scrollY: $node->spec->scrollY,
-                            cursor: mb_strlen($text),
-                            lineHeight: $node->spec->lineHeight,
-                            fontSize: $node->spec->fontSize,
-                            control: $node->spec->control,
-                        );
-                        $this->redraw();
-                    }
-                    fwrite(STDERR, "[Surface] IME onChanged: final value=\"" . $node->spec->value . "\" cursor=" . (property_exists($node->spec, 'cursor') ? $node->spec->cursor : '?') . "\n");
-                }
-            } catch (\Error|\Throwable $e) {
-                fwrite(STDERR, "[Surface] IME onChanged: EXCEPTION " . get_class($e) . " - " . $e->getMessage() . "\n");
-            }
-        });
-    }
-
-    /**
-     * Load the IME bridge dylib and call becomeFirstResponder on the proxy's NSView.
-     *
-     * libui's uiControlFocus does not exist, so we must use a compiled C/Objective-C
-     * bridge to call the Cocoa runtime directly. The bridge dylib lives at
-     * bridge/ime_bridge.dylib (same location as webview_bridge.dylib).
-     */
-    private function focusImeEntry(): void
-    {
-        if ($this->imeEntry === null) {
-            return;
-        }
-
-        try {
-            // Get the NSView handle from the MultilineEntry via uiControlHandle
-            $ffi_libui = Ffi::get();
-            $control = Ffi::control($this->imeEntry->handle());
-            $ns_view_int = $ffi_libui->uiControlHandle($control);
-            $ns_view_ptr = $ffi_libui->cast('void*', $ns_view_int);
-            fwrite(STDERR, "[Surface] focusImeEntry: ns_view_int=" . $ns_view_int . "\n");
-
-            // Load the bridge dylib — try relative to bridge/ first, then /tmp
-            $bridgePath = __DIR__ . '/../../bridge/ime_bridge.dylib';
+        // Load the bridge dylib
+        $bridgePath = __DIR__ . '/../../bridge/ime_bridge.dylib';
+        if (!\is_file($bridgePath)) {
+            $bridgePath = '/tmp/ime_bridge.dylib';
             if (!\is_file($bridgePath)) {
-                $bridgePath = '/tmp/ime_bridge.dylib';
-                if (!\is_file($bridgePath)) {
-                    fwrite(STDERR, "[Surface] Warning: ime_bridge.dylib not found, IME focus skipped\n");
-                    return;
-                }
+                fwrite(STDERR, "[Surface] Warning: ime_bridge.dylib not found, IME skipped\n");
+                return;
             }
-
-            $ffi_bridge = \FFI::cdef('
-                int ime_make_first_responder(void* view);
-                void ime_resign_first_responder(void* view);
-                void ime_set_first_responder(void* window, void* view);
-                void ime_set_view_frame(void* view, double x, double y, double w, double h);
-                void* ime_get_key_window(void);
-                int ime_is_composing(void* view);
-                void ime_get_view_frame(void* view, double* x, double* y, double* w, double* h);
-                void* ime_get_text_view(void* view);
-                void ime_activate_and_focus_view(void* view);
-            ', $bridgePath);
-
-            // Store the bridge FFI handle for use in the onChanged callback.
-            $this->imeBridgeFfi = $ffi_bridge;
-
-            // Get the Surface Area's NSView handle — needed for both position calculation
-            // and focus transfer.
-            $area_control = Ffi::control($this->area->handle());
-            $area_ns_view = $ffi_libui->uiControlHandle($area_control);
-            $area_ns_view_ptr = $ffi_libui->cast('void*', $area_ns_view);
-
-            // Position the proxy's NSView at the TextArea's layout rect so the
-            // IME candidate popup appears near the actual input field instead
-            // of at the bottom of the screen where libui placed the hidden Box child.
-            //
-            // The IME entry is a child of the parent Box, so its NSView frame is in
-            // the parent Box's coordinate system. The TextArea's layout coordinates
-            // are in the Surface's local coordinate system. We need to add the
-            // Surface Area's NSView offset to convert to parent-relative coordinates.
-            if ($this->imeProxyNode !== null) {
-                $node = $this->imeProxyNode;
-
-                // Get the Surface Area's NSView frame in the parent Box's coordinate system.
-                $area_x = $ffi_libui->new('double');
-                $area_y = $ffi_libui->new('double');
-                $area_w = $ffi_libui->new('double');
-                $area_h = $ffi_libui->new('double');
-
-                $ffi_bridge->ime_get_view_frame(
-                    $area_ns_view_ptr,
-                    \FFI::addr($area_x),
-                    \FFI::addr($area_y),
-                    \FFI::addr($area_w),
-                    \FFI::addr($area_h)
-                );
-
-                // Convert TextArea's Surface-local coordinates to viewport space.
-                // rectFor() already subtracts scroll offsets of all ancestor ScrollViewSpec nodes.
-                $rect = $this->screenRectOf($node->id);
-                if ($rect === null) {
-                    fwrite(STDERR, "[Surface] Warning: cannot get rect for IME node {$node->id}\n");
-                    return;
-                }
-                [$rect_x, $rect_y, $rect_w, $rect_h] = $rect;
-
-                // Add the Surface Area's NSView offset to get parent-relative coordinates.
-                $ime_x = $rect_x + $area_x->cdata;
-                $ime_y = $rect_y + $area_y->cdata;
-                $ime_w = $rect_w;
-                $ime_h = $rect_h;
-
-
-                $ffi_bridge->ime_set_view_frame(
-                    $ns_view_ptr,
-                    $ime_x,
-                    $ime_y,
-                    $ime_w,
-                    $ime_h
-                );
-            }
-
-            // 1. Resign first responder from the Surface's Area NSView
-            $this->areaNsViewPtr = $area_ns_view_ptr;
-            $ffi_bridge->ime_resign_first_responder($area_ns_view_ptr);
-
-            // 2. Activate the app, make the window key, and make the IME entry first responder.
-            // This is critical for the IME popup to appear - the IME framework requires the
-            // window to be properly key and the app to be active.
-            $ffi_bridge->ime_activate_and_focus_view($ns_view_ptr);
-            fwrite(STDERR, "[Surface] focusImeEntry: ime_activate_and_focus_view completed\n");
-        } catch (\Error|\Throwable $e) {
-            fwrite(STDERR, "[Surface] Warning: IME focus error: " . $e->getMessage() . "\n");
         }
+
+        $ffi_bridge = \FFI::cdef('
+            void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, const char* initial_text);
+            void ime_destroy_textview(void);
+            void ime_set_notify_callback(void* callback);
+            void ime_clear_notify_callback(void);
+            void ime_set_tab_callback(void* callback);
+            void ime_clear_tab_callback(void);
+            void* ime_get_textview(void);
+            int ime_has_textview(void);
+            void ime_set_text(const char* text);
+            int ime_get_caret_position(void);
+            void ime_set_caret_position(int pos);
+            int ime_is_composing(void);
+            int ime_make_textview_first_responder(void);
+            void ime_clear_textview_first_responder(void);
+        ', $bridgePath);
+
+        $this->imeBridgeFfi = $ffi_bridge;
+
+        // Get the current TextArea value and cursor
+        $initialText = $node->spec->control !== null
+            ? $node->spec->control->getValue()
+            : $node->spec->value ?? '';
+        $initialCursor = $node->spec->control !== null
+            ? $node->spec->control->getCursor()
+            : (property_exists($node->spec, 'cursor') ? $node->spec->cursor : 0);
+
+        // Create the NSTextView in the bridge
+        $ffi_bridge->ime_create_textview(
+            $areaNsViewPtr,
+            $innerX, $innerY, $innerW, $innerH,
+            $initialText
+        );
+
+        // Make the NSTextView the first responder so it receives keyboard input.
+        $ffi_bridge->ime_make_textview_first_responder();
+
+        // Register the text change callback from C back to PHP
+        $surface = $this;
+        $controlRef = $node->spec->control;
+        fwrite(STDERR, "[Surface] handleImeFocus: controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . " initialText=\"" . $initialText . "\" node-id=" . ($node->id ?? 'null') . "\n");
+        $notifyFn = function (string $text, int $caret) use ($surface, $node, $controlRef): void {
+            fwrite(STDERR, "[Surface] IME notifyFn called: text=\"" . $text . "\" (len=" . mb_strlen($text) . ") caret=" . $caret . " controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . "\n");
+            fflush(STDERR);
+            try {
+                if ($controlRef !== null) {
+                    $oldValue = $controlRef->getValue();
+                    fwrite(STDERR, "[Surface] IME notifyFn: controlRef->getValue()=\"{$oldValue}\" (len=" . mb_strlen($oldValue) . ")\n");
+                    fwrite(STDERR, "[Surface] IME notifyFn: calling setValue(\"" . $text . "\")\n");
+                    fflush(STDERR);
+                    $controlRef->setValue($text);
+                    fwrite(STDERR, "[Surface] IME notifyFn: after setValue(), controlRef->getValue()=\"" . $controlRef->getValue() . "\" (len=" . mb_strlen($controlRef->getValue()) . ")\n");
+                    fflush(STDERR);
+                    $controlRef->setCursor($caret);
+                } else {
+                    fwrite(STDERR, "[Surface] IME notifyFn: controlRef is null!\n");
+                }
+                $surface->redraw();
+            } catch (\Error|\Throwable $e) {
+                fwrite(STDERR, "[Surface] IME text change error: " . $e->getMessage() . "\n");
+            }
+        };
+        $this->imeNotifyFn = $notifyFn;
+        $this->imeNotifyCallback = \FFI::callback('void (const char*, int)', $notifyFn);
+        $ffi_bridge->ime_set_notify_callback($this->imeNotifyCallback);
+
+        // Register the Tab/Shift+Tab callback for focus navigation.
+        $this->imeTabFn = function (int $isShiftTab) use ($surface): void {
+            if ($isShiftTab) {
+                $surface->focus()->focusPrev();
+            } else {
+                $surface->focus()->focusNext();
+            }
+            $surface->redraw();
+        };
+        $this->imeTabCallback = \FFI::callback('void (int)', $this->imeTabFn);
+        $ffi_bridge->ime_set_tab_callback($this->imeTabCallback);
+
+        // Set the initial caret position (suppresses notify)
+        $ffi_bridge->ime_set_caret_position($initialCursor);
     }
 
-    /** Destroy the hidden IME entry and release its resources. */
-    private function detachImeEntry(): void
+    /** Destroy the IME NSTextView and clear the bridge FFI reference. */
+    private function detachImeTextview(): void
     {
-        if ($this->imeEntry !== null) {
-            // Hide and destroy the widget. The onChanged callback is automatically
-            // discarded when the widget is destroyed.
-            $this->imeEntry->hide();
-            $this->imeEntry->destroy();
-            $this->imeEntry = null;
+        if ($this->imeBridgeFfi !== null) {
+            try {
+                $this->imeBridgeFfi->ime_clear_notify_callback();
+                $this->imeBridgeFfi->ime_clear_tab_callback();
+                $this->imeBridgeFfi->ime_clear_textview_first_responder();
+                $this->imeBridgeFfi->ime_destroy_textview();
+            } catch (\Error|\Throwable $e) {
+                fwrite(STDERR, "[Surface] Warning: IME destroy error: " . $e->getMessage() . "\n");
+            }
+            $this->imeBridgeFfi = null;
+            $this->imeNotifyCallback = null;
+            $this->imeNotifyFn = null;
+            $this->imeTabCallback = null;
+            $this->imeTabFn = null;
         }
-        $this->imeProxyNode = null;
-        $this->imeBridgeFfi = null;
-        $this->areaNsViewPtr = null;
     }
 }
 
@@ -994,10 +858,11 @@ final class SurfaceDelegate extends AreaDelegate
 
         if ($spec instanceof TextAreaSpec) {
             $control = $spec->control;
+            $controlValue = $control !== null ? $control->getValue() : '(no control)';
             // If TextAreaControl owns this spec, pull the live value from it
             // (TextAreaControl::syncSpec() keeps $value in sync with edits).
             $value = $control !== null ? $control->getValue() : $spec->value;
-            fwrite(STDERR, "[Surface] withState: TextAreaSpec value=\"" . $value . "\" spec-value=\"" . $spec->value . "\" control=" . ($control !== null ? 'yes' : 'no') . "\n");
+            fwrite(STDERR, "[Surface] withState: TextAreaSpec value=\"" . $value . "\" controlValue=\"" . $controlValue . "\" spec-value=\"" . $spec->value . "\" control=" . ($control !== null ? ('yes#' . spl_object_id($control)) : 'no') . "\n");
             return new TextAreaSpec(
                 value: $value,
                 placeholder: $spec->placeholder,
@@ -1294,17 +1159,13 @@ final class SurfaceDelegate extends AreaDelegate
         }
 
         // Text input: printable characters + Backspace go to the focused field.
-        // Skip when the IME proxy (MultilineEntry) is active — it handles
-        // multi-byte UTF-8 (Chinese/emoji) that AreaKeyEvent::Key cannot capture.
+        // When the IME NSTextView is active, the NSTextView handles text input
+        // directly (including multi-byte UTF-8 via OS IME), so the Surface
+        // won't receive these events. This code path is for non-IME text fields.
         $focused = $this->surface->focus()->current();
         if ($focused !== null) {
             $textHandler = $this->surface->textHandlerFor($focused);
             if ($textHandler !== null && ($k->isPrintable() || $k->isBackspace() || $k->isEnter())) {
-                // If the IME proxy is active, skip text input here.
-                // The MultilineEntry will receive keyboard events independently.
-                if ($this->surface->imeProxyActive()) {
-                    return false;
-                }
                 $textHandler($k->isBackspace() ? '' : $k->char, $k->isBackspace());
 
                 return true;
@@ -1312,6 +1173,9 @@ final class SurfaceDelegate extends AreaDelegate
         }
 
         // Arrow keys: scroll a focused scroll viewport, or move the caret in a textarea.
+        // When the IME NSTextView is active, the NSTextView handles arrow keys
+        // directly (including IME candidate navigation), so the Surface won't
+        // receive these events for a focused TextArea.
         if ($focused !== null
             && ($k->isArrowUp() || $k->isArrowDown() || $k->isArrowLeft() || $k->isArrowRight())) {
             $node = $this->nodeById($focused);

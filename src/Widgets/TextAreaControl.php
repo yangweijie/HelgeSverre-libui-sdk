@@ -55,6 +55,10 @@ class TextAreaControl
     /** @var callable(string):void|null */
     private $onChange = null;
 
+    /** Unique instance ID for debugging. */
+    private static int $nextId = 0;
+    private int $instanceId;
+
     public function __construct(
         private readonly string $name,
         private readonly string $placeholder = '',
@@ -64,6 +68,7 @@ class TextAreaControl
         private readonly float $fontSize = 14.0,
         private readonly float $lineHeight = 20.0,
     ) {
+        $this->instanceId = ++self::$nextId;
         $this->leaf = LayoutNode::leaf(
             "textarea:{$name}",
             new TextAreaSpec(
@@ -177,8 +182,10 @@ class TextAreaControl
 
     public function setValue(string $value): static
     {
+        $oldValue = $this->value;
         $this->value = $value;
         $this->cursor = mb_strlen($value);
+        fwrite(STDERR, "[TextAreaControl##{$this->instanceId}] setValue: \"{$oldValue}\" (len=" . mb_strlen($oldValue) . ") -> \"{$value}\" (len=" . mb_strlen($value) . ")\n");
         $this->afterEdit();
 
         return $this;
@@ -194,6 +201,22 @@ class TextAreaControl
         return $this->cursor;
     }
 
+    public function setCursor(int $cursor): static
+    {
+        $this->cursor = max(0, min($cursor, mb_strlen($this->value)));
+        $this->afterEdit();
+        return $this;
+    }
+
+    /** Set value and cursor in one call to avoid double afterEdit/redraw. */
+    public function setValueWithCursor(string $value, int $cursor): static
+    {
+        $this->value = $value;
+        $this->cursor = max(0, min($cursor, mb_strlen($value)));
+        $this->afterEdit();
+        return $this;
+    }
+
     /** @param callable(string):void $fn */
     public function onChange(callable $fn): static
     {
@@ -204,6 +227,7 @@ class TextAreaControl
 
     private function afterEdit(): void
     {
+        fwrite(STDERR, "[TextAreaControl##{$this->instanceId}] afterEdit: value=\"" . $this->value . "\" cursor=" . $this->cursor . "\n");
         $this->syncSpec();
         // Layout-dependent work (caret auto-scroll, repaint) only makes sense
         // once the control is bound to a live Surface — and would otherwise pull
@@ -219,6 +243,7 @@ class TextAreaControl
 
     private function syncSpec(): void
     {
+        fwrite(STDERR, "[TextAreaControl##{$this->instanceId}] syncSpec: setting leaf->spec value=\"" . $this->value . "\" (len=" . mb_strlen($this->value) . ")\n");
         $this->leaf->spec = new TextAreaSpec(
             value: $this->value,
             placeholder: $this->placeholder,
@@ -233,6 +258,8 @@ class TextAreaControl
 
     public function moveCaret(string $dir): void
     {
+        $oldCursor = $this->cursor;
+        fwrite(STDERR, "[TextAreaControl##{$this->instanceId}] moveCaret: dir={$dir} oldCursor={$oldCursor} valueLen=" . mb_strlen($this->value) . "\n");
         // Without a bound Surface there is no layout to compute visual lines,
         // so fall back to simple character-level movement (enough for headless tests).
         if ($this->surface === null) {
@@ -241,6 +268,7 @@ class TextAreaControl
             } elseif ($dir === 'right') {
                 $this->cursor = min(mb_strlen($this->value), $this->cursor + 1);
             }
+            fwrite(STDERR, "[TextAreaControl##{$this->instanceId}] moveCaret: newCursor={$this->cursor}\n");
             $this->afterEdit();
 
             return;

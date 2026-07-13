@@ -234,3 +234,27 @@
 - 不支持 ImageSpec（像素数据是运行时动态的，不适合 XML）
 - 没有条件/循环/表达式（纯声明式）
 - ScrollView 嵌套需要手动在 XML 里安排 Row > Column 结构
+
+---
+
+## TextArea IME：回调链断裂（2026-07-13）
+
+### 问题
+NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRenderer` 始终渲染 placeholder（`$spec->value=""`）。
+
+### 诊断
+1. **withState 修复已正确**：`$control !== null ? $control->getValue() : $spec->value` — control 回引用保留
+2. **TextAreaControl.setValue 正常工作**：`$this->value = $value; $this->afterEdit();` → `syncSpec()` 更新 `$this->leaf->spec`
+3. **callback 未被触发**：`ime_textViewDidChange` 的 `NSLog` 日志未输出 → C 端 observer 未被触发
+4. **时序问题**：`ime_create_textview()` 设置 observer（`g_ime_notify_callback=NULL`），然后 `ime_set_notify_callback()` 设置 callback。如果 NSTextView 在 callback 设置之前就触发 notify，observer block 内会因 `g_ime_notify_callback` 为 NULL 而早退。
+
+### 关键发现
+- C 端 observer block 检查 `if (!tv) return;` — 弱引用 NSTextView 已释放（被 GC 回收）
+- PHP 端 `$notifyCallback` 是临时变量，在 `handleImeFocus()` 返回后被 GC 回收 → C 端函数指针无效
+- `ime_set_notify_callback()` 的 FFI 参数类型为 `void*`，传入 `\FFI::callback()` 时可能被当作 NULL
+
+### 下一步
+1. 运行测试查看 stderr 日志确认 observer 是否触发
+2. 如果 callback 为 NULL → 检查 FFI callback 签名匹配
+3. 如果 observer 未触发 → 检查 NSTextView 是否实际接收输入
+4. 如果 NSTextView 已释放 → 检查 retain cycle

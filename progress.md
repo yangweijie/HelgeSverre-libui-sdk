@@ -285,3 +285,42 @@ public function getCursor(): int
 ### 验证
 - `php -l` 语法检查通过（所有修改文件）
 - **待手动验证**：`php85 examples/surface-controls-demo.php` → 输入中文/数字 → 观察文本是否回显
+
+---
+
+## Session: 2026-07-13 — TextArea IME 调试（placeholder 未消失）
+
+### 问题
+用户报告：能打字（中文显示在 NSTextView 覆盖层上），但 placeholder 仍不消失。
+
+### 诊断
+1. **IME 代理正常**：NSTextView 接收输入，中文在覆盖层显示
+2. **spec 未更新**：`withState()` 返回的 `TextAreaSpec` 中 `value=""`，导致 `TextAreaRenderer` 渲染 placeholder
+3. **callback 未被触发**：`ime_textViewDidChange` 的 `NSLog` 日志未输出 → C 端 observer 未被触发
+4. **根因**：`$notifyCallback` 是 `handleImeFocus()` 的局部变量，函数返回后 PHP GC 回收了 FFI callback → C 端调用无效函数指针
+
+### 修复（callback GC）
+- 将 callback CData 和 closure 提升为 `Surface` 类的实例属性：
+  - `$this->imeNotifyCallback` / `$this->imeNotifyFn`
+  - `$this->imeTabCallback` / `$this->imeTabFn`
+- `detachImeTextview()` 中统一清理四个属性
+- `php85 -l` 全部通过
+
+### 待用户验证
+运行 `php85 examples/surface-controls-demo.php` → 点击 TextArea → 输入中文 → 观察：
+1. placeholder 是否消失（value 更新成功）
+2. stderr 日志确认 callback 被触发（`[Surface] IME notifyFn called:`）
+3. 中文正常显示在 TextArea 中
+
+### 调试日志（已添加，待用户运行后移除）
+- `bridge/ime_bridge.m`: `NSLog` 在 `ime_textViewDidChange` 入口、早退分支、callback 调用前
+- `src/Widgets/Surface.php`: `fwrite(STDERR)` 在 `handleImeFocus`、`notifyFn` 各关键位置
+- `src/Widgets/TextAreaControl.php`: `fwrite(STDERR)` 在 `setValue`、`afterEdit`、`syncSpec`
+- `src/Rendering/WidgetRenderer/TextAreaRenderer.php`: `fwrite(STDERR)` 在 `render` 入口
+
+### 当前未 commit 的修改
+- `bridge/ime_bridge.m` — block-based observer + 三重 debug logging
+- `bridge/ime_bridge.dylib` — 最新编译（01:55）
+- `src/Widgets/Surface.php` — 重写 `handleImeFocus` + debug logging + callback GC 修复
+- `src/Widgets/TextAreaControl.php` — `getCursor`/`setCursor`/`setValueWithCursor` + debug logging
+- `src/Rendering/WidgetRenderer/TextAreaRenderer.php` — debug logging

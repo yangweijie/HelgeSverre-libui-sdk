@@ -78,7 +78,7 @@ final class TextAreaRenderer implements WidgetRenderer
             throw new \InvalidArgumentException('TextAreaRenderer requires a TextAreaSpec');
         }
 
-        fwrite(STDERR, "[TextAreaRenderer] render: value=\"" . $spec->value . "\" width=" . $width . " height=" . $height . "\n");
+        fwrite(STDERR, "[TextAreaRenderer] render: value=\"" . $spec->value . "\" width=" . $width . " height=" . $height . " control=" . ($spec->control !== null ? ('yes#' . spl_object_id($spec->control)) : 'no') . " cursor=" . (property_exists($spec, 'cursor') ? $spec->cursor : '?') . " getCursor=" . ($spec->control !== null ? $spec->control->getCursor() : '?') . "\n");
 
         $commands = $this->shapeCommands($spec, $tokens, $width, $height);
 
