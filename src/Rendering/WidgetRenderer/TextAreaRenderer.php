@@ -91,12 +91,21 @@ final class TextAreaRenderer implements WidgetRenderer
         fwrite(STDERR, "[TextAreaRenderer] color: enabled=" . ($spec->enabled ? 'true' : 'false') . " focused=" . ($spec->focused ? 'true' : 'false') . " onSurface=" . ($onSurface ? 'found' : 'null') . "\n");
 
         $text = $spec->value;
+        $imeActive = $spec->imeActive;
         $isPlaceholder = $text === '';
         $shown = $isPlaceholder ? $spec->placeholder : $text;
 
-        fwrite(STDERR, "[TextAreaRenderer] text=\"" . $text . "\" shown=\"" . $shown . "\" isPlaceholder=" . ($isPlaceholder ? 'true' : 'false') . "\n");
+        fwrite(STDERR, "[TextAreaRenderer] text=\"" . $text . "\" shown=\"" . $shown . "\" isPlaceholder=" . ($isPlaceholder ? 'true' : 'false') . " imeActive=" . ($imeActive ? 'true' : 'false') . "\n");
 
         if ($shown === '') {
+            return new RenderCommandList($commands);
+        }
+
+        // When the IME overlay (NSTextView) is active it renders the live text
+        // and its own caret, so the renderer must not draw the value on top of
+        // it. The placeholder is renderer-only and is shown for empty fields
+        // (IME active or not) — and disappears the moment any text is present.
+        if ($imeActive && !$isPlaceholder) {
             return new RenderCommandList($commands);
         }
 
@@ -125,7 +134,8 @@ final class TextAreaRenderer implements WidgetRenderer
         }
 
         // Caret: only when focused and there is real text (or an empty field shows it at the start).
-        if ($spec->focused) {
+        // While the IME overlay is active it draws its own caret, so skip ours.
+        if ($spec->focused && !$imeActive) {
             [$caretLine, $caretX] = $this->caretPosition($lines, $starts, $spec->cursor, $maxW, $spec->fontSize);
             if ($caretLine >= $firstVisible && $caretLine <= $lastVisible) {
                 $cx = self::PAD + $caretX;

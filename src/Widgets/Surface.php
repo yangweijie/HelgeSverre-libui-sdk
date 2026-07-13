@@ -91,6 +91,9 @@ class Surface extends Composite
     /** @var callable|null IME tabFn — must be retained or GC kills it */
     private $imeTabFn = null;
 
+    /** Latest text reported by the IME NSTextView (mirrors what the overlay shows). */
+    private string $imeComposingText = '';
+
 
     /** Optional modal overlay tree painted on top of (and capturing events from) the root. */
     private ?LayoutNode $overlay = null;
@@ -477,9 +480,9 @@ class Surface extends Composite
         $ffi_bridge = \FFI::cdef('
             void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, const char* initial_text);
             void ime_destroy_textview(void);
-            void ime_set_notify_callback(void* callback);
+            void ime_set_notify_callback(void (*callback)(const char*, int));
             void ime_clear_notify_callback(void);
-            void ime_set_tab_callback(void* callback);
+            void ime_set_tab_callback(void (*callback)(int));
             void ime_clear_tab_callback(void);
             void* ime_get_textview(void);
             int ime_has_textview(void);
@@ -518,6 +521,10 @@ class Surface extends Composite
         $notifyFn = function (string $text, int $caret) use ($surface, $node, $controlRef): void {
             fwrite(STDERR, "[Surface] IME notifyFn called: text=\"" . $text . "\" (len=" . mb_strlen($text) . ") caret=" . $caret . " controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . "\n");
             fflush(STDERR);
+            // Track the live overlay text so the renderer can hide the placeholder
+            // the instant the user types (even mid-composition, before the control
+            // value syncs) and restore it only when the field is cleared.
+            $this->imeComposingText = $text;
             try {
                 if ($controlRef !== null) {
                     $oldValue = $controlRef->getValue();
@@ -536,9 +543,11 @@ class Surface extends Composite
                 fwrite(STDERR, "[Surface] IME text change error: " . $e->getMessage() . "\n");
             }
         };
+        // PHP FFI auto-converts a Closure into a C function pointer when the
+        // cdef parameter is declared as a function-pointer type (see ime_bridge.m).
+        // Retain the closure in $this->imeNotifyFn so the GC doesn't free it.
         $this->imeNotifyFn = $notifyFn;
-        $this->imeNotifyCallback = \FFI::callback('void (const char*, int)', $notifyFn);
-        $ffi_bridge->ime_set_notify_callback($this->imeNotifyCallback);
+        $ffi_bridge->ime_set_notify_callback($notifyFn);
 
         // Register the Tab/Shift+Tab callback for focus navigation.
         $this->imeTabFn = function (int $isShiftTab) use ($surface): void {
@@ -549,8 +558,9 @@ class Surface extends Composite
             }
             $surface->redraw();
         };
-        $this->imeTabCallback = \FFI::callback('void (int)', $this->imeTabFn);
-        $ffi_bridge->ime_set_tab_callback($this->imeTabCallback);
+        // Same closure-as-function-pointer pattern as the notify callback.
+        $this->imeTabCallback = $this->imeTabFn;
+        $ffi_bridge->ime_set_tab_callback($this->imeTabFn);
 
         // Set the initial caret position (suppresses notify)
         $ffi_bridge->ime_set_caret_position($initialCursor);
@@ -573,7 +583,30 @@ class Surface extends Composite
             $this->imeNotifyFn = null;
             $this->imeTabCallback = null;
             $this->imeTabFn = null;
+            $this->imeComposingText = '';
         }
+    }
+
+    /** Whether an IME NSTextView is currently mounted (overlay active). */
+    public function isImeTextviewActive(): bool
+    {
+        return $this->imeBridgeFfi !== null
+            && $this->imeBridgeFfi->ime_has_textview() === 1;
+    }
+
+    /** Latest text reported by the IME NSTextView (mirrors the overlay). */
+    public function getImeComposingText(): string
+    {
+        return $this->imeComposingText;
+    }
+
+    /** Caret position reported by the IME NSTextView, or 0 when inactive. */
+    public function getImeCaretPosition(): int
+    {
+        if ($this->imeBridgeFfi === null) {
+            return 0;
+        }
+        return $this->imeBridgeFfi->ime_get_caret_position();
     }
 }
 
@@ -862,16 +895,34 @@ final class SurfaceDelegate extends AreaDelegate
             // If TextAreaControl owns this spec, pull the live value from it
             // (TextAreaControl::syncSpec() keeps $value in sync with edits).
             $value = $control !== null ? $control->getValue() : $spec->value;
-            fwrite(STDERR, "[Surface] withState: TextAreaSpec value=\"" . $value . "\" controlValue=\"" . $controlValue . "\" spec-value=\"" . $spec->value . "\" control=" . ($control !== null ? ('yes#' . spl_object_id($control)) : 'no') . "\n");
+
+            // While the IME overlay (NSTextView) is active on this focused field,
+            // drive the renderer from its live text. This makes the placeholder
+            // disappear the instant the user types (even mid-IME-composition,
+            // before the control value syncs) and reappear only when the field
+            // is fully cleared — avoiding the typed-text / placeholder overlap.
+            $imeActive = $this->surface->isImeTextviewActive()
+                && $this->surface->focus()->isFocused($node->id);
+            $cursor = $control !== null ? $control->getCursor() : $spec->cursor;
+            if ($imeActive) {
+                $imeText = $this->surface->getImeComposingText();
+                if ($imeText !== '') {
+                    $value = $imeText;
+                }
+                $cursor = $this->surface->getImeCaretPosition();
+            }
+
+            fwrite(STDERR, "[Surface] withState: TextAreaSpec value=\"" . $value . "\" controlValue=\"" . $controlValue . "\" spec-value=\"" . $spec->value . "\" imeActive=" . ($imeActive ? 'true' : 'false') . " imeText=\"" . ($imeActive ? $this->surface->getImeComposingText() : '') . "\" control=" . ($control !== null ? ('yes#' . spl_object_id($control)) : 'no') . "\n");
             return new TextAreaSpec(
                 value: $value,
                 placeholder: $spec->placeholder,
+                imeActive: $imeActive,
                 enabled: $spec->enabled,
                 focused: $this->surface->focus()->isFocused($node->id),
                 hovered: $node->hovered,
                 radius: $spec->radius,
                 scrollY: $spec->scrollY,
-                cursor: $control !== null ? $control->getCursor() : $spec->cursor,
+                cursor: $cursor,
                 lineHeight: $spec->lineHeight,
                 fontSize: $spec->fontSize,
                 control: $control,

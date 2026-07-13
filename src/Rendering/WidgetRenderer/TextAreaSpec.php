@@ -24,6 +24,7 @@ final class TextAreaSpec extends WidgetSpec
     public function __construct(
         public readonly string $value = '',
         public readonly string $placeholder = '',
+        public readonly bool $imeActive = false,
         public readonly bool $enabled = true,
         public readonly bool $focused = false,
         public readonly bool $hovered = false,
