@@ -74,7 +74,7 @@ class ScrollViewControl
         $contentWidth = $contentWidth > 0 ? $contentWidth : $width;
         $gutter = $vertical ? ScrollViewRenderer::GUTTER : 0.0;
 
-        $this->content = LayoutNode::column(gap: $gap, padding: $padding, align: LayoutStyle::ALIGN_START)
+        $this->content = LayoutNode::column(gap: $gap, padding: $padding, align: LayoutStyle::ALIGN_STRETCH)
             ->withRole(WidgetRole::Group);
         $this->content->style->width = max(0.0, $width - $gutter);
         $this->content->style->height = $contentHeight;

@@ -79,7 +79,10 @@ class Surface extends Composite
      * — all exposed through the same FFI cdef. Created when an IME-capable field
      * is focused, destroyed when focus leaves.
      */
-     private ?\FFI $imeBridgeFfi = null;
+    private ?\FFI $imeBridgeFfi = null;
+
+    /** @var \FFI|null Cached bridge FFI handle — parsed once, reused across detach/reattach. */
+    private $imeBridgeCdef = null;
 
     /** @var \FFI\CData|null IME notify callback — must be retained or GC kills it */
     private ?\FFI\CData $imeNotifyCallback = null;
@@ -436,13 +439,13 @@ class Surface extends Composite
 
     private function handleImeFocus(?string $old, ?string $new): void
     {
-        fwrite(STDERR, "[Surface] handleImeFocus: old=" . ($old ?? 'null') . ", new=" . ($new ?? 'null') . "\n");
+        $this->imeDbg("[Surface] handleImeFocus: old=" . ($old ?? 'null') . ", new=" . ($new ?? 'null') . "\n");
 
         // If focus is leaving the current IME-capable field, detach the text view.
         if ($old !== null) {
             $oldNode = LayoutNode::find($this->rootLayout(), $old);
             if ($oldNode !== null && $this->isImeCapableSpec($oldNode->spec)) {
-                fwrite(STDERR, "[Surface] handleImeFocus: detaching IME text view\n");
+                $this->imeDbg("[Surface] handleImeFocus: detaching IME text view\n");
                 $this->detachImeTextview();
             }
         }
@@ -455,11 +458,11 @@ class Surface extends Composite
         // (TextArea / TextField / SearchField).
         $node = LayoutNode::find($this->rootLayout(), $new);
         if ($node === null || !$this->isImeCapableSpec($node->spec)) {
-            fwrite(STDERR, "[Surface] handleImeFocus: not an IME-capable field\n");
+            $this->imeDbg("[Surface] handleImeFocus: not an IME-capable field\n");
             return;
         }
 
-        fwrite(STDERR, "[Surface] handleImeFocus: " . get_class($node->spec) . " found, creating IME text view\n");
+        $this->imeDbg("[Surface] handleImeFocus: " . get_class($node->spec) . " found, creating IME text view\n");
 
         // Remember which node owns the overlay so we can reposition it on scroll.
         $this->imeNodeId = $node->id;
@@ -472,7 +475,7 @@ class Surface extends Composite
         // the NSTextView text so it matches the renderer's vertical centering.
         $inner = $this->imeInnerRect($node);
         if ($inner === null) {
-            fwrite(STDERR, "[Surface] Warning: cannot get rect for {$node->id}\n");
+            $this->imeDbg("[Surface] Warning: cannot get rect for {$node->id}\n");
             return;
         }
         [$innerX, $innerY, $innerW, $innerH, $vcenter] = $inner;
@@ -484,29 +487,35 @@ class Surface extends Composite
         // Load the platform-specific bridge library (same FFI cdef on all OSes).
         $bridgePath = self::imeBridgePath();
         if ($bridgePath === null) {
-            fwrite(STDERR, "[Surface] Warning: ime_bridge not available on this platform, IME skipped\n");
+            $this->imeDbg("[Surface] Warning: ime_bridge not available on this platform, IME skipped\n");
             return;
         }
 
-        $ffi_bridge = \FFI::cdef('
-            void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, double font_size, const char* initial_text);
-            void ime_destroy_textview(void);
-            void ime_set_notify_callback(void (*callback)(const char*, int));
-            void ime_clear_notify_callback(void);
-            void ime_set_tab_callback(void (*callback)(int));
-            void ime_clear_tab_callback(void);
-            void* ime_get_textview(void);
-            int ime_has_textview(void);
-            void ime_set_text(const char* text);
-            int ime_get_caret_position(void);
-            void ime_set_caret_position(int pos);
-            int ime_is_composing(void);
-            int ime_make_textview_first_responder(void);
-            void ime_clear_textview_first_responder(void);
-            void ime_set_view_frame(void* view, double x, double y, double w, double h);
-        ', $bridgePath);
+        // Parse the bridge cdef ONCE per Surface instance and reuse it. Re-parsing
+        // the C header on every focus change (the old behaviour) was a measurable
+        // source of focus latency.
+        if ($this->imeBridgeCdef === null) {
+            $this->imeBridgeCdef = \FFI::cdef('
+                void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, double font_size, const char* initial_text);
+                void ime_destroy_textview(void);
+                void ime_set_notify_callback(void (*callback)(const char*, int));
+                void ime_clear_notify_callback(void);
+                void ime_set_tab_callback(void (*callback)(int));
+                void ime_clear_tab_callback(void);
+                void* ime_get_textview(void);
+                int ime_has_textview(void);
+                void ime_set_text(const char* text);
+                int ime_get_caret_position(void);
+                void ime_set_caret_position(int pos);
+                int ime_is_composing(void);
+                int ime_make_textview_first_responder(void);
+                void ime_clear_textview_first_responder(void);
+                void ime_set_view_frame(void* view, double x, double y, double w, double h);
+            ', $bridgePath);
+        }
 
-        $this->imeBridgeFfi = $ffi_bridge;
+        $this->imeBridgeFfi = $this->imeBridgeCdef;
+        $ffi_bridge = $this->imeBridgeFfi;
 
         // Get the current TextArea value and cursor
         $initialText = $node->spec->control !== null
@@ -539,10 +548,9 @@ class Surface extends Composite
         // Register the text change callback from C back to PHP
         $surface = $this;
         $controlRef = $node->spec->control;
-        fwrite(STDERR, "[Surface] handleImeFocus: controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . " initialText=\"" . $initialText . "\" node-id=" . ($node->id ?? 'null') . "\n");
+        $this->imeDbg("[Surface] handleImeFocus: controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . " initialText=\"" . $initialText . "\" node-id=" . ($node->id ?? 'null') . "\n");
         $notifyFn = function (string $text, int $caret) use ($surface, $node, $controlRef): void {
-            fwrite(STDERR, "[Surface] IME notifyFn called: text=\"" . $text . "\" (len=" . mb_strlen($text) . ") caret=" . $caret . " controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . "\n");
-            fflush(STDERR);
+            $surface->imeDbg("[Surface] IME notifyFn called: text=\"" . $text . "\" (len=" . mb_strlen($text) . ") caret=" . $caret . " controlRef=" . ($controlRef !== null ? ('yes#' . spl_object_id($controlRef)) : 'null') . "\n");
             // Track the live overlay text so the renderer can hide the placeholder
             // the instant the user types (even mid-composition, before the control
             // value syncs) and restore it only when the field is cleared.
@@ -550,19 +558,16 @@ class Surface extends Composite
             try {
                 if ($controlRef !== null) {
                     $oldValue = $controlRef->getValue();
-                    fwrite(STDERR, "[Surface] IME notifyFn: controlRef->getValue()=\"{$oldValue}\" (len=" . mb_strlen($oldValue) . ")\n");
-                    fwrite(STDERR, "[Surface] IME notifyFn: calling setValue(\"" . $text . "\")\n");
-                    fflush(STDERR);
+                    $surface->imeDbg("[Surface] IME notifyFn: controlRef->getValue()=\"{$oldValue}\" (len=" . mb_strlen($oldValue) . ")\n");
+                    $surface->imeDbg("[Surface] IME notifyFn: calling setValue(\"" . $text . "\")\n");
                     $controlRef->setValue($text);
-                    fwrite(STDERR, "[Surface] IME notifyFn: after setValue(), controlRef->getValue()=\"" . $controlRef->getValue() . "\" (len=" . mb_strlen($controlRef->getValue()) . ")\n");
-                    fflush(STDERR);
+                    $surface->imeDbg("[Surface] IME notifyFn: after setValue(), controlRef->getValue()=\"" . $controlRef->getValue() . "\" (len=" . mb_strlen($controlRef->getValue()) . ")\n");
                     $controlRef->setCursor($caret);
                 } else {
                     // No control (e.g. a raw TextFieldSpec leaf): commit the
                     // composed text directly into the node's spec so it persists
                     // after the IME overlay is detached.
-                    fwrite(STDERR, "[Surface] IME notifyFn: controlRef null, updating node spec directly\n");
-                    fflush(STDERR);
+                    $surface->imeDbg("[Surface] IME notifyFn: controlRef null, updating node spec directly\n");
                     $spec = $node->spec;
                     if ($spec instanceof TextFieldSpec) {
                         $node->spec = new TextFieldSpec(
@@ -587,7 +592,7 @@ class Surface extends Composite
                 }
                 $surface->redraw();
             } catch (\Error|\Throwable $e) {
-                fwrite(STDERR, "[Surface] IME text change error: " . $e->getMessage() . "\n");
+                $surface->imeDbg("[Surface] IME text change error: " . $e->getMessage() . "\n");
             }
         };
         // PHP FFI auto-converts a Closure into a C function pointer when the
@@ -628,15 +633,12 @@ class Surface extends Composite
         // runs in its own guarded block before anything else.
         try {
             $before = $ffi->ime_has_textview();
-            fwrite(STDERR, "[Surface] detachImeTextview: BEFORE has_textview=" . var_export($before, true) . "\n");
-            fflush(STDERR);
+            $this->imeDbg("[Surface] detachImeTextview: BEFORE has_textview=" . var_export($before, true) . "\n");
             $ffi->ime_destroy_textview();
             $after = $ffi->ime_has_textview();
-            fwrite(STDERR, "[Surface] detachImeTextview: AFTER has_textview=" . var_export($after, true) . "\n");
-            fflush(STDERR);
+            $this->imeDbg("[Surface] detachImeTextview: AFTER has_textview=" . var_export($after, true) . "\n");
         } catch (\Error|\Throwable $e) {
-            fwrite(STDERR, "[Surface] Warning: IME destroy error: " . $e->getMessage() . "\n");
-            fflush(STDERR);
+            $this->imeDbg("[Surface] Warning: IME destroy error: " . $e->getMessage() . "\n");
         }
 
         // Best-effort cleanup of callbacks. Each is isolated so a failure in one
@@ -648,8 +650,7 @@ class Surface extends Composite
             try {
                 $ffi->{$clearFn}();
             } catch (\Error|\Throwable $e) {
-                fwrite(STDERR, "[Surface] Warning: IME {$clearFn} error: " . $e->getMessage() . "\n");
-                fflush(STDERR);
+                $this->imeDbg("[Surface] Warning: IME {$clearFn} error: " . $e->getMessage() . "\n");
             }
         }
 
@@ -732,6 +733,14 @@ class Surface extends Composite
     public function getImeComposingText(): string
     {
         return $this->imeComposingText;
+    }
+
+    /** Env-gated debug trace for IME internals (UI2_DEBUG_IME=1). */
+    public function imeDbg(string $msg): void
+    {
+        if (getenv('UI2_DEBUG_IME') === '1') {
+            fwrite(STDERR, $msg);
+        }
     }
 
     /** Caret position reported by the IME NSTextView, or 0 when inactive. */
@@ -1111,7 +1120,7 @@ final class SurfaceDelegate extends AreaDelegate
                 $cursor = $this->surface->getImeCaretPosition();
             }
 
-            fwrite(STDERR, "[Surface] withState: TextAreaSpec value=\"" . $value . "\" controlValue=\"" . $controlValue . "\" spec-value=\"" . $spec->value . "\" imeActive=" . ($imeActive ? 'true' : 'false') . " imeText=\"" . ($imeActive ? $this->surface->getImeComposingText() : '') . "\" control=" . ($control !== null ? ('yes#' . spl_object_id($control)) : 'no') . "\n");
+            $this->surface->imeDbg("[Surface] withState: TextAreaSpec value=\"" . $value . "\" controlValue=\"" . $controlValue . "\" spec-value=\"" . $spec->value . "\" imeActive=" . ($imeActive ? 'true' : 'false') . " imeText=\"" . ($imeActive ? $this->surface->getImeComposingText() : '') . "\" control=" . ($control !== null ? ('yes#' . spl_object_id($control)) : 'no') . "\n");
             return new TextAreaSpec(
                 value: $value,
                 placeholder: $spec->placeholder,

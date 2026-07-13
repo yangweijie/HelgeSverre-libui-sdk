@@ -40,6 +40,29 @@
 | 渲染引擎 | `.planning/2026-07-11-rendering-engine/` | 3/3 ✅ | `src/Rendering/`（RenderCommand, DesignTokens, WidgetRenderer），26 测试 |
 | 布局引擎+自绘控件 | `.planning/2026-07-11-layout-engine/` | 7/7 ✅ | `src/Layout/`, `src/Events/`, `src/Semantics/`, `src/Widgets/Surface.php` |
 
+## Tetris 示例 — 任务计划
+
+> 目标：用 ui2 自绘体系实现一个完整可玩的俄罗斯方块示例
+
+| Phase | 内容 | 状态 | 备注 |
+|-------|------|------|------|
+| T1 | 基础游戏逻辑：棋盘、7 种方块、旋转、消行、计分、等级 | ✅ complete | `examples/tetris.php` |
+| T2 | Area + AreaDelegate：游戏区域自绘（网格、方块、幽灵、硬降） | ✅ complete | 键盘 + draw 回调 |
+| T3 | 侧边栏：标签 + 分数 + NEXT 预览 | ✅ complete | 单 Area 全自绘，drawString + fillRect |
+| T4 | LayoutNode/Surface 侧边栏方案探索 | ✅ 完成但放弃 | Surface 内部 Area 在 Box 中拿不到固定宽度，被挤出窗口。结论：游戏类布局不适合 Surface |
+| T5 | LabelSpec text 可变支持 | ✅ complete | `src/Rendering/WidgetRenderer/LabelSpec.php` — `text` 从 `readonly` 改为 mutable |
+| T6 | 全部画进单个 Area：游戏区域左 + 侧边栏右 | ✅ complete | 消除 Area 竞争，draw 回调中直接绘制所有内容 |
+| T7 | 游戏区域垂直居中 + GAME OVER/PAUSED 覆盖层居中 | ✅ complete | boardY 偏移 + `extents()` 手动测量居中（`DrawTextAlign::Center` 在 macOS 不可靠） |
+| T8 | 动态标签实时更新 | ✅ complete | draw 回调直接拼接 state 变量，每次重绘自动更新 |
+
+### 关键发现
+- **Surface 不能放在 Box 中与另一个 Area 共存**：Surface 内部创建非滚动 Area，libui Box 无法给它固定宽度
+- **DrawTextAlign::Center 在 macOS 不可靠**：CoreText 渲染比逻辑布局框更宽导致偏移，需用 `extents()` 手动测量
+- **游戏类布局最佳方案**：单个 Area + AreaDelegate 画全部（游戏区域 + 侧边栏），不依赖 Surface
+- **LabelSpec text 应为 mutable**：动态内容（分数/等级/行数）需要运行时修改文本
+- **`Color::__construct()` 是 private**：必须用 `Color::rgb()` / `Color::rgba()` 工厂方法
+- **未来架构建议**：为 Surface 增加 `CanvasSpec`，让 Surface 的 LayoutNode 树能嵌入自定义绘制回调（游戏/图表等）
+
 ## Pending / 可选优化（待用户反馈）
 - 暂无明确待办；等待用户运行 `php85 examples/onepiece-doudizhu.php` 截图验证
 - 潜在：卡牌花色符号在某些字体的渲染对齐、更多武将技能平衡
@@ -75,6 +98,6 @@
 | K | ime_bridge 跨平台（Windows/Linux）+ 接入构建系统 | ✅ complete | `bridge/ime_bridge_win.c`(EDIT) + `bridge/ime_bridge_linux.c`(GTK3) 三平台同符号；`Surface.php` 加 `imeBridgePath()` 按 `PHP_OS_FAMILY` 选库；`composer.json` 新增 `build:ime` 并纳入 `build` 聚合。macOS `composer build:ime` 编译+符号导出验证通过 |
 | L | 「全面转向自绘」简化可行性审计 | ✅ complete | 依赖面勘察：原生 `Fields/*` + `*Control` 被 4 测试 + 多个示例 + IME 覆盖层（`Surface.php:1094` / `TextAreaSpec.$control`）引用；自绘 Spec 缺 DatePicker/FilePicker/Password/Number。结论：当前为混合架构，不可直接删除 |
 | M | 补自绘 Spec 缺口（DatePicker/FilePicker/Password/Number） | ✅ complete | `Number`/`Password`/`Date`/`File` 四组 Spec+Renderer 全部加入并注册（`date_picker`/`file_picker` 画成只读字段+右侧 chevron，点击由 Surface `onClick` 调 `DatePickerDialog`/`FilePickerDialog`）。新增 `src/Pickers/FilePickerDialog.php` 补 OS 文件框（libui `Dialogs::openFile()` 封装），与 `src/Pickers/` 家族对称。5 文件 `php85 -l` 全过，registry headless 注册验证通过 |
-| N | 解耦 IME 覆盖层（浮动于绘制矩形而非原生控件） | ⏸ pending | 将 `Surface` 的 IME 路径从依赖 `TextAreaControl` 改为浮动于自绘 rect；或决定保留原生文本控件 |
-| O | 迁移示例/测试到自绘 Spec | ⏸ pending | `test-fields.php`/`test-widgets.php`/`all-components.php`/`surface-controls-demo.php` + `FieldsTest/WidgetsTest/InputControlsTest/EditControlsTest` 改为用 Spec |
-| P | 删除原生封装（Fields/* + *Control + Generated 控件类） | ⏸ pending | 仅在 M/N/O 完成后执行；上游 `Generated\*` 走 patches/vendor 机制 |
+| N | IME 性能优化 + （可选）解耦原生控件 | ✅ complete | 性能优化（用户实测"不卡了"确认生效）：① IME 调试日志门控到 `UI2_DEBUG_IME=1`（去掉每键 ~5 次 `fflush(STDERR)` + 每帧 `withState` 写），② bridge cdef 每实例只解析一次（缓存 `$imeBridgeCdef`）。另修 `imeDbg()` 可见性 bug（`private`→`public`，否则 `SurfaceDelegate` 调用触发致命错误导致多行文本框不显示）。**深层"去原生控件"重写暂不做**：去掉原生 NSTextView 即丧失中文 IME 能力 |
+| O | 迁移示例/测试到自绘 Spec | ✅ complete | 示例（`test-fields.php`）早已自绘；`tests/FieldsTest.php` 现已收尾：由测原生 `Fields\*`（断言 `root() instanceof Control`/`value()`）改写为测**自绘 Spec 值对象** + 断言每个字段 `type()` 在 `RendererRegistry::default()` 已注册（"原生字段有自绘 renderer 接管"）。20 项全过，headless 无需 FFI。原生 `src/Fields/*` 仍保留（Phase P 被 IME 阻塞），但测试已脱离原生 API，Phase P 落地即无覆盖缺口。`tests/FieldsTest.php` 不再引用原生 `Fields\*` |
+| P | 删除原生封装（Fields/* + *Control + Generated 控件类） | ⏸ blocked | **被 IME 阻塞**：删除 `*Control`（含 `TextAreaControl`，IME 原生 NSTextView 覆盖层宿主）即丧失中文输入能力（findings 已结论）。需先定 IME 路线（保留原生覆盖层 / 或 Phase N「去原生」重写）才能推进。`tests/FieldsTest.php` 随此阶段一并处理（转 Spec 值测试或删除） |

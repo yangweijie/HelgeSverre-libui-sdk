@@ -11,16 +11,16 @@ namespace Yangweijie\Ui2\Rendering\WidgetRenderer;
  * background, border, or hit-testing behaviour — it exists purely to label
  * sections of a self-drawn UI.
  *
- * @property-read string $text      Label text.
- * @property-read float  $size      Font size in pixels.
- * @property-read string $align     Text alignment: 'left' | 'center' | 'right'.
- * @property-read string $color     Token key used to resolve the text colour.
- * @property-read float  $opacity   Text opacity, 0..1.
+ * @property-write string $text     Label text (mutable — update and call Surface::redraw()).
+ * @property-read  float  $size      Font size in pixels.
+ * @property-read  string $align     Text alignment: 'left' | 'center' | 'right'.
+ * @property-read  string $color     Token key used to resolve the text colour.
+ * @property-read  float  $opacity   Text opacity, 0..1.
  */
 final class LabelSpec extends WidgetSpec
 {
     public function __construct(
-        public readonly string $text = '',
+        public string $text = '',
         public readonly float $size = 14.0,
         public readonly string $align = 'left',
         public readonly string $color = 'color.onSurface',

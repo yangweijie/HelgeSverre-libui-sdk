@@ -323,3 +323,12 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 - `DatePickerSpec`/`DatePickerRenderer`、`FilePickerSpec`/`FilePickerRenderer` 画成只读字段 + 右侧 chevron（`date_picker`/`file_picker` 已注册）
 - 点击由 Surface `onClick` 调 `DatePickerDialog::pick()` / 新增 `FilePickerDialog::pick()`（封装 `\Libui\Dialogs::openFile()`，与 `src/Pickers/` 家族对称）
 - 四组缺失 Spec（Number/Password/Date/File）全部补齐，原生 `Fields/*` 可被自绘替代面已覆盖 → Phase M ✅
+
+### IME 卡顿根因与优化（2026-07-13 续3）
+用户实测 IME「很卡：聚焦等几秒、输入后响应慢」。读 `Surface.php` 定位三类热路径开销：
+- 每键 ~5 次 `fwrite(STDERR)`+`fflush(STDERR)`（`notifyFn`）—— 强制刷 stderr，输入慢主因
+- 每帧 `withState` 对 `TextAreaSpec` 写 stderr（~60fps）—— 整窗卡主因
+- 每次聚焦重新 `\FFI::cdef()` 解析整段 C 头 —— 聚焦慢来源
+**修复**：新增 `imeDbg()` 门控到 `UI2_DEBUG_IME=1`（默认关），18 处热路径日志改走它；bridge cdef 改为每实例只解析一次（缓存 `$imeBridgeCdef`）。
+
+**关键结论：不能"去掉原生 NSTextView 纯自绘"来修 IME** —— libui `AreaKeyEvent->Key` 是单字节 ASCII，中文/emoji 无法经该通道输入；当前中文 IME 正依赖原生 `NSTextView` 覆盖层。故 Phase N 走"优化"分支而非"替换"分支，性能问题已解决，中文输入能力保留。

@@ -539,3 +539,100 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 - `src/Rendering/WidgetRenderer/FilePickerRenderer.php`（新增）
 - `src/Pickers/FilePickerDialog.php`（新增）
 - `src/Rendering/WidgetRenderer/RendererRegistry.php`（注册两项）
+
+---
+
+## Session: 2026-07-13（续3）— IME 性能优化（Phase N 优化分支）
+
+### 用户反馈
+"隐藏原生组件功能能用了 但是 很卡 聚焦等几秒 输入后 响应也慢，迟早要换或优化的"。即 IME 当前的痛点纯是**性能**，不是功能。
+
+### 根因（读 `src/Widgets/Surface.php` IME 实现）
+1. **每键 ~5 次 `fwrite(STDERR)` + `fflush(STDERR)`**（`notifyFn` 内，原 544–565 行）——强制 syscall 刷新 stderr，是"输入后响应慢"头号元凶。
+2. **每帧 `withState` 写 stderr**（原 1114 行，只要画到 `TextAreaSpec` 就 ~60fps 写）——是整窗"很卡"主因。
+3. **每次聚焦重新 `\FFI::cdef()` 解析整段 C 头**（原 491 行）——"聚焦慢"的来源之一。
+
+### 改动（`src/Widgets/Surface.php`）
+- 新增 `imeDbg(string $msg)` 私有方法：仅当 `getenv('UI2_DEBUG_IME')==='1'` 才写 stderr（与既有 `UI2_DEBUG_MOUSE` 同模式，默认关闭）。
+- IME 热路径 18 处 `fwrite(STDERR)`/`fflush(STDERR)` 全部改为 `$this->imeDbg(...)`（闭包内用 `$surface->imeDbg(...)`，`withState` 内用 `$this->surface->imeDbg(...)`）。
+- 新增缓存属性 `$imeBridgeCdef`；`handleImeFocus` 改为仅在首次解析 bridge cdef，之后复用，不再每次聚焦重解析。
+- 保留 `detachImeTextview` 中 `$this->imeBridgeFfi = null`（现有守卫逻辑不变），仅 cdef 句柄跨 detach/reattach 复用。
+
+### 验证
+- `php85 -l src/Widgets/Surface.php` → No syntax errors
+- `read_lints` → 0 诊断
+- grep 确认 IME 路径（`handleImeFocus`/`IME`/`Warning`/`withState: TextAreaSpec`）已无残留 `fwrite(STDERR)`/`fflush(STDERR)`；仅剩 `FocusManager onChange`（单次聚焦，非热路径）与已门控的 `dbgMouse`
+
+### 未做（决策说明）
+**未做"去掉原生 NSTextView、纯自绘 rect"的深层重写**：libui 的 `AreaKeyEvent->Key` 是单字节 ASCII，无法输入中文/emoji；当前中文 IME 正依赖原生 `NSTextView` 覆盖层。去掉它即丧失中文输入能力，且风险高。本次以"优化"分支直接解决卡顿，符合用户"迟早要换或优化的"中"优化"那条。是否进一步"换"（去原生控件）待用户定夺。
+
+### 未 commit 的修改
+- `src/Widgets/Surface.php`（IME 日志门控 + cdef 缓存 + `imeDbg` 方法）
+
+---
+
+## Session: 2026-07-13（续4）— Phase O 收尾：FieldsTest 迁移到自绘 Spec
+
+### 决策
+用户选"收尾 FieldsTest"（Phase O 最后一项）。原生 `Fields\*` 因 IME 阻塞无法在 Phase P 删除，故**不删原生类、只迁移测试**，使 `FieldsTest` 脱离原生 API、转为验证自绘 Spec 值对象。
+
+### 改动（`tests/FieldsTest.php`，整文件重写）
+- 移除全部 `Libui\*` / `Yangweijie\Ui2\Fields\*` 原生导入；改测 `Rendering\WidgetRenderer\*Spec` 值对象。
+- 每个原生字段 → 对应自绘 Spec 映射断言：
+  - TextField→`TextFieldSpec`、PasswordField→`PasswordSpec`、SearchField→`SearchFieldSpec`、NumberField→`NumberSpec`、CheckboxField→`CheckboxSpec`、RadioGroup→`RadioSpec`、ComboBox/EditableComboBox→`SelectSpec`、DatePickerField→`DatePickerSpec`、TextAreaField→`TextAreaSpec`、ProgressBarField→`ProgressSpec`、SliderField→`SliderSpec`、FilePickerField→`FilePickerSpec`、SeparatorLine→`separator` renderer。
+- 核心断言：每个 Spec `type()` 在 `RendererRegistry::default()` 已注册（即"原生字段有自绘 renderer 接管"，为 Phase P 删原生封装提供依据）。
+- 覆盖不可变性：更新值 = 构造新 Spec，原 Spec 不变。
+
+### 验证
+- `php85 vendor/bin/pest tests/FieldsTest.php` → **20 passed**（headless，无需 FFI）
+- `task_plan.md` Phase O 标记 ✅ complete
+
+### 未 commit 的修改
+- `tests/FieldsTest.php`（整文件重写：原生 `Fields\*` 测试 → 自绘 Spec 值对象测试）
+- `task_plan.md`（Phase O 状态 in_progress → ✅ complete）
+
+---
+
+## 2026-07-14 — Tetris 示例完善（自绘布局）
+
+### T1–T3: 游戏逻辑 + 侧边栏初版
+- `examples/tetris.php` 从旧版重写为混合架构：Area+AreaDelegate（游戏）+ Surface+LayoutNode+LabelSpec（侧边栏）
+- 游戏逻辑完整：7 种方块、旋转踢墙、消行计分、等级递增、幽灵方块、硬降、暂停
+
+### T4: Surface 侧边栏方案验证（失败）
+- **问题**：Surface `root()` 返回非滚动 Area，在 libui Box 中拿不到固定宽度，侧边栏被挤出窗口
+- **尝试**：自定义 `PreviewSpec` + `PreviewRenderer`（用 `FillRoundedRect` 在 Surface 内画预览方块）→ 解决了 preview 但侧边栏宽度仍不可控
+- **结论**：游戏类布局不适合 Surface——Surface 的 Area 在 Box 中没有"自然尺寸"概念
+
+### T5: LabelSpec text 可变
+- `src/Rendering/WidgetRenderer/LabelSpec.php` — `text` 属性从 `readonly` 改为 mutable
+- 允许 `$spec->text = "Score: 42"` 运行时更新 + `Surface::redraw()` 触发重绘
+
+### T6: 单 Area 全自绘方案（最终方案）
+- 全部画进一个 Area+AreaDelegate：左侧游戏区域 + 右侧侧边栏
+- `drawString()` 直接绘制 TETRIS 标题、Score、Level、Lines、NEXT 标签
+- `fillRect()` 绘制侧边栏背景、预览方块
+- 消除所有 Surface/Area 竞争问题
+
+### T7: 布局修正
+- 游戏区域垂直居中：`$boardY = max(0, (areaH - BOARD_H) / 2)`
+- 所有绘制函数（`drawCell`/`drawBoard`/`drawGhost`/`drawLockedCells`/`drawOverlay`）接受 `$boardY` 偏移参数
+- GAME OVER/PAUSED 覆盖层用 `extents()` 手动测量居中（`DrawTextAlign::Center` 在 macOS 不可靠）
+
+### T8: 动态标签
+- draw 回调中直接拼接 `$this->state->score` 等变量
+- 每次 `queueRedrawAll()` 重绘时标签自动更新，无需额外机制
+
+### 修复的错误
+| 错误 | 原因 | 修复 |
+|------|------|------|
+| `Unknown named parameter $grow` | `LayoutNode::leaf()` 不接受 `grow` 参数 | 移除该参数 |
+| `Can't use nullsafe operator in write context` | PHP 不允许 `?->` 赋值 | 改为 `if ($x !== null) $x->prop = ...` |
+| `Call to private Color::__construct()` | Color 构造函数是 private | 改为 `Color::rgb()` / `Color::rgba()` |
+| 侧边栏超出窗口 | Surface Area 在 Box 中无固定宽度 | 放弃 Surface，改单 Area 全自绘 |
+| GAME OVER 文字偏左 | `DrawTextAlign::Center` macOS 不可靠 | 用 `extents()` 手动测量居中 |
+
+### 关键架构决策
+- **单 Area 全自绘**是游戏类布局的最佳方案
+- **Surface 适合表单 UI**，不适合需要固定宽度侧边栏的游戏布局
+- **未来方向**：为 Surface 增加 `CanvasSpec`，支持在 LayoutNode 树中嵌入自定义绘制回调
