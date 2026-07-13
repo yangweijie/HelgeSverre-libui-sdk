@@ -82,8 +82,8 @@ class Surface extends Composite
     /** @var \FFI\CData|null IME notify callback — must be retained or GC kills it */
     private ?\FFI\CData $imeNotifyCallback = null;
 
-    /** @var \FFI\CData|null IME tab callback — must be retained or GC kills it */
-    private ?\FFI\CData $imeTabCallback = null;
+    /** @var callable|null IME tabFn — must be retained or GC kills it */
+    private $imeTabCallback = null;
 
     /** @var callable|null IME notifyFn — must be retained or GC kills it */
     private $imeNotifyFn = null;
@@ -93,6 +93,9 @@ class Surface extends Composite
 
     /** Latest text reported by the IME NSTextView (mirrors what the overlay shows). */
     private string $imeComposingText = '';
+
+    /** Id of the node the IME NSTextView overlay is currently attached to (for scroll-follow). */
+    private ?string $imeNodeId = null;
 
 
     /** Optional modal overlay tree painted on top of (and capturing events from) the root. */
@@ -422,14 +425,21 @@ class Surface extends Composite
      * @param string|null $old The node id that lost focus
      * @param string|null $new The node id that gained focus
      */
+    private function isImeCapableSpec(\Yangweijie\Ui2\Rendering\WidgetRenderer\WidgetSpec $spec): bool
+    {
+        return $spec instanceof TextAreaSpec
+            || $spec instanceof TextFieldSpec
+            || $spec instanceof SearchFieldSpec;
+    }
+
     private function handleImeFocus(?string $old, ?string $new): void
     {
         fwrite(STDERR, "[Surface] handleImeFocus: old=" . ($old ?? 'null') . ", new=" . ($new ?? 'null') . "\n");
 
-        // If focus is leaving the current TextArea, detach the text view.
+        // If focus is leaving the current IME-capable field, detach the text view.
         if ($old !== null) {
             $oldNode = LayoutNode::find($this->rootLayout(), $old);
-            if ($oldNode !== null && $oldNode->spec instanceof TextAreaSpec) {
+            if ($oldNode !== null && $this->isImeCapableSpec($oldNode->spec)) {
                 fwrite(STDERR, "[Surface] handleImeFocus: detaching IME text view\n");
                 $this->detachImeTextview();
             }
@@ -439,29 +449,31 @@ class Surface extends Composite
             return;
         }
 
-        // Check if the newly focused node is a TextAreaSpec
+        // Check if the newly focused node is an IME-capable text field
+        // (TextArea / TextField / SearchField).
         $node = LayoutNode::find($this->rootLayout(), $new);
-        if ($node === null || !($node->spec instanceof TextAreaSpec)) {
-            fwrite(STDERR, "[Surface] handleImeFocus: not a TextAreaSpec\n");
+        if ($node === null || !$this->isImeCapableSpec($node->spec)) {
+            fwrite(STDERR, "[Surface] handleImeFocus: not an IME-capable field\n");
             return;
         }
 
-        fwrite(STDERR, "[Surface] handleImeFocus: TextAreaSpec found, creating IME text view\n");
+        fwrite(STDERR, "[Surface] handleImeFocus: " . get_class($node->spec) . " found, creating IME text view\n");
 
-        // Get the TextArea's layout rect (in Surface-local coordinates)
-        $rect = $this->screenRectOf($node->id);
-        if ($rect === null) {
-            fwrite(STDERR, "[Surface] Warning: cannot get rect for TextArea {$node->id}\n");
+        // Remember which node owns the overlay so we can reposition it on scroll.
+        $this->imeNodeId = $node->id;
+
+        // Calculate the inner content rect for the IME NSTextView.
+        // Multi-line TextArea uses PAD=8 (TextAreaRenderer) and is top-aligned.
+        // Single-line fields align the overlay with their own text insets and
+        // are vertically centered (TextField x=8; SearchField x=26, leaving room
+        // for the magnifier + clear button). $vcenter tells the bridge to center
+        // the NSTextView text so it matches the renderer's vertical centering.
+        $inner = $this->imeInnerRect($node);
+        if ($inner === null) {
+            fwrite(STDERR, "[Surface] Warning: cannot get rect for {$node->id}\n");
             return;
         }
-        [$tx, $ty, $tw, $th] = $rect;
-
-        // Calculate the inner content rect (accounting for TextAreaRenderer PAD=8.0)
-        $pad = 8.0;
-        $innerX = $tx + $pad;
-        $innerY = $ty + $pad;
-        $innerW = $tw - 2 * $pad;
-        $innerH = $th - 2 * $pad;
+        [$innerX, $innerY, $innerW, $innerH, $vcenter] = $inner;
 
         // Get the Area NSView (which is an NSScrollView) via uiControlHandle
         $areaNsViewInt = Ffi::get()->uiControlHandle(Ffi::control($this->area->handle()));
@@ -478,7 +490,7 @@ class Surface extends Composite
         }
 
         $ffi_bridge = \FFI::cdef('
-            void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, const char* initial_text);
+            void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, const char* initial_text);
             void ime_destroy_textview(void);
             void ime_set_notify_callback(void (*callback)(const char*, int));
             void ime_clear_notify_callback(void);
@@ -492,6 +504,7 @@ class Surface extends Composite
             int ime_is_composing(void);
             int ime_make_textview_first_responder(void);
             void ime_clear_textview_first_responder(void);
+            void ime_set_view_frame(void* view, double x, double y, double w, double h);
         ', $bridgePath);
 
         $this->imeBridgeFfi = $ffi_bridge;
@@ -508,6 +521,7 @@ class Surface extends Composite
         $ffi_bridge->ime_create_textview(
             $areaNsViewPtr,
             $innerX, $innerY, $innerW, $innerH,
+            $vcenter,
             $initialText
         );
 
@@ -536,7 +550,32 @@ class Surface extends Composite
                     fflush(STDERR);
                     $controlRef->setCursor($caret);
                 } else {
-                    fwrite(STDERR, "[Surface] IME notifyFn: controlRef is null!\n");
+                    // No control (e.g. a raw TextFieldSpec leaf): commit the
+                    // composed text directly into the node's spec so it persists
+                    // after the IME overlay is detached.
+                    fwrite(STDERR, "[Surface] IME notifyFn: controlRef null, updating node spec directly\n");
+                    fflush(STDERR);
+                    $spec = $node->spec;
+                    if ($spec instanceof TextFieldSpec) {
+                        $node->spec = new TextFieldSpec(
+                            value: $text,
+                            placeholder: $spec->placeholder,
+                            enabled: $spec->enabled,
+                            focused: $spec->focused,
+                            hovered: $spec->hovered,
+                            radius: $spec->radius,
+                        );
+                    } elseif ($spec instanceof SearchFieldSpec) {
+                        $node->spec = new SearchFieldSpec(
+                            value: $text,
+                            placeholder: $spec->placeholder,
+                            enabled: $spec->enabled,
+                            focused: $spec->focused,
+                            hovered: $spec->hovered,
+                            radius: $spec->radius,
+                            showClear: $text !== '',
+                        );
+                    }
                 }
                 $surface->redraw();
             } catch (\Error|\Throwable $e) {
@@ -584,7 +623,67 @@ class Surface extends Composite
             $this->imeTabCallback = null;
             $this->imeTabFn = null;
             $this->imeComposingText = '';
+            $this->imeNodeId = null;
         }
+    }
+
+    /**
+     * Inner content rect (in viewport coords) for the IME NSTextView overlay of
+     * the given field node, plus a vcenter flag. Returns null when the node rect
+     * can't be resolved. Shared by focus-attach and scroll-reposition so the
+     * overlay always lands exactly on the rendered field.
+     *
+     * @return array{0:float,1:float,2:float,3:float,4:int}|null
+     */
+    private function imeInnerRect(LayoutNode $node): ?array
+    {
+        $rect = $this->screenRectOf($node->id);
+        if ($rect === null) {
+            return null;
+        }
+        [$tx, $ty, $tw, $th] = $rect;
+
+        if ($node->spec instanceof TextAreaSpec) {
+            $pad = 8.0;
+            return [$tx + $pad, $ty + $pad, max(1.0, $tw - 2 * $pad), max(1.0, $th - 2 * $pad), 0];
+        }
+        if ($node->spec instanceof SearchFieldSpec) {
+            return [$tx + 26.0, $ty, max(1.0, $tw - 26.0 - 30.0), $th, 1];
+        }
+        // TextFieldSpec (default): centered single-line field.
+        return [$tx + 8.0, $ty, max(1.0, $tw - 16.0), $th, 1];
+    }
+
+    /**
+     * Keep the live IME NSTextView overlay glued to its field while the surface
+     * scrolls. The overlay is a real NSView child of the (non-scrolling) Area
+     * view, so the Surface's fake scroll (translated DrawContext) does not move
+     * it — without this it would stay fixed and appear as a floating ghost.
+     */
+    public function repositionImeOverlay(): void
+    {
+        if ($this->imeBridgeFfi === null || $this->imeNodeId === null) {
+            return;
+        }
+        if ($this->imeBridgeFfi->ime_has_textview() !== 1) {
+            return;
+        }
+        $node = LayoutNode::find($this->rootLayout(), $this->imeNodeId);
+        if ($node === null) {
+            return;
+        }
+        $inner = $this->imeInnerRect($node);
+        if ($inner === null) {
+            return;
+        }
+        [$x, $y, $w, $h] = $inner;
+        $tv = $this->imeBridgeFfi->ime_get_textview();
+        if ($tv === null) {
+            return;
+        }
+        // The overlay is positioned in Area-view (screen) coords, which is exactly
+        // what screenRectOf returns, so it tracks the field through the scroll.
+        $this->imeBridgeFfi->ime_set_view_frame($tv, $x, $y, $w, $h);
     }
 
     /** Whether an IME NSTextView is currently mounted (overlay active). */
@@ -607,6 +706,19 @@ class Surface extends Composite
             return 0;
         }
         return $this->imeBridgeFfi->ime_get_caret_position();
+    }
+
+    /**
+     * Called when any scroll container scrolls. The IME NSTextView overlay is a
+     * real NSView child of the (non-scrolling) Area view, so the Surface's fake
+     * scroll does not move it. Instead of blurring the field (which detaches the
+     * overlay and, under the layer-backed Area, can leave a fixed ghost that
+     * never follows the scrolled field), we reposition the overlay to stay glued
+     * to its field. The field keeps focus and the committed text is preserved.
+     */
+    public function onScrollContainerScrolled(string $scrollViewportId): void
+    {
+        $this->repositionImeOverlay();
     }
 }
 
@@ -810,25 +922,44 @@ final class SurfaceDelegate extends AreaDelegate
         }
 
         if ($spec instanceof TextFieldSpec) {
+            // While the IME overlay is active on this focused field, drive the
+            // renderer from its live text so the placeholder hides the instant
+            // the user types and reappears only when the field is cleared.
+            $imeActive = $this->surface->isImeTextviewActive()
+                && $this->surface->focus()->isFocused($node->id);
+            $value = $spec->value;
+            if ($imeActive && $this->surface->getImeComposingText() !== '') {
+                $value = $this->surface->getImeComposingText();
+            }
             return new TextFieldSpec(
-                value: $spec->value,
+                value: $value,
                 placeholder: $spec->placeholder,
                 enabled: $spec->enabled,
                 focused: $this->surface->focus()->isFocused($node->id),
                 hovered: $node->hovered,
                 radius: $spec->radius,
+                imeActive: $imeActive,
+                control: $spec->control,
             );
         }
 
         if ($spec instanceof SearchFieldSpec) {
+            $imeActive = $this->surface->isImeTextviewActive()
+                && $this->surface->focus()->isFocused($node->id);
+            $value = $spec->value;
+            if ($imeActive && $this->surface->getImeComposingText() !== '') {
+                $value = $this->surface->getImeComposingText();
+            }
             return new SearchFieldSpec(
-                value: $spec->value,
+                value: $value,
                 placeholder: $spec->placeholder,
                 enabled: $spec->enabled,
                 focused: $this->surface->focus()->isFocused($node->id),
                 hovered: $node->hovered,
                 radius: $spec->radius,
-                showClear: $spec->value !== '',
+                showClear: $value !== '',
+                imeActive: $imeActive,
+                control: $spec->control,
             );
         }
 

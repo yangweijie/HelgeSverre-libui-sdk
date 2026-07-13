@@ -21,7 +21,7 @@ use Yangweijie\Ui2\Rendering\WidgetRenderer\TextAreaSpec;
  * $ta->bind($surface)->onChange(fn ($v) => save($v));
  * ```
  */
-class TextAreaControl
+class TextAreaControl implements TextInputControl
 {
     private const PAD = 8.0;
 

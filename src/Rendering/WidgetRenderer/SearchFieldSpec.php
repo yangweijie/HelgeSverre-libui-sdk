@@ -26,6 +26,8 @@ final class SearchFieldSpec extends WidgetSpec
         public readonly bool $hovered = false,
         public readonly float $radius = 6.0,
         public readonly bool $showClear = false,
+        public readonly bool $imeActive = false,
+        public readonly ?object $control = null,
     ) {
     }
 

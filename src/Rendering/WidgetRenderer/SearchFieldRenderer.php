@@ -71,8 +71,10 @@ final class SearchFieldRenderer implements WidgetRenderer
         $commands[] = new StrokeLine($cx + $r * 0.7, $cy + $r * 0.7, $cx + $r * 1.5, $cy + $r * 1.5, $iconColor, 1.5);
 
         // Value / placeholder text.
+        // When the IME overlay (NSTextView) is active it renders the live text,
+        // so skip drawing the value here (the placeholder/empty case still draws).
         $text = $spec->value !== '' ? $spec->value : $spec->placeholder;
-        if ($text !== '') {
+        if ($text !== '' && !($spec->imeActive && $spec->value !== '')) {
             $isPlaceholder = $spec->value === '';
             $color = $isPlaceholder ? $muted : ($spec->enabled ? $onSurface : Color::rgba($onSurface->r, $onSurface->g, $onSurface->b, 0.4));
             $fontSize = min($height * 0.5, 14.0);

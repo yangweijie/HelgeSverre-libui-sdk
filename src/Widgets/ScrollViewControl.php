@@ -230,14 +230,26 @@ class ScrollViewControl
     private function setScrollY(float $y): void
     {
         $max = max(0.0, $this->spec->contentHeight - $this->spec->viewportHeight);
-        $this->viewport->scrollY = max(0.0, min($max, $y));
+        $clamped = max(0.0, min($max, $y));
+        if ($clamped === $this->viewport->scrollY) {
+            return;
+        }
+        $this->viewport->scrollY = $clamped;
+        // Notify after the offset is updated so the IME overlay can be
+        // repositioned against the new scroll position (no one-frame lag).
+        $this->surface?->onScrollContainerScrolled($this->viewport->id);
         $this->surface?->redraw();
     }
 
     private function setScrollX(float $x): void
     {
         $max = max(0.0, $this->spec->contentWidth - $this->spec->viewportWidth);
-        $this->viewport->scrollX = max(0.0, min($max, $x));
+        $clamped = max(0.0, min($max, $x));
+        if ($clamped === $this->viewport->scrollX) {
+            return;
+        }
+        $this->viewport->scrollX = $clamped;
+        $this->surface?->onScrollContainerScrolled($this->viewport->id);
         $this->surface?->redraw();
     }
 }

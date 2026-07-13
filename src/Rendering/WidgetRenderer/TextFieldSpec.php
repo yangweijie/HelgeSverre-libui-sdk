@@ -23,6 +23,8 @@ final class TextFieldSpec extends WidgetSpec
         public readonly bool $focused = false,
         public readonly bool $hovered = false,
         public readonly float $radius = 6.0,
+        public readonly bool $imeActive = false,
+        public readonly ?object $control = null,
     ) {
     }
 

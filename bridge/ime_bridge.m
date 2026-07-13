@@ -1,10 +1,12 @@
 #include <Foundation/Foundation.h>
 #include <AppKit/AppKit.h>
+#include <QuartzCore/QuartzCore.h>
 #include <objc/runtime.h>
 
 // ── Global state (declared early for IMENSTextView reference) ─────────────
 
 static NSTextView* g_ime_text_view = nil;
+static NSView* g_ime_parent_view = nil;
 
 // Tab callback: PHP provides this for focus navigation.
 // Receives (int is_shift_tab): 1 = Shift+Tab, 0 = Tab.
@@ -60,10 +62,12 @@ static void ime_textViewDidChange(NSNotification* notification);
 //   scroll_view_ns_view  — the NSScrollView (Area NSView) whose documentView
 //                          (an NSClipView) will contain the NSTextView.
 //   x, y, w, h           — frame of the NSTextView in the NSClipView's coords.
-//                          This should match the TextArea's inner content rect
-//                          (accounting for the TextAreaRenderer's padding).
+//                          This should match the field's inner content rect.
+//   vcenter              — 1 for single-line fields (TextField/SearchField):
+//                          vertically center the text (the renderer draws these
+//                          centered). 0 for multi-line TextArea (top-aligned).
 //   initial_text         — initial text content (UTF-8, null-terminated).
-void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, const char* initial_text) {
+void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, const char* initial_text) {
     // Destroy any existing text view first
     if (g_ime_text_view) {
         [g_ime_text_view removeFromSuperview];
@@ -78,7 +82,7 @@ void ime_create_textview(void* area_ns_view, double x, double y, double w, doubl
     // IME popup and the (invisible) text at the correct location within the
     // TextArea so the user sees input aligned with the rendered text.
     IMENSTextView* textView = [[IMENSTextView alloc] initWithFrame:NSMakeRect(x, y, w, h)];
-    [textView setFont:[NSFont systemFontOfSize:13.0]];
+    [textView setFont:[NSFont systemFontOfSize:14.0]];
     [textView setDrawsBackground:NO];
     [textView setRichText:NO];
     [textView setVerticallyResizable:NO];
@@ -88,6 +92,17 @@ void ime_create_textview(void* area_ns_view, double x, double y, double w, doubl
     [textView setSelectable:YES];
     [textView setEditable:YES];
     [textView setAllowsUndo:NO];
+
+    // Single-line fields render their (centered) text, but NSTextView draws
+    // from the top of its frame. Without an inset the IME text appears shifted
+    // up / clipped. Center it vertically by pushing the text container down.
+    if (vcenter) {
+        NSFont* f = [textView font];
+        CGFloat lineHeight = [[textView layoutManager] defaultLineHeightForFont:f];
+        CGFloat inset = (h - lineHeight) / 2.0;
+        if (inset < 0) inset = 0;
+        [textView setTextContainerInset:NSMakeSize(0, inset)];
+    }
 
     // Set initial text
     NSString* initialStr = [NSString stringWithUTF8String:initial_text];
@@ -100,6 +115,7 @@ void ime_create_textview(void* area_ns_view, double x, double y, double w, doubl
     [areaView setWantsLayer:YES];
 
     g_ime_text_view = textView;
+    g_ime_parent_view = areaView;
 
     // Set up text change notification observers using blocks (avoids selector dispatch issues).
     // Use weak reference to textView to avoid retain cycles.
@@ -169,9 +185,6 @@ void ime_clear_tab_callback(void) {
 
 // Destroy the global NSTextView, remove notification observer, and nil it.
 void ime_destroy_textview(void) {
-    if (!g_ime_text_view) {
-        return;
-    }
     NSNotificationCenter* nc = [NSNotificationCenter defaultCenter];
     if (g_ime_changed_observer) {
         [nc removeObserver:g_ime_changed_observer];
@@ -181,11 +194,59 @@ void ime_destroy_textview(void) {
         [nc removeObserver:g_ime_textchanged_observer];
         g_ime_textchanged_observer = nil;
     }
-    [g_ime_text_view removeFromSuperview];
+
+    // Capture the parent up-front. We remove by enumerating its subviews too, so
+    // the overlay is gone even if g_ime_text_view was somehow lost (the previous
+    // early-return-on-nil path could leave the NSTextView in place as a ghost).
+    NSView* parent = g_ime_parent_view;
+
+    // 1) Remove the known global view (if still set).
+    if (g_ime_text_view) {
+        NSTextStorage* ts = [g_ime_text_view textStorage];
+        if (ts) [ts setAttributedString:[[NSAttributedString alloc] initWithString:@""]];
+        [g_ime_text_view setFrame:NSZeroRect];
+        [g_ime_text_view setAlphaValue:0.0];
+        [g_ime_text_view setHidden:YES];
+        [g_ime_text_view removeFromSuperview];
+    }
+
+    // 2) Sweep the parent for any stray IMENSTextView instances and remove them.
+    //    Belt-and-suspenders against a dangling overlay after scrolling/blur.
+    if (parent) {
+        NSMutableArray* strays = [NSMutableArray array];
+        for (NSView* sub in [parent subviews]) {
+            if ([sub isKindOfClass:[IMENSTextView class]]) {
+                [strays addObject:sub];
+            }
+        }
+        for (NSView* sub in strays) {
+            NSTextStorage* ts = [((NSTextView*)sub) textStorage];
+            if (ts) [ts setAttributedString:[[NSAttributedString alloc] initWithString:@""]];
+            [sub setFrame:NSZeroRect];
+            [sub setAlphaValue:0.0];
+            [sub setHidden:YES];
+            [sub removeFromSuperview];
+        }
+        NSLog(@"[IME] ime_destroy_textview: removed %lu IME view(s), parent=%p",
+              (unsigned long)(g_ime_text_view ? 1 : 0) + [strays count], (__bridge void*)parent);
+    } else {
+        NSLog(@"[IME] ime_destroy_textview: no parent view captured (g_ime_text_view=%p)", (__bridge void*)g_ime_text_view);
+    }
+
     g_ime_text_view = nil;
     g_ime_notify_callback = NULL;
     g_ime_tab_callback = NULL;
     g_ime_suppress_notify = NO;
+
+    // Force the parent view to invalidate its layer backing store so any cached
+    // subview bitmap is discarded. removeFromSuperview schedules a layer tree
+    // change; CATransaction flush commits it immediately to the render server.
+    if (parent) {
+        [parent setNeedsDisplay:YES];
+        [parent displayIfNeeded];
+        [CATransaction flush];
+    }
+    g_ime_parent_view = nil;
 }
 
 // Get the global NSTextView pointer (for use in callbacks / queries).

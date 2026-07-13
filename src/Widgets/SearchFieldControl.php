@@ -22,7 +22,7 @@ use Yangweijie\Ui2\Rendering\WidgetRenderer\SearchFieldSpec;
  * $search->bind($surface)->onChange(fn ($v) => filter($v));
  * ```
  */
-final class SearchFieldControl
+final class SearchFieldControl implements TextInputControl
 {
     private LayoutNode $root;
 
@@ -44,7 +44,7 @@ final class SearchFieldControl
     ) {
         $this->field = LayoutNode::leaf(
             "{$this->name}:input",
-            new SearchFieldSpec(value: $value, placeholder: $placeholder),
+            new SearchFieldSpec(value: $value, placeholder: $placeholder, control: $this),
             width: $width - 34,
             height: $height,
         );
@@ -87,11 +87,12 @@ final class SearchFieldControl
     }
 
     /** Replace the field's text, refresh the clear button, and repaint. */
-    public function setValue(string $value): void
+    public function setValue(string $value): static
     {
         $this->field->spec = new SearchFieldSpec(
             value: $value,
             placeholder: $this->field->spec instanceof SearchFieldSpec ? $this->field->spec->placeholder : 'Search…',
+            control: $this,
         );
         $this->clear->spec = new ButtonSpec('×', 'soft', enabled: $value !== '');
 
@@ -99,6 +100,24 @@ final class SearchFieldControl
             ($this->onChange)($value);
         }
         $this->surface?->redraw();
+
+        return $this;
+    }
+
+    public function getValue(): string
+    {
+        return $this->value();
+    }
+
+    public function getCursor(): int
+    {
+        return 0;
+    }
+
+    public function setCursor(int $cursor): static
+    {
+        // Single-line fields don't track a caret; nothing to do.
+        return $this;
     }
 
     /** @param callable(string):void $fn */

@@ -67,6 +67,13 @@ final class TextFieldRenderer implements WidgetRenderer
             return new RenderCommandList($commands);
         }
 
+        // When the IME overlay (NSTextView) is active it renders the live text,
+        // so the renderer must not draw the value on top of it. The placeholder
+        // (empty field) is renderer-only and stays visible while IME is active.
+        if ($spec->imeActive && $spec->value !== '') {
+            return new RenderCommandList($commands);
+        }
+
         $isPlaceholder = $spec->value === '';
         $onSurface = $tokens->color('color.onSurface');
         $color = $isPlaceholder ? Color::rgba($onSurface->r, $onSurface->g, $onSurface->b, 0.5) : $onSurface;
