@@ -332,3 +332,31 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 **修复**：新增 `imeDbg()` 门控到 `UI2_DEBUG_IME=1`（默认关），18 处热路径日志改走它；bridge cdef 改为每实例只解析一次（缓存 `$imeBridgeCdef`）。
 
 **关键结论：不能"去掉原生 NSTextView 纯自绘"来修 IME** —— libui `AreaKeyEvent->Key` 是单字节 ASCII，中文/emoji 无法经该通道输入；当前中文 IME 正依赖原生 `NSTextView` 覆盖层。故 Phase N 走"优化"分支而非"替换"分支，性能问题已解决，中文输入能力保留。
+
+## 项目审计 — 组件删除/迁移（2026-07-14）
+
+### 审计范围
+全面审查 src/Pickers、src/Fields、patches/、tests/、examples/，确定哪些组件可删除或迁移。
+
+### 结论
+
+#### 可删除（已完成）
+1. **src/Fields/（14 个文件）** — 全部有自绘 Spec 等价物，已删除
+2. **tests/ChartTest.php** — 引用已删除的 `src/Chart/*` 旧类
+3. **patches/.../Form.php** — Fields 已删，Form 在 src/ 和 examples/ 中零引用
+
+#### 保留（不可删）
+- **Composite.php** — 9 个类继承（Surface, ToggleSwitch, CircleProgressBar, SvgView, StatusIndicator, TableView, RendererButton, TabContainer, GroupSection）
+- **EmitsEvents.php** — 3 个类使用（RendererButton, ToggleSwitch, SvgDelegate）
+- **src/Pickers/** — 原生 OS 选择器（Color/Font/Time），自绘无法替代
+- **src/Dialogs/** — 原生 OS 对话框
+- **TextAreaControl / SearchFieldControl** — IME 覆盖层依赖 TextInputControl 接口
+
+### DatePickerSpec/FilePickerSpec 交互修复
+- DatePickerSpec 和 FilePickerSpec 是纯展示组件（显示值+chevron），点击需要手动接线
+- control-gallery.php 中添加 `onClick` 事件，调用 `DatePickerDialog::pick()` / `FilePickerDialog::pick()`
+- SelectSpec 无 `options` 参数（选项在 Control 层管理），改用 TextFieldSpec 展示选中值
+
+### 上游补丁审计
+- **Form.php 补丁已删除**（Fields 已删，Form 在整个项目中零引用）
+- 其他 18 个补丁仍有必要：内存泄漏修复（Ffi/App/Control）、Composite 支持（Box/Grid/Group/Tab）、菜单系统（Menu/MenuItem）、窗口管理（Window）、绘图构建器（DrawContext/Path）

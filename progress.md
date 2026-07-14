@@ -741,3 +741,36 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 - **所有 14 个原生 Fields 都有自绘 Spec 等价物**，删除后零覆盖缺口
 - **SeparatorLine 是 Separator 的 Composite 包装**，在原生 Box 布局中直接用 Separator
 - **TextAreaControl/SearchFieldControl 仍保留**，因 IME 覆盖层依赖 TextInputControl 接口
+
+---
+
+## 2026-07-14（续）— control-gallery 自绘改造 + 清理
+
+### control-gallery.php 自绘改造
+- 从 100% 原生 libui 控件改造为 Surface + LayoutNode + WidgetSpec 自绘版
+- 左栏：ButtonSpec、CheckboxSpec、LabelSpec、DatePickerSpec、FilePickerSpec、FontButton/ColorButton（保留原生触发 picker）
+- 右栏：NumberSpec、SliderSpec、ProgressSpec、TextFieldSpec、RadioSpec、TabControl
+- 事件接线：button click、checkbox toggle、slider drag → progress sync、number input、radio select、date/file/font/color picker 对话框
+- 修复 DatePickerSpec/FilePickerSpec 点击无交互：添加 `onClick` 事件接线 `DatePickerDialog::pick()` / `FilePickerDialog::pick()`
+
+### 修复的错误
+| 错误 | 原因 | 修复 |
+|------|------|------|
+| `Unknown named parameter $dateOnly` | DatePickerSpec 无 dateOnly 参数 | 移除无效参数 |
+| `Unknown named parameter $options` | SelectSpec 无 options 参数 | 改用 TextFieldSpec 展示选中值 |
+
+### 项目审计 + 清理
+- **删除 `tests/ChartTest.php`**：引用已删除的 `src/Chart/*` 旧类
+- **删除 `patches/.../Form.php`**：Fields 已删，Form patches 无人使用
+- **清理文档陈旧引用**：
+  - `docs/{en,zh}/examples.md`：移除 test-fields.php 条目
+  - `SKILL.md`：更新描述 + 示例列表
+  - `docs/{en,zh}/guide/patches.md`：移除 Form.php 行
+- 测试验证：20 项通过（10 个预存失败与本次改动无关）
+
+### 项目审计结论（可删除/可迁移清单）
+- **所有 14 个原生 Fields** 已删除 ✅
+- **保留**：Composite（9 个类继承）、EmitsEvents（3 个类使用）、Pickers（原生 OS 选择器）、Dialogs、TextAreaControl/SearchFieldControl（IME 依赖）
+- **Form.php 补丁已删除**：src/ 和 examples/ 均无 Form 使用
+- **旧 Chart 目录已删除**，仅留 ChartV2 + tests/ChartTest.php（已删）
+- **SKILL.md 描述更新**：fields → self-drawn Surface/WidgetRenderer system

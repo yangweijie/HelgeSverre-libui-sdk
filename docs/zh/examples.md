@@ -133,7 +133,6 @@ php examples/surface-controls-demo.php
 
 | 脚本 | 功能 |
 |---|---|
-| `test-fields.php` | 字段组件测试 |
 | `test-widgets.php` | 自定义控件测试 |
 | `test-pickers.php` | 选择器对话框测试 |
 | `test-circle-progress.php` | 圆形进度条 |

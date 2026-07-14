@@ -1,6 +1,6 @@
 ---
 name: ui2-sdk
-description: yangweijie/ui2 — Native desktop GUI for PHP 8.5+ via FFI. Thin convenience layer over helgesverre/libui with composite widgets, fields, pickers, dialogs, custom-drawn widgets, WebView, tree/file browser, code editor, circular progress bars, and SVG support.
+description: yangweijie/ui2 — Native desktop GUI for PHP 8.5+ via FFI. Thin convenience layer over helgesverre/libui with composite widgets, self-drawn Surface/WidgetRenderer system, pickers, dialogs, custom-drawn widgets, WebView, tree/file browser, code editor, circular progress bars, and SVG support.
 author: yangweijie
 platform: github
 source: https://github.com/yangweijie/HelgeSverre-libui-sdk
@@ -111,9 +111,9 @@ See `docs/development.md` for platform-specific build instructions.
 
 See `docs/examples.md` for runnable examples:
 - `examples/all-components.php` — 6-tab demo showcasing all widgets
+- `examples/control-gallery.php` — Self-drawn control gallery (all basic WidgetSpecs)
 - `examples/webview.php` — WebView with sidebar and JS bridge
 - `examples/menu.php` — Declarative vs imperative menu APIs
-- `examples/test-fields.php` — Fields showcase
 
 ## Documentation Index
 

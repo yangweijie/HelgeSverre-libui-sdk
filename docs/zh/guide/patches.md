@@ -16,7 +16,6 @@
 | `App.php` | `gc_collect_cycles()` 在 destroy 循环前后；`finally` 块中显式销毁 Window |
 | `Control.php` | `__destruct()` 仅销毁 toplevel 控件；`clearRetainedCallbacks()` |
 | `Box.php` | 接受 `Composite` 子元素；`horizontal()` 静态工厂；`appendStretchy()` |
-| `Form.php` | 接受 `Composite` 子元素；HasValue 字段的 `values()`/`setValues()`；`appendStretchy()` |
 | `Grid.php` | 接受 `Composite` 子元素；`appendAt()` 位置参数；`place()` 快捷方法 |
 | `Group.php` | 接受 `Composite` 子元素；`titled()` 静态工厂 |
 | `Tab.php` | 在 `append()`/`appendMargined()` 中接受 `Composite` 子元素 |

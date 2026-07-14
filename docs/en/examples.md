@@ -135,7 +135,6 @@ Additional test scripts in `examples/` for individual features:
 
 | Script | Feature |
 |---|---|
-| `test-fields.php` | Field component tests |
 | `test-widgets.php` | Custom widget tests |
 | `test-pickers.php` | Picker dialog tests |
 | `test-circle-progress.php` | Circle progress bar |

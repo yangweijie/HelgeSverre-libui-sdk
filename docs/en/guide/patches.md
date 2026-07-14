@@ -16,7 +16,6 @@ Under `patches/helgesverre/libui/src/`:
 | `App.php` | `gc_collect_cycles()` before/after destroy loop; explicit Window destroy in `finally` block |
 | `Control.php` | `__destruct()` for toplevel widgets; `clearRetainedCallbacks()` |
 | `Box.php` | Accepts `Composite` children; `horizontal()` static factory; `appendStretchy()` |
-| `Form.php` | Accepts `Composite` children; `values()`/`setValues()` for HasValue fields; `appendStretchy()` |
 | `Grid.php` | Accepts `Composite` children; `appendAt()` positional args; `place()` shortcut |
 | `Group.php` | Accepts `Composite` children; `titled()` static factory |
 | `Tab.php` | Accepts `Composite` children in `append()`/`appendMargined()` |
