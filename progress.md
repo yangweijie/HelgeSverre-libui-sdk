@@ -774,3 +774,23 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 - **Form.php 补丁已删除**：src/ 和 examples/ 均无 Form 使用
 - **旧 Chart 目录已删除**，仅留 ChartV2 + tests/ChartTest.php（已删）
 - **SKILL.md 描述更新**：fields → self-drawn Surface/WidgetRenderer system
+
+---
+
+## 2026-07-14（续2）— 修复全部失败测试（391/391 通过）
+
+### 修复的 5 个测试文件、10 项失败
+
+| 测试文件 | 失败数 | 根因 | 修复 |
+|----------|--------|------|------|
+| `LayoutSnapshotTest` | 1 | `TextFieldSpec` 新增 `imeActive`/`control` 字段导致 snapshot 过期 | 删除 baseline → 重新生成 |
+| `SnapshotTest` | 2 | DesignTokens snapshot 过期（新增 renderer 注册） | 删除 baseline → 重新生成 |
+| `CounterModelTest` | 1 | 测试断言逻辑错误：两次 dispatch 后检查第一次返回值是否等于当前 model | 改为每次 dispatch 后立即断言 |
+| `SystemInfoTest` | 3 | API 返回类型变更：`diskUsed()` 返回 `?int` 非 `?float`；`fmtBytes()` 格式 `'1.0'` → `'1'`；`toArray()` 键名 camelCase → snake_case | 更新测试断言匹配新 API |
+| `ProcessUtilTest` | 3 | 后端从 Symfony Process 迁移为 Illuminate Process：`throw()` 返回 `ProcessResult` 非 `Process`；`toArray()` 键名 snake_case；`path()` 测试不再断言输出内容 | 更新测试断言匹配新 API |
+
+### 最终测试结果
+```
+Tests: 391 passed, 0 failed
+Time:  1.01s
+```

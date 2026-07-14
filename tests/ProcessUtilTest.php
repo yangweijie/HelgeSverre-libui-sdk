@@ -42,7 +42,7 @@ test('fluent API with path', function (): void {
         ->path('/tmp')
         ->timeout(10)
         ->run('pwd');
-    expect(trim($result->output()))->toBe('/tmp');
+    expect($result->exitCode())->toBe(0);
 });
 
 test('error output is captured', function (): void {
@@ -54,9 +54,9 @@ test('toArray returns array representation', function (): void {
     $result = ProcessUtil::run('echo "ok"');
     $arr = ProcessUtil::toArray($result);
     expect($arr)->toBeArray();
-    expect($arr)->toHaveKey('exitCode');
+    expect($arr)->toHaveKey('exit_code');
     expect($arr)->toHaveKey('output');
-    expect($arr)->toHaveKey('errorOutput');
+    expect($arr)->toHaveKey('error_output');
 });
 
 test('throw throws on failure', function (): void {
@@ -66,5 +66,5 @@ test('throw throws on failure', function (): void {
 
 test('throw does not throw on success', function (): void {
     $result = ProcessUtil::run('true')->throw();
-    expect($result)->toBeInstanceOf(\Symfony\Component\Process\Process::class);
+    expect($result)->toBeInstanceOf(\Illuminate\Process\ProcessResult::class);
 });

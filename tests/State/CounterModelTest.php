@@ -99,11 +99,12 @@ test('dispatch returns the new model', function (): void {
     $app = new AppRuntime(new CounterModel(0), 'counterUpdate');
 
     $m1 = $app->dispatch(CounterMsg::Inc);
-    $m2 = $app->dispatch(CounterMsg::Inc);
+    expect($m1->count)->toBe(1);
+    expect($app->model())->toBe($m1);
 
-    // Each dispatch returns the new model
-    expect($m1)->toBe($app->model());
-    expect($m2)->toBe($app->model());
+    $m2 = $app->dispatch(CounterMsg::Inc);
+    expect($m2->count)->toBe(2);
+    expect($app->model())->toBe($m2);
 });
 
 test('model() returns current model after dispatch', function (): void {

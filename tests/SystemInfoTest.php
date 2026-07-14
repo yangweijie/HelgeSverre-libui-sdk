@@ -67,18 +67,18 @@ test('memUsed returns a number or null', function (): void {
 test('diskUsed returns a number or null', function (): void {
     $info = new SystemInfo();
     $used = $info->diskUsed();
-    expect($used === null || (is_float($used) && $used >= 0))->toBeTrue();
+    expect($used === null || (is_int($used) && $used >= 0))->toBeTrue();
 });
 
 test('fmtBytes formats correctly', function (): void {
     expect(SystemInfo::fmtBytes(0))->toContain('0');
-    expect(SystemInfo::fmtBytes(1024))->toContain('1.0');
-    expect(SystemInfo::fmtBytes(1024 * 1024))->toContain('1.0');
-    expect(SystemInfo::fmtBytes(1024 * 1024 * 1024))->toContain('1.0');
+    expect(SystemInfo::fmtBytes(1024))->toContain('1');
+    expect(SystemInfo::fmtBytes(1024 * 1024))->toContain('1');
+    expect(SystemInfo::fmtBytes(1024 * 1024 * 1024))->toContain('1');
 });
 
 test('toArray returns all fields', function (): void {
     $info = new SystemInfo();
     $arr = $info->toArray();
-    expect($arr)->toHaveKeys(['os', 'arch', 'archLabel', 'hostname', 'cpuCores', 'memTotal', 'diskTotal']);
+    expect($arr)->toHaveKeys(['os', 'arch', 'arch_label', 'hostname', 'cpu_cores', 'mem_total', 'disk_total']);
 });

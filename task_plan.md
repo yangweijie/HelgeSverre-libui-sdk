@@ -102,6 +102,7 @@
 | O | 迁移示例/测试到自绘 Spec | ✅ complete | 示例（`test-fields.php`）早已自绘；`tests/FieldsTest.php` 现已收尾：由测原生 `Fields\*`（断言 `root() instanceof Control`/`value()`）改写为测**自绘 Spec 值对象** + 断言每个字段 `type()` 在 `RendererRegistry::default()` 已注册（"原生字段有自绘 renderer 接管"）。20 项全过，headless 无需 FFI。原生 `src/Fields/*` 仍保留（Phase P 被 IME 阻塞），但测试已脱离原生 API，Phase P 落地即无覆盖缺口。`tests/FieldsTest.php` 不再引用原生 `Fields\*` |
 | P | 删除原生封装（Fields/\* + \*Control + Generated 控件类） | 🟡 partial | **Phase P-1（Fields/\*）✅ complete**：14 个原生 Field 封装全部删除，examples 迁移为原生 Separator/Entry 或自绘 Spec，tests/FieldsTest.php 20 项全过。**Phase P-2（\*Control）⏸ blocked**：TextAreaControl/SearchFieldControl 因 IME 覆盖层依赖 TextInputControl 接口仍保留。 |
 | Q | 示例自绘改造 + 上游补丁清理 | ✅ complete | control-gallery.php 从 100% 原生改造为 Surface 自绘版；DatePickerSpec/FilePickerSpec 添加 onClick 交互；删除 tests/ChartTest.php（引用已删旧 Chart 代码）；删除 patches/Form.php（Fields 已删，无人使用）；清理文档陈旧引用 |
+| R | 修复全部失败测试（391/391 通过） | ✅ complete | 修复 5 个测试文件共 10 项失败：LayoutSnapshotTest/SnapshotTest（更新 snapshot baseline）、CounterModelTest（测试断言逻辑错误）、SystemInfoTest（API 返回类型/键名变更）、ProcessUtilTest（Symfony→Illuminate Process 迁移） |
 
 ## ChartV2 示例 — 任务计划
 

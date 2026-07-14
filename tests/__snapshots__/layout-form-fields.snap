@@ -39,6 +39,8 @@
                     "focused": false,
                     "hovered": false,
                     "radius": 6,
+                    "imeActive": false,
+                    "control": null,
                     "type": "text_field"
                 },
                 "commands": [
@@ -99,6 +101,8 @@
                     "focused": false,
                     "hovered": false,
                     "radius": 6,
+                    "imeActive": false,
+                    "control": null,
                     "type": "text_field"
                 },
                 "commands": [

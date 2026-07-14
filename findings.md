@@ -360,3 +360,28 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 ### 上游补丁审计
 - **Form.php 补丁已删除**（Fields 已删，Form 在整个项目中零引用）
 - 其他 18 个补丁仍有必要：内存泄漏修复（Ffi/App/Control）、Composite 支持（Box/Grid/Group/Tab）、菜单系统（Menu/MenuItem）、窗口管理（Window）、绘图构建器（DrawContext/Path）
+
+## 测试修复 — API 变更与 snapshot 过期（2026-07-14 续2）
+
+### 关键发现
+
+#### Snapshot 过期是常态
+- `TextFieldSpec` 新增 `imeActive`/`control` 属性后 `layout-form-fields.snap` 过期
+- `DesignTokens` 新增 renderer 注册后 `design-tokens-*.snap` 过期
+- **修复方式**：删除 baseline 文件后重跑，`Snapshot::assert()` 自动重新生成
+- 这是 snapshot 测试的正常工作流——代码变更后 baseline 自然过期
+
+#### ProcessUtil 从 Symfony 迁移到 Illuminate
+- `ProcessUtil::run()` 返回类型从 `Symfony\Component\Process\Process` 变为 `Illuminate\Process\ProcessResult`
+- `toArray()` 键名从 camelCase（`exitCode`/`errorOutput`）变为 snake_case（`exit_code`/`error_output`）
+- `throw()` 返回 `ProcessResult` 而非底层 `Process`
+
+#### SystemInfo API 微调
+- `diskUsed()` 返回类型从 `?float` 变为 `?int`
+- `fmtBytes()` 使用 `round()` 导致 `'1.0'` → `'1'`（PHP 的 `round(1.0, 1)` 字符串化为 `'1'`）
+- `toArray()` 键名从 camelCase（`archLabel`/`cpuCores`/`memTotal`/`diskTotal`）变为 snake_case（`arch_label`/`cpu_cores`/`mem_total`/`disk_total`）
+
+#### 测试断言陷阱
+- Pest `toBe()` 检查对象引用（`===`），不是值相等
+- CounterModelTest 的 `expect($m1)->toBe($app->model())` 在两次 dispatch 后，`$m1` 是第一次的返回值（count=1），`$app->model()` 是当前状态（count=2），引用不同
+- 修复：改为每次 dispatch 后立即断言
