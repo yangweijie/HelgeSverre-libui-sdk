@@ -111,6 +111,7 @@ final class CapabilityRegistry
             'hotkey'     => HotkeyCapability::class,
             'systeminfo' => SystemInfoCapability::class,
             'process'    => ProcessCapability::class,
+            'automation' => AutomationCapability::class,
         ];
 
         $class = $map[$name] ?? null;

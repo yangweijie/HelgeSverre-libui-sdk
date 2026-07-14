@@ -40,6 +40,8 @@ use Yangweijie\Ui2\Rendering\WidgetRenderer\TextAreaSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\TextFieldSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\ScrollViewSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\WidgetSpec;
+use Yangweijie\Ui2\Semantics\SemanticProvider;
+use Yangweijie\Ui2\Semantics\SemanticsNode;
 
 /**
  * A self-drawn canvas that lays out and renders a {@see LayoutNode} tree itself,
@@ -63,7 +65,7 @@ use Yangweijie\Ui2\Rendering\WidgetRenderer\WidgetSpec;
  * $window->setChild(Build::stretchy($surface->root()));
  * ```
  */
-class Surface extends Composite
+class Surface extends Composite implements SemanticProvider
 {
     private Area $area;
     private SurfaceDelegate $delegate;
@@ -171,6 +173,12 @@ class Surface extends Composite
     public function rootLayout(): LayoutNode
     {
         return $this->root;
+    }
+
+    /** The accessibility/automation tree for this self-drawn surface. */
+    public function semantics(): ?SemanticsNode
+    {
+        return SemanticsNode::fromLayout($this->rootLayout());
     }
 
     public function registry(): RendererRegistry

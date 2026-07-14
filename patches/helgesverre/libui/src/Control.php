@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Libui;
 
+use Yangweijie\Ui2\Semantics\SemanticProvider;
+use Yangweijie\Ui2\Semantics\SemanticsNode;
+
 /**
  * Base class for every libui widget.
  *
@@ -11,9 +14,22 @@ namespace Libui;
  * (show/hide/enable/...) live here once and operate on the `uiControl *` upcast.
  * Every generated widget extends this class.
  */
-abstract class Control
+abstract class Control implements SemanticProvider
 {
     protected \FFI\CData $handle;
+
+    /**
+     * Parent control in the semantics tree (set when this control is added to a
+     * container). A pure PHP-side back-reference — libui exposes none.
+     *
+     * @var ?self
+     */
+    private ?self $semanticsParent = null;
+
+    /** Children registered via the patched container append/setChild methods.
+     *  @var list<self>
+     */
+    private array $semanticsChildren = [];
 
     /**
      * Native callback trampolines, retained for the process lifetime.
@@ -113,6 +129,57 @@ abstract class Control
         $obj = new \ReflectionClass(static::class)->newInstanceWithoutConstructor();
         $obj->handle = $handle;
         return $obj;
+    }
+
+    // --- semantics tree back-references (observability / automation) ---------
+
+    /** @return ?self The parent control in the semantics tree, if registered. */
+    public function parent(): ?self
+    {
+        return $this->semanticsParent;
+    }
+
+    /** @return list<self> Children registered via a patched container. */
+    public function children(): array
+    {
+        return $this->semanticsChildren;
+    }
+
+    /** Child at index, or null (containers that track children only). */
+    public function childAt(int $index): ?self
+    {
+        return $this->semanticsChildren[$index] ?? null;
+    }
+
+    /** @internal Register $child as a child of this control. */
+    public function registerChild(self $child): void
+    {
+        if (!in_array($child, $this->semanticsChildren, true)) {
+            $this->semanticsChildren[] = $child;
+        }
+    }
+
+    /** @internal Clear all registered children. */
+    public function clearChildren(): void
+    {
+        $this->semanticsChildren = [];
+    }
+
+    /** @internal Set this control's parent in the semantics tree. */
+    public function setParentInternal(?self $parent): void
+    {
+        $this->semanticsParent = $parent;
+    }
+
+    /**
+     * Accessibility / automation node for this control.
+     *
+     * The base implementation contributes nothing; containers (Box/Grid/Group/
+     * Tab), Window and the self-drawn Surface override it to build the tree.
+     */
+    public function semantics(): ?SemanticsNode
+    {
+        return null;
     }
 
     // --- common uiControl verbs (inherited by every widget) ------------------

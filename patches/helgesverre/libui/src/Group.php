@@ -23,7 +23,17 @@ class Group extends Generated\Group
     public function setChild(Control|Composite $child): static
     {
         $control = $child instanceof Composite ? $child->root() : $child;
+        $this->clearChildren();
+        $this->registerChild($control);
+        $control->setParentInternal($this);
         return parent::setChild($control);
+    }
+
+    /** Accessibility/automation node for this group and its child. */
+    public function semantics(): ?\Yangweijie\Ui2\Semantics\SemanticsNode
+    {
+        $label = method_exists($this, 'title') ? $this->title() : null;
+        return \Yangweijie\Ui2\Semantics\SemanticsNode::fromControls($this->children(), \Yangweijie\Ui2\Semantics\WidgetRole::Group, $label);
     }
 
     /**

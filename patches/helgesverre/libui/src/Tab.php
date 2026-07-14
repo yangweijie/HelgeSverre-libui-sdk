@@ -14,6 +14,9 @@ use Yangweijie\Ui2\Composite;
  */
 class Tab extends Generated\Tab
 {
+    /** @var array<string, \Libui\Control> */
+    private array $tabPages = [];
+
     /**
      * Append a page, unwrapping Composite if needed.
      *
@@ -24,6 +27,9 @@ class Tab extends Generated\Tab
     public function append(string $name, Control|Composite $child): static
     {
         $control = $child instanceof Composite ? $child->root() : $child;
+        $this->registerChild($control);
+        $control->setParentInternal($this);
+        $this->tabPages[$name] = $control;
         return parent::append($name, $control);
     }
 
@@ -53,5 +59,23 @@ class Tab extends Generated\Tab
             $this->append($name, $child);
         }
         return $this;
+    }
+
+    /** Accessibility/automation node: a tablist of labelled pages. */
+    public function semantics(): ?\Yangweijie\Ui2\Semantics\SemanticsNode
+    {
+        $list = new \Yangweijie\Ui2\Semantics\SemanticsNode(null, \Yangweijie\Ui2\Semantics\WidgetRole::TabList);
+        foreach ($this->tabPages as $name => $control) {
+            $tab = new \Yangweijie\Ui2\Semantics\SemanticsNode(null, \Yangweijie\Ui2\Semantics\WidgetRole::Tab);
+            $tab->label = $name;
+            if ($control instanceof \Yangweijie\Ui2\Semantics\SemanticProvider) {
+                $child = $control->semantics();
+                if ($child !== null) {
+                    $tab->add($child);
+                }
+            }
+            $list->add($tab);
+        }
+        return $list->children === [] ? null : $list;
     }
 }

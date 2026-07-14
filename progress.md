@@ -794,3 +794,56 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 Tests: 391 passed, 0 failed
 Time:  1.01s
 ```
+
+---
+
+## 2026-07-14（续3）— MCP 客户端示例 + automation-server 修复
+
+### 背景
+用户要求"补充 MCP 客户端示例（用 PHP 写一个小代理消费 SSE）"。服务端 `examples/automation-server.php`（基于 `AppRuntime` + `CounterModel` + `AutomationServer`/`McpServer`，`mcp: true`）已就绪，但缺一个轻量、零依赖、可端到端联调的客户端参考实现。
+
+### 新增 `examples/mcp-client.php`（纯 PHP、零依赖、无需 libui/显示）
+- **`McpHttpClient`**：`POST /mcp` 的 JSON-RPC 2.0 客户端
+  - `call()` —— 带 `id`，等响应（服务端 `HTTP/1.0 200` + `Content-Length`）
+  - `notify()` —— 无 `id`，对应服务端 `202` 空 body（如 `notifications/initialized`）
+- **`SseStream`**：`GET /mcp` 的 SSE 消费者
+  - `Accept: text/event-stream` 的 HTTP/1.1 长连接
+  - `stream_select` 以 `0.3s` 超时阻塞读取，按 `\n\n` 切分事件，解析 `event:`/`data:` 行
+- **主流程**：握手（`initialize` → `notifications/initialized` → `tools/list` → `resources/read ui://snapshot`）→ 打开 SSE 流（确认 `event: endpoint`）→ 每 ~1s `tools/call ui_drive {nodeId:"inc"}` 驱动 UI，同时实时打印 `notifications/state_changed` / `notifications/resources/updated`。无服务端时优雅提示并 exit 1。
+
+### 端到端联调（无显示，用真实类搭临时 mock server）
+- 用真实 `AutomationServer`+`McpServer` 类 + `AppRuntime`+`CounterModel` 起临时无头 server
+- 验证：握手 / `tools/list`（返回 `ui_snapshot, ui_get_state, ui_drive`）/ `resources/read` 正常
+- SSE `state_changed` 实时到达且反映驱动后的真实递增值（如 `9→13`、`14→19`），证明**无需轮询**
+- 临时 mock 文件联调后已清理
+
+### 修复 `examples/automation-server.php`（GUI 不更新 + SSE count 不递增）
+- **现象**：客户端 5 次驱动均 `ok:true`，但 GUI 无变化、SSE 只收到 `count 0→1`
+- **三层无头诊断**：
+  1. 状态/SSE 链路（`AppRuntime`+`AutomationServer`+`McpServer` 直接 `dispatch`）→ SSE 准确反映 9→13… 递增 ✅
+  2. 示例点击逻辑（stub `Surface` 复现 `onClick`/`handlerFor`/`dispatch`）→ 5 次驱动 count 1→5 ✅
+  3. 真实 `Surface`：`EmitsEvents::emit` 遍历所有监听器（非只触发一次）；`LayoutNode::child` 按对象句柄存储（`$countLeaf` 即树内同节点）
+- **根因**：`inc`/`dec` 处理器只写 `$countLeaf->spec = ...`，**从未调用 `$surface->redraw()`**。自绘 `Surface` 不在 spec 变化后自动重绘 → ① GUI 纹丝不动 ② 首驱后渲染状态异常拖垮后续驱动的 SSE 反映
+- **修复**：两个处理器在更新 spec 后追加 `$surface->redraw();`（与 `EmitsEvents` 推荐用法 `$this->redraw(); $this->emit(...)` 一致）
+```php
+$surface->onClick('inc', static function () use ($app, $countLeaf, $surface): void {
+    $m = $app->dispatch(CounterMsg::Inc);
+    $countLeaf->spec = new ButtonSpec((string) $m->count, 'soft');
+    $surface->redraw();
+});
+// dec 同样处理
+```
+
+### 文档
+- `docs/zh/design/observability-automation.md` §11：新增 `examples/mcp-client.php` 说明（作为 Claude Desktop/LLM agent 之外的最小协议参考实现）
+- `examples/automation-server.php` 头部注释：增加指向客户端示例的引用
+
+### 验证
+- `php85 -l examples/mcp-client.php` → No syntax errors
+- 无服务端场景冒烟：优雅报错退出（exit 1）
+- 真实类联调：SSE `state_changed` 实时反映驱动后递增值
+
+### 未 commit 的修改
+- `examples/mcp-client.php`（新增）
+- `examples/automation-server.php`（inc/dec 加 `redraw()`）
+- `docs/zh/design/observability-automation.md`（§11 补充客户端说明）

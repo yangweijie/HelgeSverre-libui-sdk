@@ -169,6 +169,30 @@ class Log
     }
 
     /**
+     * Telemetry: record a named event (UI event, state change, automation drive).
+     *
+     * This is the unified sink the observability layer routes UI events /
+     * state changes / snapshots into (design §4.6). Structured $context keeps
+     * the data machine-consumable.
+     */
+    public static function event(string $name, array $context = []): void
+    {
+        self::ensureInit();
+        self::$logger->info('[event] ' . $name, $context);
+    }
+
+    /**
+     * Telemetry: record a component-tree / state snapshot for external observers.
+     *
+     * @param array<int, mixed> $tree  The snapshot nodes (e.g. SemanticsNode arrays).
+     */
+    public static function snapshot(array $tree, array $context = []): void
+    {
+        self::ensureInit();
+        self::$logger->debug('[snapshot]', $context + ['nodes' => \count($tree)]);
+    }
+
+    /**
      * Flush buffered log entries to disk.
      *
      * Call this from a UI idle timer or when you know it's safe to do I/O:

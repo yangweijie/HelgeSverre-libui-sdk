@@ -25,6 +25,9 @@ private $onClose = null;
 /** True once libui's close handler has already destroyed this window. */
 private bool $externallyClosed = false;
 
+/** The content child passed to {@see setChild()}, tracked for the automation tree. */
+private ?\Libui\Control $contentControl = null;
+
 /** Mark the window as already closed by the user (close button / Cmd+Q).
  *  Keep the C handle alive so that App::run()'s destroy loop can still call
  *  uiControlDestroy() on it — libui does NOT auto-destroy on close. */
@@ -88,6 +91,33 @@ public function isExternallyClosed(): bool
     public function dialogs(): Dialogs
     {
         return new Dialogs($this);
+    }
+
+    /**
+     * Track the window's content child so the automation tree can be built from
+     * the window down. (libui does not expose a getter for it.)
+     */
+    public function setChild(\Libui\Control $child): static
+    {
+        $this->contentControl = $child;
+        if ($child instanceof \Yangweijie\Ui2\Semantics\SemanticProvider) {
+            $child->setParentInternal($this);
+        }
+        return parent::setChild($child);
+    }
+
+    /** Accessibility/automation root node for this window. */
+    public function semantics(): ?\Yangweijie\Ui2\Semantics\SemanticsNode
+    {
+        $node = new \Yangweijie\Ui2\Semantics\SemanticsNode(null, \Yangweijie\Ui2\Semantics\WidgetRole::Dialog);
+        $node->label = $this->title();
+        if ($this->contentControl instanceof \Yangweijie\Ui2\Semantics\SemanticProvider) {
+            $child = $this->contentControl->semantics();
+            if ($child !== null) {
+                $node->add($child);
+            }
+        }
+        return $node;
     }
 
     /**

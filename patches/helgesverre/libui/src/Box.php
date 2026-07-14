@@ -33,7 +33,15 @@ class Box extends Generated\Box
     public function append(Control|Composite $child, bool|int $stretchy = false): static
     {
         $control = $child instanceof Composite ? $child->root() : $child;
+        $this->registerChild($control);
+        $control->setParentInternal($this);
         return parent::append($control, (int) $stretchy);
+    }
+
+    /** Accessibility/automation node for this box and its children. */
+    public function semantics(): ?\Yangweijie\Ui2\Semantics\SemanticsNode
+    {
+        return \Yangweijie\Ui2\Semantics\SemanticsNode::fromControls($this->children(), \Yangweijie\Ui2\Semantics\WidgetRole::Group);
     }
 
     /** Append a child (Control or Composite) that grows to fill the box's main axis. */

@@ -103,6 +103,7 @@
 | P | 删除原生封装（Fields/\* + \*Control + Generated 控件类） | 🟡 partial | **Phase P-1（Fields/\*）✅ complete**：14 个原生 Field 封装全部删除，examples 迁移为原生 Separator/Entry 或自绘 Spec，tests/FieldsTest.php 20 项全过。**Phase P-2（\*Control）⏸ blocked**：TextAreaControl/SearchFieldControl 因 IME 覆盖层依赖 TextInputControl 接口仍保留。 |
 | Q | 示例自绘改造 + 上游补丁清理 | ✅ complete | control-gallery.php 从 100% 原生改造为 Surface 自绘版；DatePickerSpec/FilePickerSpec 添加 onClick 交互；删除 tests/ChartTest.php（引用已删旧 Chart 代码）；删除 patches/Form.php（Fields 已删，无人使用）；清理文档陈旧引用 |
 | R | 修复全部失败测试（391/391 通过） | ✅ complete | 修复 5 个测试文件共 10 项失败：LayoutSnapshotTest/SnapshotTest（更新 snapshot baseline）、CounterModelTest（测试断言逻辑错误）、SystemInfoTest（API 返回类型/键名变更）、ProcessUtilTest（Symfony→Illuminate Process 迁移） |
+| S | MCP 客户端示例 + automation-server 修复 | ✅ complete | 新增 `examples/mcp-client.php`（纯 PHP、零依赖 MCP 客户端：`McpHttpClient` POST 握手 + `SseStream` GET SSE 消费，端到端联调验证 SSE 实时反映驱动后状态）。修复 `examples/automation-server.php` 的 `inc`/`dec` 处理器：更新 spec 后补 `$surface->redraw()`（自绘 Surface 不自动重绘，导致 GUI 不更新 + SSE count 不递增）。`docs/zh/design/observability-automation.md` §11 补客户端说明 |
 
 ## ChartV2 示例 — 任务计划
 

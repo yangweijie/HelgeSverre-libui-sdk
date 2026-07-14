@@ -30,6 +30,8 @@ class Grid extends Generated\Grid
         Align $valign = Align::Fill,
     ): static {
         $child = $control instanceof Composite ? $control->root() : $control;
+        $this->registerChild($child);
+        $child->setParentInternal($this);
         return parent::append($child, $left, $top, $xspan, $yspan, (int) $hexpand, $halign, (int) $vexpand, $valign);
     }
 
@@ -37,5 +39,11 @@ class Grid extends Generated\Grid
     public function place(Control|Composite $control, int $column, int $row): static
     {
         return $this->appendAt($control, $column, $row);
+    }
+
+    /** Accessibility/automation node for this grid and its children. */
+    public function semantics(): ?\Yangweijie\Ui2\Semantics\SemanticsNode
+    {
+        return \Yangweijie\Ui2\Semantics\SemanticsNode::fromControls($this->children(), \Yangweijie\Ui2\Semantics\WidgetRole::Group);
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\State;
 
+use Yangweijie\Ui2\EmitsEvents;
+
 /**
  * Minimal Elm-architecture runtime — owns a Model and dispatches Messages.
  *
@@ -26,6 +28,8 @@ namespace Yangweijie\Ui2\State;
  */
 class AppRuntime
 {
+    use EmitsEvents;
+
     /** @var TModel */
     private Model $model;
 
@@ -62,9 +66,44 @@ class AppRuntime
      */
     public function dispatch(Msg $msg): Model
     {
+        $prev = $this->model;
         $result = ($this->update)($this->model, $msg);
         $this->model = $result->model;
 
+        // Observability: broadcast the transition so automation / debug observers
+        // can tap state changes without touching business code (see design §4.5).
+        $this->emit('state.changed', new StateChangedEvent($msg, $prev, $this->model));
+
         return $this->model;
+    }
+
+    /**
+     * Export the current model as a plain array for the automation / observability
+     * layer (e.g. served by the automation server's /state endpoint).
+     *
+     * @return array<string, mixed>
+     */
+    public function snapshot(): array
+    {
+        return self::modelSnapshot($this->model);
+    }
+
+    /**
+     * Reflect a readonly Model into an associative array.
+     *
+     * @return array<string, mixed>
+     */
+    public static function modelSnapshot(Model $model): array
+    {
+        $out = [];
+        $ref = new \ReflectionObject($model);
+        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+            if ($prop->isStatic()) {
+                continue;
+            }
+            $out[$prop->getName()] = $prop->getValue($model);
+        }
+
+        return $out;
     }
 }

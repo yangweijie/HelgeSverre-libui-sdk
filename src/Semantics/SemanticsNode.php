@@ -187,4 +187,65 @@ final class SemanticsNode
     {
         return property_exists($spec, $name);
     }
+
+    /**
+     * Build a container node from a list of SemanticProvider children
+     * (typically libui Controls). Children whose semantics() is null are
+     * skipped. Returns null when no child contributes a node.
+     *
+     * @param  iterable<SemanticProvider> $controls
+     */
+    public static function fromControls(iterable $controls, WidgetRole $role, ?string $label = null, ?string $id = null): ?self
+    {
+        $node = new self($id, $role);
+        $node->label = $label;
+
+        foreach ($controls as $control) {
+            if ($control instanceof SemanticProvider) {
+                $child = $control->semantics();
+                if ($child !== null) {
+                    $node->add($child);
+                }
+            }
+        }
+
+        return $node->children === [] ? null : $node;
+    }
+
+    /**
+     * Serialize the whole tree (id / role / label / value / state / geometry /
+     * children) into a plain array an automation server can JSON-encode.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'id'        => $this->id,
+            'role'      => $this->role->value,
+            'label'     => $this->label,
+            'value'     => $this->value,
+            'enabled'   => $this->enabled,
+            'checked'   => $this->checked,
+            'selected'  => $this->selected,
+            'focusable' => $this->focusable,
+            'focused'   => $this->focused,
+            'valueNow'  => $this->valueNow,
+            'valueMin'  => $this->valueMin,
+            'valueMax'  => $this->valueMax,
+            'rect'      => [
+                'x' => $this->x,
+                'y' => $this->y,
+                'w' => $this->w,
+                'h' => $this->h,
+            ],
+            'children'  => array_map(static fn (self $c): array => $c->toArray(), $this->children),
+        ];
+    }
+
+    /** JSON form of {@see toArray()}. */
+    public function toJson(int $flags = 0): string
+    {
+        return json_encode($this->toArray(), $flags);
+    }
 }
