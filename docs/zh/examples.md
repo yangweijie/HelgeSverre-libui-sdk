@@ -9,6 +9,7 @@ php examples/webview.php           # 带侧边栏和 JS↔PHP 桥接的 WebView
 php examples/tetris.php            # 完整的俄罗斯方块游戏，使用 Area 自绘实现
 php examples/chart-v2-demo.php     # ChartV2 交互式图表示例
 php examples/canvas-demo.php       # CanvasSpec 在 Surface 布局中嵌入自定义绘制
+php examples/control-gallery.php   # 自绘控件画廊（所有基础 WidgetSpec）
 ```
 
 ## all-components.php
@@ -82,6 +83,18 @@ $layout = LayoutNode::column()
     ->child(LayoutNode::leaf('chart', $canvas, height: 200.0));
 
 $surface = new Surface($layout);
+```
+
+## control-gallery.php
+
+经典 libui 控件画廊的自绘版本——演示所有基础 `WidgetSpec` 类型在 Surface 中渲染：
+
+- **左栏**：Button（ButtonSpec）、Checkbox（CheckboxSpec）、Label（LabelSpec）、DatePicker（DatePickerSpec）、FontButton + ColorButton（通过 ButtonSpec 触发原生 picker）
+- **右栏**：Number 输入框（NumberSpec）、Slider（SliderSpec）、Progress（ProgressSpec）、TextField（TextFieldSpec）、Radio 组（RadioSpec）、TabControl
+- **事件**：按钮点击、复选框切换、滑块拖拽→进度同步、数字输入过滤、Radio 选择、标签页切换、字体/颜色选择器对话框
+
+```bash
+php examples/control-gallery.php
 ```
 
 ## renderer-button-demo.php

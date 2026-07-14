@@ -9,6 +9,7 @@ php examples/webview.php           # WebView with sidebar, JS ↔ PHP bridge
 php examples/tetris.php             # Full Tetris game using Area custom drawing
 php examples/chart-v2-demo.php     # ChartV2 interactive chart demo
 php examples/canvas-demo.php       # CanvasSpec custom drawing in Surface layout
+php examples/control-gallery.php   # Self-drawn control gallery (all basic WidgetSpecs)
 ```
 
 ## all-components.php
@@ -84,6 +85,18 @@ $layout = LayoutNode::column()
     ->child(LayoutNode::leaf('chart', $canvas, height: 200.0));
 
 $surface = new Surface($layout);
+```
+
+## control-gallery.php
+
+Self-drawn version of the classic libui control gallery — demonstrates all basic `WidgetSpec` types rendered in a Surface:
+
+- **Left panel**: Button (ButtonSpec), Checkbox (CheckboxSpec), Label (LabelSpec), DatePicker (DatePickerSpec), FontButton + ColorButton (native picker trigger via ButtonSpec)
+- **Right panel**: Number input (NumberSpec), Slider (SliderSpec), Progress (ProgressSpec), TextField (TextFieldSpec), Radio group (RadioSpec), TabControl
+- **Events**: Button click, checkbox toggle, slider drag → progress sync, number input filtering, radio selection, tab switching, font/color picker dialogs
+
+```bash
+php examples/control-gallery.php
 ```
 
 ## renderer-button-demo.php

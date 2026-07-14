@@ -710,3 +710,34 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 - **DrawCallback 嵌入渲染管线**：Surface 无需修改，CommandExecutor 自动分发，与所有现有 Spec（LabelSpec/ButtonSpec 等）共存
 - **回调坐标系**：Surface 的 `withSave()` + `transform()` 已平移到节点位置，回调在节点局部坐标系中绘制
 - **不修改 Surface**：CanvasSpec 是纯数据层扩展，Surface 的 `paint()` 方法无需感知特定 Spec 类型
+
+---
+
+## 2026-07-14 — 示例迁移 + 原生 Fields 删除
+
+### control-gallery.php 自绘改造
+- 从 100% 原生 libui 控件改造为 Surface + LayoutNode + WidgetSpec 自绘版
+- 左栏：Button/ButtonSpec、Checkbox/CheckboxSpec、Label/LabelSpec、DatePicker/DatePickerSpec、FilePicker/FilePickerSpec、FontButton/ColorButton（保留原生触发 picker）
+- 右栏：Number/NumberSpec、Slider/SliderSpec、Progress/ProgressSpec、TextField/TextFieldSpec、Radio/RadioSpec、TabControl
+- 事件接线：button click、checkbox toggle、slider drag → progress sync、number input filtering、radio select、date/file picker 对话框
+- 修复 DatePickerSpec/FilePickerSpec 点击无交互：添加 `onClick` 事件接线 `DatePickerDialog::pick()` / `FilePickerDialog::pick()`
+
+### 修复的错误
+| 错误 | 原因 | 修复 |
+|------|------|------|
+| `Unknown named parameter $dateOnly` | DatePickerSpec 无 dateOnly 参数 | 移除无效参数 |
+| `Unknown named parameter $options` | SelectSpec 无 options 参数 | 改用 TextFieldSpec 展示选中值 |
+
+### 原生 Fields 删除（Phase P 部分完成）
+- **删除 `src/Fields/` 目录**（14 个文件）：TextField、SearchField、PasswordField、NumberField、TextAreaField、ComboBoxField、EditableComboBoxField、CheckboxField、RadioGroup、SliderField、ProgressBarField、DatePickerField、FilePickerField、SeparatorLine
+- **更新 examples**：
+  - `all-components.php`：SeparatorLine → Separator（原生），移除 TextField import
+  - `test-circle-progress.php`：SeparatorLine → Separator（原生）
+- **更新 tests**：FieldsTest.php 注释更新（移除 Phase P 阻塞说明）
+- **更新文档**：AGENTS.md 移除 Fields 条目
+- 测试验证：20 项全部通过
+
+### 关键发现
+- **所有 14 个原生 Fields 都有自绘 Spec 等价物**，删除后零覆盖缺口
+- **SeparatorLine 是 Separator 的 Composite 包装**，在原生 Box 布局中直接用 Separator
+- **TextAreaControl/SearchFieldControl 仍保留**，因 IME 覆盖层依赖 TextInputControl 接口

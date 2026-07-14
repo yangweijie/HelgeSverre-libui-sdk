@@ -3,19 +3,10 @@
 declare(strict_types=1);
 
 /**
- * FieldsTest — self-drawn (Surface + WidgetSpec) port of the old native
- * Fields\* test suite.
+ * FieldsTest — tests all self-drawn (Surface + WidgetSpec) field types.
  *
- * Phase O of the "全面转向自绘" roadmap migrated the canonical `examples/test-fields.php`
- * demo onto the self-drawn Surface. This test completes that migration: instead
- * of asserting `root() instanceof Libui\Control` against the native `Yangweijie\Ui2\Fields\*`
- * wrappers, it asserts the *value objects* the renderer draws from — and that every
- * native field type has a registered self-drawn renderer in `RendererRegistry::default()`.
- *
- * Native wrappers (`src/Fields/*`) still exist (Phase P is blocked by IME), so this
- * test deliberately avoids importing them: once Phase P lands, deleting the native
- * layer leaves zero coverage gaps because each field below is already exercised
- * through its immutable Spec + registered renderer.
+ * Each field type is exercised through its immutable Spec object and verified
+ * to have a registered self-drawn renderer in `RendererRegistry::default()`.
  */
 
 use Yangweijie\Ui2\Rendering\WidgetRenderer\CheckboxSpec;

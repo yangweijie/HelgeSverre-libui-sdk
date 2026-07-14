@@ -9,7 +9,6 @@ Thin convenience layer over [`helgesverre/libui`](https://github.com/HelgeSverre
 | `src/` | **Your code** — `Yangweijie\Ui2\` namespace |
 | `src/Composite.php` | Abstract base for multi-control widgets. Subclass, override `root()` |
 | `src/EmitsEvents.php` | Trait: `on(event, handler)` / `emit(event, data)` |
-| `src/Fields/` | Label + input combos (TextField, NumberField, CheckboxField, etc.) |
 | `src/Pickers/` | Modal picker dialogs (Color, Font, DatePicker, TimePicker) |
 | `src/Dialogs/` | MessageBox, DialogConfirm, DialogPrompt |
 | `src/Widgets/` | Custom-drawn: ToggleSwitch, StatusIndicator, CircleProgressBar, Toast, TableView, TreeView, CodeEditor |

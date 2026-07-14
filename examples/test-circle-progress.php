@@ -25,7 +25,6 @@ use Libui\Ffi;
 use Yangweijie\Ui2\Widgets\CircleProgressBar;
 use Yangweijie\Ui2\Widgets\StatusIndicator;
 use Yangweijie\Ui2\Widgets\ToggleSwitch;
-use Yangweijie\Ui2\Fields\SeparatorLine;
 
 Ffi::init();
 
@@ -149,8 +148,8 @@ if (STEP === 0) {
     );
 
     $toggleStatusBtn = new Button("Toggle Status");
-    $separator3 = new SeparatorLine();
-    $separator4 = new SeparatorLine();
+    $separator3 = new Separator();
+    $separator4 = new Separator();
 
     $customToastLabel = new Label("Toast — native OS desktop notification:");
     $toastBtn = new Button("Send Toast");
@@ -160,10 +159,10 @@ if (STEP === 0) {
         $groupToggleSwitch,
         $groupStatus,
         $toggleStatusBtn,
-        $separator3->root(),
+        $separator3,
         $groupCircle,
         $buttonsRow,
-        $separator4->root(),
+        $separator4,
         $customToastLabel,
         Build::hbox($toastBtn, Build::stretchy(new Label(""))),
         Build::stretchy(new Label("")),
@@ -199,8 +198,8 @@ if (STEP === 0) {
     );
 
     $toggleStatusBtn = new Button("Toggle Status");
-    $separator3 = new SeparatorLine();
-    $separator4 = new SeparatorLine();
+    $separator3 = new Separator();
+    $separator4 = new Separator();
 
     $customToastLabel = new Label("Toast — native OS desktop notification:");
     $toastBtn = new Button("Send Toast");
@@ -210,10 +209,10 @@ if (STEP === 0) {
         $groupToggleSwitch,
         $groupStatus,
         $toggleStatusBtn,
-        $separator3->root(),
+        $separator3,
         $groupCircle,
         $buttonsRow,
-        $separator4->root(),
+        $separator4,
         $customToastLabel,
         Build::hbox($toastBtn, Build::stretchy(new Label(""))),
         Build::stretchy(new Label("")),
@@ -261,8 +260,8 @@ if (STEP === 0) {
     );
 
     $toggleStatusBtn = new Button("Toggle Status");
-    $separator3 = new SeparatorLine();
-    $separator4 = new SeparatorLine();
+    $separator3 = new Separator();
+    $separator4 = new Separator();
 
     $customToastLabel = new Label("Toast — native OS desktop notification:");
     $toastBtn = new Button("Send Toast");
@@ -272,10 +271,10 @@ if (STEP === 0) {
         $groupToggleSwitch,
         $groupStatus,
         $toggleStatusBtn,
-        $separator3->root(),
+        $separator3,
         $groupCircle,
         $buttonsRow,
-        $separator4->root(),
+        $separator4,
         $customToastLabel,
         Build::hbox($toastBtn, Build::stretchy(new Label(""))),
         Build::stretchy(new Label("")),

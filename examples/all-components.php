@@ -34,9 +34,6 @@ use Yangweijie\Ui2\Dialogs\DialogConfirm;
 use Yangweijie\Ui2\Dialogs\DialogPrompt;
 use Yangweijie\Ui2\Dialogs\MessageBox;
 
-use Yangweijie\Ui2\Fields\SeparatorLine;
-use Yangweijie\Ui2\Fields\TextField;
-
 use Yangweijie\Ui2\Pickers\ColorPickerDialog;
 use Yangweijie\Ui2\Pickers\DatePickerDialog;
 use Yangweijie\Ui2\Pickers\FontPickerDialog;
@@ -121,8 +118,8 @@ $toggleStatusBtn = new Button("Toggle Status")->onClicked(function () use (
     }
 });
 
-$separator3 = new SeparatorLine();
-$separator4 = new SeparatorLine();
+$separator3 = new Separator();
+$separator4 = new Separator();
 
 $circleBar = new CircleProgressBar(35);
 
@@ -174,9 +171,9 @@ $toggleControls = Build::vbox(
     $groupToggleSwitch,
     $groupStatus,
     $toggleStatusBtn,
-    $separator3->root(),
+    $separator3,
     $groupCircle,
-    $separator4->root(),
+    $separator4,
     $customToastLabel,
     Build::hbox($toastBtn, Build::stretchy($toastSpacer)),
 );
@@ -185,9 +182,9 @@ $toggleControls = Build::vbox(
 // TAB 3 — Dialogs (MessageBox, DialogConfirm, DialogPrompt)
 // ═════════════════════════════════════════════════════════════════════════════
 
-$separator5 = new SeparatorLine();
-$separator6 = new SeparatorLine();
-$separator7 = new SeparatorLine();
+$separator5 = new Separator();
+$separator6 = new Separator();
+$separator7 = new Separator();
 
 $dialogMsgLabel = new Label("MessageBox — native info/warning/error dialogs:");
 $dialogInfoBtn = new Button("Info");
@@ -225,10 +222,10 @@ $dialogEndSpacer = new Label("");
 $dialogControls = Build::vbox(
     $dialogMsgLabel,
     Build::hbox($dialogInfoBtn, $dialogWarnBtn, $dialogErrBtn, Build::stretchy($dialogSpacer1)),
-    $separator5->root(),
+    $separator5,
     $dialogConfirmLabel,
     Build::hbox($dialogConfirmBtn, Build::stretchy($dialogSpacer2)),
-    $separator6->root(),
+    $separator6,
     $dialogPromptLabel,
     Build::hbox($dialogNameBtn, Build::stretchy($dialogSpacer3)),
     Build::stretchy($dialogEndSpacer),
@@ -373,8 +370,8 @@ $tableControls = Build::vbox(
 // TAB 6 — WebView (TreeView, CodeEditor)
 // ═════════════════════════════════════════════════════════════════════════════
 
-$separator8 = new SeparatorLine();
-$separator9 = new SeparatorLine();
+$separator8 = new Separator();
+$separator9 = new Separator();
 
 $webviewTreeLabel = new Label("TreeView — collapsible file tree (opens in overlay child window):");
 $webviewTreeBtn = new Button("Open File Tree");
@@ -417,7 +414,7 @@ $webviewEditorBtn->onClicked(function () use (&$mainWindow, $outputLabel): void 
 });
 $webviewEditorSpacer = new Label("");
 
-$separator10 = new \Yangweijie\Ui2\Fields\SeparatorLine();
+$separator10 = new Separator();
 $iconLabel = new Label("App Icon — set dock/taskbar icon at runtime:");
 $iconBtn = new Button("Set App Icon");
 $iconBtn->onClicked(function () use (&$mainWindow, $outputLabel): void {
@@ -447,10 +444,10 @@ $webviewEndSpacer = new Label("");
 $webviewControls = Build::vbox(
     $webviewTreeLabel,
     Build::hbox($webviewTreeBtn, Build::stretchy($webviewTreeSpacer)),
-    $separator8->root(),
+    $separator8,
     $webviewEditorLabel,
     Build::hbox($webviewEditorBtn, Build::stretchy($webviewEditorSpacer)),
-    $separator9->root(),
+    $separator9,
     $iconLabel,
     Build::hbox($iconBtn, Build::stretchy($iconBtnSpacer)),
     $iconNote,

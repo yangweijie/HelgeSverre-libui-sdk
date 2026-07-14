@@ -100,7 +100,7 @@
 | M | 补自绘 Spec 缺口（DatePicker/FilePicker/Password/Number） | ✅ complete | `Number`/`Password`/`Date`/`File` 四组 Spec+Renderer 全部加入并注册（`date_picker`/`file_picker` 画成只读字段+右侧 chevron，点击由 Surface `onClick` 调 `DatePickerDialog`/`FilePickerDialog`）。新增 `src/Pickers/FilePickerDialog.php` 补 OS 文件框（libui `Dialogs::openFile()` 封装），与 `src/Pickers/` 家族对称。5 文件 `php85 -l` 全过，registry headless 注册验证通过 |
 | N | IME 性能优化 + （可选）解耦原生控件 | ✅ complete | 性能优化（用户实测"不卡了"确认生效）：① IME 调试日志门控到 `UI2_DEBUG_IME=1`（去掉每键 ~5 次 `fflush(STDERR)` + 每帧 `withState` 写），② bridge cdef 每实例只解析一次（缓存 `$imeBridgeCdef`）。另修 `imeDbg()` 可见性 bug（`private`→`public`，否则 `SurfaceDelegate` 调用触发致命错误导致多行文本框不显示）。**深层"去原生控件"重写暂不做**：去掉原生 NSTextView 即丧失中文 IME 能力 |
 | O | 迁移示例/测试到自绘 Spec | ✅ complete | 示例（`test-fields.php`）早已自绘；`tests/FieldsTest.php` 现已收尾：由测原生 `Fields\*`（断言 `root() instanceof Control`/`value()`）改写为测**自绘 Spec 值对象** + 断言每个字段 `type()` 在 `RendererRegistry::default()` 已注册（"原生字段有自绘 renderer 接管"）。20 项全过，headless 无需 FFI。原生 `src/Fields/*` 仍保留（Phase P 被 IME 阻塞），但测试已脱离原生 API，Phase P 落地即无覆盖缺口。`tests/FieldsTest.php` 不再引用原生 `Fields\*` |
-| P | 删除原生封装（Fields/* + *Control + Generated 控件类） | ⏸ blocked | **被 IME 阻塞**：删除 `*Control`（含 `TextAreaControl`，IME 原生 NSTextView 覆盖层宿主）即丧失中文输入能力（findings 已结论）。需先定 IME 路线（保留原生覆盖层 / 或 Phase N「去原生」重写）才能推进。`tests/FieldsTest.php` 随此阶段一并处理（转 Spec 值测试或删除） |
+| P | 删除原生封装（Fields/* + *Control + Generated 控件类） | 🟡 partial | Fields/\* 已全部删除（14 个文件），examples 已迁移为原生 Separator/Entry 或自绘 Spec。tests/FieldsTest.php 20 项全过。剩余：`*Control`（TextAreaControl、SearchFieldControl）仍保留，因 IME 覆盖层依赖其 TextInputControl 接口。 |
 
 ## ChartV2 示例 — 任务计划
 

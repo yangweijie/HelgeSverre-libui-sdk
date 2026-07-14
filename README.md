@@ -368,6 +368,7 @@ php examples/menu.php              # Declarative vs imperative menu APIs
 php examples/webview.php           # WebView with sidebar, JS ↔ PHP bridge
 php examples/chart-v2-demo.php     # ChartV2 interactive chart (bar/line/area/pie/scatter)
 php examples/canvas-demo.php       # CanvasSpec custom drawing in Surface layout
+php examples/control-gallery.php   # Self-drawn control gallery (all basic WidgetSpecs)
 php examples/tetris.php             # Full Tetris game using Area custom drawing
 ```
 
