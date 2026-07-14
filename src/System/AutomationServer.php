@@ -60,6 +60,9 @@ final class AutomationServer
     /** Queued SSE frames (already `event:/data:` formatted) waiting to be flushed. */
     private array $sseQueue = [];
 
+    /** Per-connection pending outbound bytes (survives short writes). */
+    private array $sseOut = [];
+
     /**
      * @param callable(): iterable         $rootsProvider Returns roots (Window | Surface | SemanticsNode | SemanticProvider) for /snapshot.
      * @param callable(string,array):array $driveHandler  (nodeId, payload) → response array for /drive.
@@ -150,38 +153,37 @@ final class AutomationServer
             // *before* the select; keeps firing even when no socket is readable.
             $this->flushSse();
 
-            $read = [$this->server];
-            foreach ($this->conns as $conn) {
-                $read[] = $conn;
-            }
-            $write = [];
-            $except = [];
-            $n = @\stream_select($read, $write, $except, 0);
-            if ($n === false || $n === 0) {
-                return true;
-            }
-
-            if (\in_array($this->server, $read, true)) {
+            // Accept pending connections every tick with a non-blocking accept
+            // rather than only when stream_select flags the listen socket. A
+            // zero-timeout stream_select can intermittently fail to report the
+            // listen socket as readable (observed on macOS loopback), which would
+            // otherwise drop incoming connections.
+            $conn = @\stream_socket_accept($this->server, 0);
+            while ($conn !== false) {
+                \stream_set_blocking($conn, false);
+                $id = (int) $conn;
+                $this->conns[$id] = $conn;
+                $this->buffers[$id] = '';
                 $conn = @\stream_socket_accept($this->server, 0);
-                if ($conn !== false) {
-                    \stream_set_blocking($conn, false);
-                    $id = (int) $conn;
-                    $this->conns[$id] = $conn;
-                    $this->buffers[$id] = '';
-                    // Make the freshly accepted connection eligible for reading in
-                    // this same tick (stream_select only flagged the listen socket).
-                    $read[] = $conn;
-                }
             }
 
+            // Read every connection each tick with a non-blocking fread instead
+            // of gating on stream_select(0). A zero-timeout select can also miss
+            // readable data on established connections (same macOS loopback
+            // quirk), so we poll each conn directly and only drop a connection
+            // on a hard read error or a genuine EOF.
             foreach ($this->conns as $id => $conn) {
-                if (!\in_array($conn, $read, true)) {
+                $data = @\fread($conn, 8192);
+                if ($data === false) {
+                    // Hard read error / peer closed — drop the connection.
+                    $this->dropConn($id);
                     continue;
                 }
-                $data = @\fread($conn, 8192);
-                if ($data === false || $data === '') {
-                    // Peer closed (or read error) — drop the connection.
-                    $this->dropConn($id);
+                if ($data === '') {
+                    $meta = @\stream_get_meta_data($conn);
+                    if (($meta['eof'] ?? false)) {
+                        $this->dropConn($id);
+                    }
                     continue;
                 }
                 $this->buffers[$id] .= $data;
@@ -195,13 +197,16 @@ final class AutomationServer
                 $this->buffers[$id] = \substr($this->buffers[$id], $parsed['consumed']);
 
                 if ($this->isSseEndpoint($parsed['method'], $parsed['path'])) {
+                    // Consume the parsed request before upgrading, so any
+                    // subsequent client bytes aren't re-parsed as a stale GET.
+                    $this->buffers[$id] = \substr($this->buffers[$id], $parsed['consumed']);
                     // Upgrade this connection to a keep-alive SSE stream.
                     $this->openSse($id, $conn);
                     continue;
                 }
 
                 $response = $this->handleRequest($parsed['method'], $parsed['path'], $parsed['body']);
-                @\fwrite($conn, $response);
+                $this->writeFully($conn, $response);
                 $this->dropConn($id);
             }
         } catch (\Throwable $e) {
@@ -391,6 +396,7 @@ final class AutomationServer
             unset($this->conns[$id]);
         }
         unset($this->buffers[$id]);
+        unset($this->sseOut[$id]);
     }
 
     // --- SSE (Server-Sent Events) push — S2 live notifications ------------
@@ -468,11 +474,25 @@ final class AutomationServer
         }
         $frames = \implode('', $this->sseQueue);
         $this->sseQueue = [];
-        foreach ($this->sseConns as $id => $conn) {
-            $written = @\fwrite($conn, $frames);
-            if ($written === false) {
-                // Broken pipe — drop the dead subscription (read loop also covers this).
+        foreach (array_keys($this->sseConns) as $id) {
+            $this->sseOut[$id] = ($this->sseOut[$id] ?? '') . $frames;
+        }
+        foreach ($this->sseOut as $id => $pending) {
+            if ($pending === '') {
+                continue;
+            }
+            $conn = $this->sseConns[$id] ?? null;
+            if ($conn === null) {
+                unset($this->sseOut[$id]);
+                continue;
+            }
+            // writeFully retries short writes / EAGAIN so the whole frame drains
+            // within this tick; only a hard error drops the stream.
+            if ($this->writeFully($conn, $pending)) {
+                unset($this->sseOut[$id]);
+            } else {
                 $this->dropConn($id);
+                unset($this->sseOut[$id]);
             }
         }
     }
@@ -480,6 +500,46 @@ final class AutomationServer
     private function isSseEndpoint(string $method, string $path): bool
     {
         return $method === 'GET' && \parse_url($path, PHP_URL_PATH) === '/mcp';
+    }
+
+    /**
+     * Write the full payload to a (possibly non-blocking) stream. Writes run in
+     * blocking mode so a freshly-accepted SSE socket always drains every byte
+     * within the current poll tick — even before the client has read anything
+     * (the loopback kernel buffers it). The original blocking mode is restored
+     * afterwards so the connection stays non-blocking for reads via stream_select.
+     * Returns true once every byte is sent, false only on a hard write error.
+     */
+    private function writeFully($conn, string $data): bool
+    {
+        $meta = \stream_get_meta_data($conn);
+        $wasBlocking = $meta['blocked'] ?? true;
+        if (! $wasBlocking) {
+            \stream_set_blocking($conn, true);
+        }
+
+        $offset = 0;
+        $len = \strlen($data);
+        $ok = true;
+        while ($offset < $len) {
+            $written = @\fwrite($conn, \substr($data, $offset));
+            if ($written === false) {
+                $ok = false;
+                break;
+            }
+            if ($written === 0) {
+                // Extremely unlikely in blocking mode; bail rather than spin.
+                $ok = false;
+                break;
+            }
+            $offset += $written;
+        }
+
+        if (! $wasBlocking) {
+            \stream_set_blocking($conn, false);
+        }
+
+        return $ok;
     }
 
     private function sseHeaders(): string

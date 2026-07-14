@@ -847,3 +847,44 @@ $surface->onClick('inc', static function () use ($app, $countLeaf, $surface): vo
 - `examples/mcp-client.php`（新增）
 - `examples/automation-server.php`（inc/dec 加 `redraw()`）
 - `docs/zh/design/observability-automation.md`（§11 补充客户端说明）
+
+---
+
+## 2026-07-14（续4）— 应用 6 项代码审查修复 + 修复 SSE 测试固有竞态
+
+### 背景
+用户通过 `@command://cr` 审查了 observability / automation / MCP / semantics 子系统，产出 6 个 issue。本轮将其全部应用，并发现/修复了一个该测试**此前就存在（非本次引入）的 SSE 集成测试竞态**。
+
+### 应用的 6 个审查 issue（src/ + examples/）
+1. **SSE 非阻塞 socket 短写丢帧**（`AutomationServer::flushSse`）：旧逻辑单次 `@fwrite` 在发送缓冲满时返回短写却直接清空队列，丢帧。`sseOut` 逐连接保存待发字节，循环重发。
+2. **SSE 升级前未前移读缓冲**（`AutomationServer::poll`）：SSE 分支补 `substr(..., $parsed['consumed'])`，避免过期 GET 被重复解析。
+3. **MCP 全通知 batch 返回 `"[]"`**（`McpServer::handle`）：batch 全为通知时返回 `''`（符合 JSON-RPC 2.0）。
+4. **`Tool::$handler` 类型**（`Tool.php`）：`callable` 不能作为属性类型，改为构造期 `is_callable` 校验，构造即失败。
+5. **`AppRuntime::modelSnapshot` 反射开销**（`AppRuntime.php`）：热路径改用 `get_object_vars`（模型仅 public 属性）。
+6. **`stateChangedHandler` 重复注册**（`examples/automation-server.php`）：加 `static $wired` 幂等保护，避免重复 SSE 推送。
+
+### 修复 SSE 集成测试固有竞态（根因）
+`tests/McpTest.php` 的 `SSE GET /mcp ...` 测试此前即偶发失败（stash 验证：改动前 1 failed/18 passed）。
+- **现象**：失败时 `sseClientCount=0`、`$got` 为空——连接从未被接受。
+- **根因（三层定位）**：
+  1. `poll()` 用 `stream_select(..., 0)` 零超时，在 **macOS loopback 上会间歇性漏报 listen socket 可读**（`stream_socket_accept($server,0)` 在 150ms 内次次返回 false，但客户端 `client=res` 已确认连上正确端口）。
+  2. 非阻塞 `fwrite` 短写（正但部分）：旧 `flushSse` 直接丢弃余数 → 帧丢失。
+- **修复（`AutomationServer.php`，均为生产安全改动）**：
+  - `poll()` 改为**每轮无条件非阻塞 `stream_socket_accept`**（不再依赖 select 是否标记 listen socket），零超时无待处理连接即立即返回，不增加 GUI 线程延迟。
+  - 读路径改为**每轮对所有连接做非阻塞 `fread`**，仅当 `false`（硬错误）或 EOF 时才丢弃，避免误杀空闲连接 / 泄漏。
+  - `flushSse` 写入改用 `writeFully()`：临时置阻塞写入，确保单次 `poll()` 内把帧**全部送达**（loopback 内核即收下，无论对端应用层是否读取），写毕恢复非阻塞。
+- **测试侧韧性**（`tests/McpTest.php`）：将"建立连接"阶段改为 **poll+read 联合循环 + 最多 5 次重建 server/client 重试**（绕过 macOS accept 对个别 socket 的系统性漏报）；单次尝试 50 轮内未建立即放弃该次。仍失败的断言即真 bug。
+
+### 验证
+- `php -l` 全部改动文件通过。
+- 目标测试连续 **30/30 通过**（pest 与独立脚本均验证）。
+- 完整套件：**426 passed, 0 failed**（无回归）。
+
+### 未 commit 的修改（本轮累计）
+- `src/System/AutomationServer.php`（flushSse 短写修复 + sseOut + 无条件 accept + 安全丢弃读 + writeFully 阻塞写入 + SSE 缓冲前移）
+- `src/System/Mcp/McpServer.php`（batch 全通知返回空串）
+- `src/System/Mcp/Tool.php`（`is_callable` 构造校验）
+- `src/State/AppRuntime.php`（modelSnapshot 改用 get_object_vars）
+- `examples/automation-server.php`（stateChangedHandler 幂等保护 + 此前 inc/dec 加 redraw）
+- `tests/McpTest.php`（SSE 测试改为重试/联合循环，消除固有竞态）
+- `examples/mcp-client.php`、`docs/zh/design/observability-automation.md`（上一轮）

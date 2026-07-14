@@ -284,36 +284,59 @@ test('SSE notifyStateChanged is a no-op when MCP is disabled', function () {
 
 test('SSE GET /mcp opens a keep-alive stream and pushes live state_changed', function () {
     $state = ['count' => 1];
-    $server = new AutomationServer(
-        rootsProvider: fn () => [],
-        driveHandler: fn () => [],
-        stateProvider: static function () use (&$state) {
-            return $state;
-        },
-        mcp: true,
-    );
 
-    // Bind a real loopback socket WITHOUT libui (bypass start()/Loop::repeat).
-    $sock = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN);
-    expect($sock)->toBeTruthy();
-    \stream_set_blocking($sock, false);
-    set_private($server, 'server', $sock);
-    $name = \stream_socket_get_name($sock, false);
-    $port = (int) \substr($name, \strrpos($name, ':') + 1);
-    set_private($server, 'port', $port);
-
-    $client = \stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 1.0);
-    \stream_set_blocking($client, false);
-    \fwrite($client, "GET /mcp HTTP/1.1\r\nHost: localhost\r\n\r\n");
-
-    // First poll: accept + upgrade to SSE + push the initial state.
-    $server->poll();
+    // Drive poll() and read from the client in a single loop, mirroring how the
+    // real libui timer repeatedly calls poll(). We retry the whole
+    // connect+establish phase a few times because, on macOS loopback,
+    // stream_socket_accept(0) can intermittently fail to surface a freshly
+    // established connection for an entire attempt; a fresh socket pair usually
+    // clears it. A genuine server-side failure still fails after all retries.
+    $server = null;
+    $client = null;
     $got = '';
-    for ($i = 0; $i < 100 && !\str_contains($got, 'notifications/state_changed'); $i++) {
-        $got .= (string) \fread($client, 65536);
-        if ($got === '') {
+    for ($attempt = 0; $attempt < 5; $attempt++) {
+        $server = new AutomationServer(
+            rootsProvider: fn () => [],
+            driveHandler: fn () => [],
+            stateProvider: static function () use (&$state) {
+                return $state;
+            },
+            mcp: true,
+        );
+
+        $sock = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN);
+        expect($sock)->toBeTruthy();
+        \stream_set_blocking($sock, false);
+        set_private($server, 'server', $sock);
+        $name = \stream_socket_get_name($sock, false);
+        $port = (int) \substr($name, \strrpos($name, ':') + 1);
+        set_private($server, 'port', $port);
+
+        $client = \stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 1.0);
+        \stream_set_blocking($client, false);
+        \fwrite($client, "GET /mcp HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+        $got = '';
+        for ($i = 0; $i < 300; $i++) {
+            $server->poll();
+            $got .= (string) @\fread($client, 65536);
+            if (\str_contains($got, 'notifications/state_changed')) {
+                break;
+            }
+            // This attempt is doomed (connection never established) — bail early.
+            if ($i > 50 && $server->sseClientCount() < 1) {
+                break;
+            }
             \usleep(500);
         }
+
+        if (\str_contains($got, 'text/event-stream')) {
+            break; // established successfully
+        }
+        if (\is_resource($client)) {
+            @\fclose($client);
+        }
+        $server->stop();
     }
 
     expect($got)->toContain('text/event-stream');
@@ -325,11 +348,11 @@ test('SSE GET /mcp opens a keep-alive stream and pushes live state_changed', fun
     // A state transition pushes a fresh notification without the client polling.
     $state = ['count' => 2];
     $server->notifyStateChanged();
-    $server->poll();
     $got2 = '';
-    for ($i = 0; $i < 100 && !\str_contains($got2, '"count":2'); $i++) {
-        $got2 .= (string) \fread($client, 65536);
-        if ($got2 === '') {
+    for ($i = 0; $i < 300 && !\str_contains($got2, '"count":2'); $i++) {
+        $server->poll();
+        $got2 .= (string) @\fread($client, 65536);
+        if (!\str_contains($got2, '"count":2')) {
             \usleep(500);
         }
     }

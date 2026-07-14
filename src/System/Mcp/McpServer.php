@@ -73,7 +73,8 @@ final class McpServer
                 }
             }
 
-            return json_encode($out);
+            // A batch containing only notifications must yield NO response.
+            return $out === [] ? '' : json_encode($out);
         }
 
         $r = $this->dispatchOne($decoded);

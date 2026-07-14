@@ -95,15 +95,8 @@ class AppRuntime
      */
     public static function modelSnapshot(Model $model): array
     {
-        $out = [];
-        $ref = new \ReflectionObject($model);
-        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
-            if ($prop->isStatic()) {
-                continue;
-            }
-            $out[$prop->getName()] = $prop->getValue($model);
-        }
-
-        return $out;
+        // Models expose only public properties; this avoids per-call Reflection
+        // on the hot path (snapshot() runs on every state transition).
+        return \get_object_vars($model);
     }
 }

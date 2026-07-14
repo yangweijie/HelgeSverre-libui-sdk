@@ -104,6 +104,7 @@
 | Q | 示例自绘改造 + 上游补丁清理 | ✅ complete | control-gallery.php 从 100% 原生改造为 Surface 自绘版；DatePickerSpec/FilePickerSpec 添加 onClick 交互；删除 tests/ChartTest.php（引用已删旧 Chart 代码）；删除 patches/Form.php（Fields 已删，无人使用）；清理文档陈旧引用 |
 | R | 修复全部失败测试（391/391 通过） | ✅ complete | 修复 5 个测试文件共 10 项失败：LayoutSnapshotTest/SnapshotTest（更新 snapshot baseline）、CounterModelTest（测试断言逻辑错误）、SystemInfoTest（API 返回类型/键名变更）、ProcessUtilTest（Symfony→Illuminate Process 迁移） |
 | S | MCP 客户端示例 + automation-server 修复 | ✅ complete | 新增 `examples/mcp-client.php`（纯 PHP、零依赖 MCP 客户端：`McpHttpClient` POST 握手 + `SseStream` GET SSE 消费，端到端联调验证 SSE 实时反映驱动后状态）。修复 `examples/automation-server.php` 的 `inc`/`dec` 处理器：更新 spec 后补 `$surface->redraw()`（自绘 Surface 不自动重绘，导致 GUI 不更新 + SSE count 不递增）。`docs/zh/design/observability-automation.md` §11 补客户端说明 |
+| T | 应用 6 项 CR 修复 + 修复 SSE 测试固有竞态 | ✅ complete | 应用审查 issue：flushSse 短写修复(sseOut)、SSE 升级前移读缓冲、MCP 全通知 batch 返回空串、Tool handler is_callable 校验、modelSnapshot 改用 get_object_vars、stateChangedHandler 幂等保护。修复 SSE 集成测试 macOS loopback `stream_select(0)`/`accept(0)` 漏报竞态：`poll()` 改无条件非阻塞 accept + 安全丢弃读 + writeFully 阻塞写入；测试改 poll+read 联合循环 + 5 次重建重试。完整套件 426 passed |
 
 ## ChartV2 示例 — 任务计划
 

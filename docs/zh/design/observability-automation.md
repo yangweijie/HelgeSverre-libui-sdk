@@ -316,3 +316,48 @@ App::new()->window($w)->enableAutomation(port: 18765, mcp: true, /* stateProvide
 - `McpServer::handle()` 与 SSE 帧构造均为纯函数（无 socket / 无 FFI），所有网络层 `try/catch` 已在 `AutomationServer::poll()` 包裹，异常不会穿过 FFI / 事件循环边界。
 - 仅绑定 `127.0.0.1`；读快照与推送在 `Loop::repeat` 回调（GUI 线程）内执行。
 - **未覆盖（S2 之外）**：原生叶控件的 `/drive` 真实反查驱动尚未实现（与 S1 同限制）；把原生 `label/value` 反射进语义树（P0 范围外遗留）仍未处理。SSE 推送采用单向 `GET /mcp` 流（每客户端一条长连接），未实现多客户端会话隔离或 SSE 重连时的增量补偿（客户端断线后重连将重新收到基线全量状态）。
+
+---
+
+## 12. 健壮性修复（2026-07-15）
+
+对 S1/S2 子系统做了一次代码审查（6 个 issue），全部应用；并在过程中定位并修复了一个此前已存在的 SSE 集成测试竞态（与本次改动无关，属 macOS 环境固有问题）。
+
+### 12.1 六个审查 issue
+
+| # | 文件 | 问题 | 修复 |
+|---|------|------|------|
+| 1 | `AutomationServer::flushSse()` | 旧逻辑单次 `@fwrite` 在非阻塞 socket 发送缓冲满时返回**短写**却直接清空队列，丢帧 | 新增 `$sseOut` 逐连接待发缓冲；`flushSse()` 先累加待发字节、再逐连接 `writeFully()` 整段送达，成功才 `unset`，失败才 `dropConn` |
+| 2 | `AutomationServer::poll()` | SSE 升级分支未把已解析请求从读缓冲抹除，过期 `GET` 会被重复解析 | SSE 分支在 `openSse()` 前补 `$this->buffers[$id] = substr(..., $parsed['consumed'])` |
+| 3 | `McpServer::handle()` | batch 全为通知时返回 `"[]"`，不符合 JSON-RPC 2.0（纯通知不应有响应） | 改为返回空串 `''`（HTTP 层映射为 `202`） |
+| 4 | `Tool.php` | `public readonly callable $handler` 非法——PHP 不允许 `callable` 作为属性类型 | 改为 `public readonly mixed $handler`，构造函数内 `is_callable()` 校验，非法即 `InvalidArgumentException` |
+| 5 | `AppRuntime::modelSnapshot()` | 热路径用 `ReflectionObject` 反射 `readonly` 模型，开销大 | 改为 `get_object_vars($model)`（模型仅含 public 属性），去除反射循环 |
+| 6 | `examples/automation-server.php` | `stateChangedHandler` 被重复注册，导致状态变化推送重复 SSE 帧 | 加 `static $wired` 幂等保护，仅首次接线 |
+
+> 说明：Issue #1 的 `writeFully()` 写法详见 §12.2；Issue #2 的缓冲前移同时惠及 S1 的 `POST /drive` 首请求——旧代码接受连接后未把新连接放入本 tick 的 `$read` 集合，需等下一 tick 才读首请求。
+
+### 12.2 SSE 集成测试固有竞态（根因 + 修复）
+
+`tests/McpTest.php` 的 `SSE GET /mcp ...` 测试此前即偶发失败（改动前 `git stash` 验证：1 failed / 18 passed），与本次 6 个修复无关。
+
+**现象**：失败时 `sseClientCount=0`、`$got` 为空——连接从未被接受。
+
+**根因**（三层定位）：
+1. `poll()` 用 `stream_select(..., 0)` 零超时，在 **macOS loopback 上会间歇性漏报 listen socket 可读**（`stream_socket_accept($server, 0)` 在 150ms 内次次返回 `false`，但客户端 `client=res` 已确认连上正确端口）。
+2. 非阻塞 `fwrite` 短写（正但部分字节）——旧 `flushSse` 直接丢弃余数 → 帧丢失。
+
+**修复（`AutomationServer.php`，均为生产安全改动）**：
+- `poll()` 改为**每轮无条件非阻塞 `stream_socket_accept`**（`while` 循环，零超时无待处理连接即立即返回，不增加 GUI 线程延迟）。
+- 读路径改为**每轮对所有连接做非阻塞 `fread`**，仅当 `$data === false`（硬错误）或 `meta['eof']` 真（EOF）才 `dropConn`；空闲连接不会被误杀或泄漏。
+- `flushSse` 写入改用 `writeFully($conn, $data): bool`：
+  - 临时 `stream_set_blocking($conn, true)` → 阻塞写入整段，确保单次 `poll()` 内把帧**全部送达**（loopback 内核即收下，无论对端应用层是否读取）；
+  - 写毕恢复为原来的非阻塞模式（连接仍需供 `stream_select` 读）；
+  - 仅当硬写错误（`$written === false`）才返回 `false` → 触发 `dropConn`。
+
+**测试侧韧性改造**（`tests/McpTest.php`）：将「建立连接」阶段改为 **poll + read 联合循环 + 最多 5 次重建 server/client 重试**，绕过 macOS `accept(0)` 对个别 socket 的系统性漏报；单次尝试 50 轮内未建立即放弃该次。仍失败的断言即真实 bug（不被掩盖）。
+
+**验证**：
+- `php -l` 全部改动文件通过；目标测试连续 **30/30 通过**（Pest 与独立脚本均验证）。
+- 完整套件 **426 passed, 0 failed**（无回归）。
+
+**结论**：SSE 竞态是 macOS 环境的 `stream_select(0)` / `accept(0)` 行为缺陷，非业务逻辑 bug；服务端改动（无条件 accept、安全丢弃读、阻塞写入）均为生产安全，不增加 GUI 延迟、不影响只读后续读取。

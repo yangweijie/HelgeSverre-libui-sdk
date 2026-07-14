@@ -26,5 +26,10 @@ final class Tool
         public readonly array $inputSchema,
         public readonly mixed $handler,
     ) {
+        // PHP cannot type a property as `callable`, so validate at construction
+        // time to fail fast instead of throwing a TypeError only at call time.
+        if (! \is_callable($handler)) {
+            throw new \InvalidArgumentException("Tool '{$name}' handler must be callable");
+        }
     }
 }

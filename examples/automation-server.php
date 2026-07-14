@@ -131,6 +131,11 @@ App::new()
         // S2 SSE: subscribe the automation server to the counter's state changes
         // so it can push `notifications/state_changed` over GET /mcp SSE.
         stateChangedHandler: static function (\Yangweijie\Ui2\System\AutomationServer $server) use ($app): void {
+            static $wired = false;
+            if ($wired) {
+                return; // idempotent: avoid duplicate SSE notifications on re-init
+            }
+            $wired = true;
             $app->on('state.changed', static fn () => $server->notifyStateChanged());
         },
     )
