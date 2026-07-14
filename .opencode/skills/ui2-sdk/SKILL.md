@@ -68,7 +68,7 @@ This skill is organized into multiple focused documents:
 - **Fields** (18): TextField, NumberField, PasswordField, TextAreaField, SearchField, ComboBoxField, EditableComboBoxField, CheckboxField, RadioGroup, SliderField, ProgressBarField, DatePickerField, FilePickerField, SeparatorLine
 - **Pickers** (4): ColorPickerDialog, FontPickerDialog, DatePickerDialog, TimePickerDialog
 - **Dialogs** (3): MessageBox, DialogConfirm, DialogPrompt
-- **Custom Widgets** (8): CircleProgressBar, ToggleSwitch, StatusIndicator, Toast, TableView, TreeView, CodeEditor, SvgView
+- **Custom Widgets** (8+): CircleProgressBar, ToggleSwitch, StatusIndicator, Toast, TableView, TreeView, CodeEditor, SvgView
 - **Layout** (2): TabContainer, GroupSection
 
 ### WebView Integration

@@ -682,3 +682,31 @@ Spec 是不可变值对象，无回调；点击由 Surface 层负责：`$surface
 - **命名空间同名冲突**：子命名空间中的类如果不显式导入父命名空间同名类，PHP 解析到子命名空间 → 类似 `StrokeCircle` 找不到
 - **渲染器缓存应在持有者中**：`RenderCommandList` 是纯数据对象，不应承载缓存元数据
 - **`$series->color ?? palette` 优先级**：series 显式颜色 > palette 降级，需要在应用层处理覆盖逻辑
+
+---
+
+## 2026-07-14 — CanvasSpec：Surface 自定义绘制嵌入
+
+### V1–V5: 核心实现
+- **`DrawCallback`**（`src/Rendering/DrawCallback.php`）— 新 RenderCommand，持有 `\Closure(DrawContext, float, float): void`
+- **`CanvasSpec`**（`src/Rendering/WidgetRenderer/CanvasSpec.php`）— 新 WidgetSpec，嵌入回调到 LayoutNode 叶子节点，可选背景色
+- **`CanvasRenderer`**（`src/Rendering/WidgetRenderer/CanvasRenderer.php`）— 渲染器，生成 DrawCallback 命令
+- **`CommandExecutor`** — 新增 `DrawCallback` 分发：`($cmd->callback)($ctx, $cmd->width, $cmd->height)`
+- **`RendererRegistry`** — 注册 CanvasRenderer
+
+### V6: 示例 demo
+- `examples/canvas-demo.php`（199 行）— 迷你折线图 + 柱状图 + 动画进度条 + LabelSpec 混合布局
+- 流程图（LineChart）: fillRect 背景 → fillPolygon 半透明区域 → strokeLine 连线 → fillCircle 数据点
+- 柱状图（BarChart）: 动态宽度计算 + 多色柱
+- 进度条: Loop::repeat(50ms) 驱动动画 + 渐变色
+
+### 修复的错误
+| 错误 | 原因 | 修复 |
+|------|------|------|
+| `Property cannot have type callable` | PHP 8.5 不允许 `callable` 作为 readonly 属性类型 | 改为 `\Closure` |
+| `Call to private Color::__construct()` | CanvasRenderer 用 `new Color()` | 改为 `Color::rgb()` |
+
+### 设计决策
+- **DrawCallback 嵌入渲染管线**：Surface 无需修改，CommandExecutor 自动分发，与所有现有 Spec（LabelSpec/ButtonSpec 等）共存
+- **回调坐标系**：Surface 的 `withSave()` + `transform()` 已平移到节点位置，回调在节点局部坐标系中绘制
+- **不修改 Surface**：CanvasSpec 是纯数据层扩展，Surface 的 `paint()` 方法无需感知特定 Spec 类型

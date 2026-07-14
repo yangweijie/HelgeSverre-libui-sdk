@@ -132,3 +132,39 @@
 - **命名空间同名冲突**：子命名空间（如 `WidgetRenderer`）中的类如果不显式导入父命名空间的同名类，PHP 解析到子命名空间 → 类似 `StrokeCircle` 找不到
 - **`FontDescriptor` 属性 vs 方法**：`size()` 是方法不是属性，PHP 8.x 严格模式下会报 `Undefined property`
 - **渲染器缓存**：`RenderCommandList` 是纯数据对象，不应承载缓存元数据（width/height），应在持有者（ChartWidget）中跟踪
+
+## CanvasSpec — Surface 自定义绘制嵌入
+
+> 目标：为 Surface 的 LayoutNode 树增加 `CanvasSpec`，支持嵌入任意 DrawContext 绘制回调
+
+| Phase | 内容 | 状态 | 备注 |
+|-------|------|------|------|
+| V1 | 新增 `DrawCallback` RenderCommand | ✅ complete | 持有 `\Closure(DrawContext, float, float): void` |
+| V2 | 新增 `CanvasSpec` WidgetSpec | ✅ complete | 嵌入回调到 LayoutNode 叶子节点 |
+| V3 | 新增 `CanvasRenderer` | ✅ complete | 生成 DrawCallback 命令 + 可选背景色 |
+| V4 | `CommandExecutor` 支持 DrawCallback 分发 | ✅ complete | `($cmd->callback)($ctx, $cmd->width, $cmd->height)` |
+| V5 | `RendererRegistry` 注册 CanvasRenderer | ✅ complete | |
+| V6 | 示例 `examples/canvas-demo.php` | ✅ complete | 迷你折线图 + 柱状图 + 动画进度条 + LabelSpec 混合布局 |
+
+### CanvasSpec 用法
+```php
+$canvas = new CanvasSpec(
+    function (DrawContext $ctx, float $w, float $h): void {
+        $ctx->fillRect(0, 0, $w, $h, Brush::rgb(0x1E293B));
+        // 任意 DrawContext 绑制...
+    },
+    background: 0x1E293B, // 可选背景色
+);
+
+$layout = LayoutNode::column()
+    ->child(LayoutNode::leaf('header', new LabelSpec('Title'), height: 30.0))
+    ->child(LayoutNode::leaf('chart', $canvas, height: 200.0));
+
+$surface = new Surface($layout);
+```
+
+### 关键设计
+- **DrawCallback 是 RenderCommand**：Surface 渲染管线无需修改，CommandExecutor 自动分发
+- **`\Closure` 而非 `callable`**：PHP 8.5 不允许 `callable` 作为 readonly 属性类型
+- **回调接收 `(DrawContext, width, height)`**：坐标系已由 Surface 的 `withSave()` + `transform()` 平移到节点位置
+- **与 LabelSpec 等混合布局**：CanvasSpec 作为 LayoutNode 叶子，与任何其他 Spec 共存

@@ -45,6 +45,33 @@ $container->append($surface);
 
 `Surface` widgets are **fully composable** with libui containers — they are not child-window-based (unlike WebView widgets).
 
+### CanvasSpec — Custom Drawing in Surface
+
+`CanvasSpec` lets you embed arbitrary `DrawContext` drawing inside a Surface's `LayoutNode` tree. Place it as a leaf node to draw charts, games, custom visualizations, or any other content:
+
+```php
+use Yangweijie\Ui2\Rendering\WidgetRenderer\CanvasSpec;
+use Yangweijie\Ui2\Rendering\WidgetRenderer\LabelSpec;
+use Yangweijie\Ui2\Layout\LayoutNode;
+use Yangweijie\Ui2\Widgets\Surface;
+
+$chart = new CanvasSpec(
+    function (DrawContext $ctx, float $w, float $h): void {
+        $ctx->fillRect(0, 0, $w, $h, Brush::rgb(0x1E293B));
+        // Any DrawContext drawing...
+    },
+    background: 0x1E293B,
+);
+
+$layout = LayoutNode::column(gap: 8)
+    ->child(LayoutNode::leaf('title', new LabelSpec('Chart'), height: 30.0))
+    ->child(LayoutNode::leaf('canvas', $chart, height: 200.0));
+
+$surface = new Surface($layout);
+```
+
+See [Drawing](/en/guide/drawing#canvasspec--custom-drawing-in-surface-layout) for full details.
+
 ### Surface-based Controls
 
 These full-featured controls are built on `Surface` and `WidgetRenderer`:

@@ -7,6 +7,8 @@ php examples/all-components.php   # Full demo with 6 tabs showing all widgets
 php examples/menu.php              # Declarative vs imperative menu APIs
 php examples/webview.php           # WebView with sidebar, JS ↔ PHP bridge
 php examples/tetris.php             # Full Tetris game using Area custom drawing
+php examples/chart-v2-demo.php     # ChartV2 interactive chart demo
+php examples/canvas-demo.php       # CanvasSpec custom drawing in Surface layout
 ```
 
 ## all-components.php
@@ -37,22 +39,52 @@ php examples/tetris.php
 
 Controls: ← → ↓ move, ↑ rotate, Space hard drop, R restart, Escape pause/resume.
 
-## chart-demo.php
+## chart-v2-demo.php
 
-A complete chart component demo built on `Area` custom drawing — no third-party chart library. Demonstrates:
+Interactive chart demo built on the `ChartV2` component system (`src/ChartV2/`):
 
-- **5 chart types** — Line, Bar, Pie, Doughnut, Scatter (switch from the top button bar)
-- **Gestures** — double-click zoom, Shift+drag pinch, drag box-zoom (when not zoomed), drag pan (when zoomed), keyboard `+/-/=` zoom, `0` reset
-- **Dynamic data** — the "Random Data" button triggers an easeOutCubic animated transition
+- **5 chart types** — Bar, Line, Area, Pie, Scatter (switch from the top button bar)
+- **Dynamic data** — the "Random Data" button generates new random datasets
 - **Value labels** — toggle data-point/bar values on and off
-- **Light / dark theme** — switch in one click (including tooltip colors)
-- **Hover tooltip** — follows the cursor showing `series: value` (pie shows a percentage)
+- **Light / dark theme** — switch in one click
+- **Custom palette** — recolor all series with random colors
+- **ChartWidget** — wraps ChartRenderer in an AreaDelegate with mouse hover/tooltip support
 
 ```bash
-php examples/chart-demo.php
+php examples/chart-v2-demo.php
 ```
 
-The bottom status bar shows interaction hints: `double-click/box = zoom · Shift+drag = pinch · drag = pan after zoom · keys +/-/= zoom, 0 reset`.
+## canvas-demo.php
+
+Demonstrates `CanvasSpec` — embedding arbitrary `DrawContext` drawing callbacks inside a Surface's `LayoutNode` tree:
+
+- **Mini line chart** — custom-drawn with `fillPolygon`, `strokeLine`, `fillCircle`
+- **Mini bar chart** — multi-color bar rendering with `fillRect`
+- **Animated progress bar** — `Loop::repeat(50ms)` drives gradient color animation
+- **Mixed with LabelSpec** — canvas nodes coexist with text labels in the same LayoutNode tree
+
+```bash
+php examples/canvas-demo.php
+```
+
+Key API:
+```php
+use Yangweijie\Ui2\Rendering\WidgetRenderer\CanvasSpec;
+
+$canvas = new CanvasSpec(
+    function (DrawContext $ctx, float $w, float $h): void {
+        $ctx->fillRect(0, 0, $w, $h, Brush::rgb(0x1E293B));
+        // Any DrawContext drawing...
+    },
+    background: 0x1E293B,
+);
+
+$layout = LayoutNode::column()
+    ->child(LayoutNode::leaf('header', new LabelSpec('Title'), height: 30.0))
+    ->child(LayoutNode::leaf('chart', $canvas, height: 200.0));
+
+$surface = new Surface($layout);
+```
 
 ## renderer-button-demo.php
 
@@ -104,6 +136,8 @@ Additional test scripts in `examples/` for individual features:
 | `test-log.php` | Log viewer |
 | `test-process-util.php` | Process utility |
 | `test-svg.php` | SVG rendering |
+| `chart-v2-demo.php` | ChartV2 interactive chart (bar/line/area/pie/scatter + theme + recolor) |
+| `canvas-demo.php` | CanvasSpec custom drawing in Surface layout (line chart + bar chart + animated progress) |
 | `test-debug-bridge.php` | Bridge debugging |
 | `test-set-icon.php` | App icon setting |
 | `tetris.php` | Full Tetris game — Area custom drawing, keyboard input, gravity timer, ghost piece, score system |

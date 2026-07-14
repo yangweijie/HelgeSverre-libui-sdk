@@ -45,6 +45,33 @@ $container->append($surface);
 
 `Surface` 控件与 libui 容器**完全可组合**——它们不基于子窗口（与 WebView 控件不同）。
 
+### CanvasSpec — Surface 中嵌入自定义绘制
+
+`CanvasSpec` 允许你在 Surface 的 `LayoutNode` 树中嵌入任意 `DrawContext` 绘制。将其作为叶子节点放置，即可绘制图表、游戏、自定义可视化等内容：
+
+```php
+use Yangweijie\Ui2\Rendering\WidgetRenderer\CanvasSpec;
+use Yangweijie\Ui2\Rendering\WidgetRenderer\LabelSpec;
+use Yangweijie\Ui2\Layout\LayoutNode;
+use Yangweijie\Ui2\Widgets\Surface;
+
+$chart = new CanvasSpec(
+    function (DrawContext $ctx, float $w, float $h): void {
+        $ctx->fillRect(0, 0, $w, $h, Brush::rgb(0x1E293B));
+        // 任意 DrawContext 绘制...
+    },
+    background: 0x1E293B,
+);
+
+$layout = LayoutNode::column(gap: 8)
+    ->child(LayoutNode::leaf('title', new LabelSpec('图表'), height: 30.0))
+    ->child(LayoutNode::leaf('canvas', $chart, height: 200.0));
+
+$surface = new Surface($layout);
+```
+
+详见[绘制](/zh/guide/drawing#canvasspec--surface-中嵌入自定义绘制)了解完整用法。
+
 ### 基于 Surface 的控件
 
 以下控件基于 `Surface` 和 `WidgetRenderer` 构建：

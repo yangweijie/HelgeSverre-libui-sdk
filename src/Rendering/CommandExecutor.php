@@ -96,6 +96,7 @@ final class CommandExecutor
                 },
             ),
             $cmd instanceof DrawImage => $this->drawImage($ctx, $cmd),
+            $cmd instanceof DrawCallback => ($cmd->callback)($ctx, $cmd->width, $cmd->height),
         };
     }
 

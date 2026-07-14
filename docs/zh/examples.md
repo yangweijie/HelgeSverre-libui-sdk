@@ -7,52 +7,82 @@ php examples/all-components.php   # 完整的演示，6 个标签页展示所有
 php examples/menu.php              # 声明式 vs 命令式菜单 API
 php examples/webview.php           # 带侧边栏和 JS↔PHP 桥接的 WebView
 php examples/tetris.php            # 完整的俄罗斯方块游戏，使用 Area 自绘实现
+php examples/chart-v2-demo.php     # ChartV2 交互式图表示例
+php examples/canvas-demo.php       # CanvasSpec 在 Surface 布局中嵌入自定义绘制
 ```
 
 ## all-components.php
 
-在 6 个标签页中展示本包的所有控件：
+演示所有控件，分为 6 个标签页：
 
 1. **字段** — 所有输入字段类型
 2. **自定义** — ToggleSwitch、StatusIndicator、CircleProgressBar
 3. **对话框** — MessageBox、DialogConfirm、DialogPrompt、Toast
 4. **选择器** — 颜色、字体、日期、时间选择器
-5. **表格** — 使用 TableView 展示表格数据
-6. **WebView** — TreeView 和 CodeEditor 启动按钮
+5. **表格** — TableView 表格数据
+6. **WebView** — TreeView 和 CodeEditor
 
 ## tetris.php
 
-一个完整的俄罗斯方块游戏，完全使用 `Area` 自绘实现——无需外部游戏引擎或 canvas。展示了：
+完整的俄罗斯方块游戏，完全使用 `Area` 自绘实现：
 
-- **`Area` + `AreaDelegate`** — 自定义 2D 渲染 (`draw()`) 和键盘处理 (`key()`)
-- **`Loop::repeat()`** — 重力定时器，速度随关卡递增
-- **`DrawContext` 构建器** — 单元格 3D 斜面效果、阴影方块预览、网格线
-- **键盘输入** — 方向键 (`ExtKey`) 控制移动/旋转，上下方向键软降/硬降
-- **游戏机制** — 7 种方块、墙踢、消行、分数/等级/行数统计
-- **叠加层** — 在 Area 上直接绘制暂停和游戏结束界面
+- **`Area` + `AreaDelegate`** — 自定义 2D 渲染 `draw()`，键盘处理 `key()`
+- **`Loop::repeat()`** — 重力计时器以递增速度驱动游戏
+- **`DrawContext` 构建器** — 带 3D 浮雕效果的方块绘制、幽灵方块预览、网格线
+- **键盘输入** — 方向键移动，上旋转，空格硬降，R 重开，Esc 暂停
+- **游戏机制** — 7 种方块、踢墙、消行、计分/等级/行数追踪
+- **覆盖层** — 暂停画面、游戏结束覆盖层直接绘制在 Area 上
 
 ```bash
 php examples/tetris.php
 ```
 
-操作：← → ↓ 移动，↑ 旋转，空格硬降，R 重新开始，Escape 暂停/继续。
+## chart-v2-demo.php
 
-## chart-demo.php
+基于 `ChartV2` 组件系统的交互式图表示例（`src/ChartV2/`）：
 
-一个完整的图表组件演示，基于 `Area` 自绘实现，不依赖任何第三方图表库。展示了：
-
-- **5 种图表类型** — 折线、柱状、饼图、环形、散点（顶部按钮切换）
-- **手势交互** — 双击缩放、Shift+拖拽捏合、拖拽框选放大（未缩放时）、拖拽平移（已缩放时）、键盘 `+/-/=` 缩放、`0` 复位
-- **动态数据** — “随机数据”按钮触发 easeOutCubic 动画过渡
+- **5 种图表类型** — 柱状、折线、面积、饼图、散点（顶部按钮切换）
+- **动态数据** — "随机数据"按钮生成新的随机数据集
 - **数值标签** — 一键开关数据点/柱上的数值
-- **明/暗主题** — 一键切换（含 tooltip 配色）
-- **悬停 tooltip** — 跟随光标显示 `系列: 值`（饼图附带百分比）
+- **明/暗主题** — 一键切换
+- **自定义配色** — 随机颜色重新着色所有系列
+- **ChartWidget** — 将 ChartRenderer 封装在 AreaDelegate 中，支持鼠标悬停和 Tooltip
 
 ```bash
-php examples/chart-demo.php
+php examples/chart-v2-demo.php
 ```
 
-底部状态栏显示交互提示：`双击/框选=放大 · Shift+拖拽=捏合缩放 · 放大后拖拽=平移 · 键盘 +/-/= 放大、0 复位`。
+## canvas-demo.php
+
+演示 `CanvasSpec` — 在 Surface 的 `LayoutNode` 树中嵌入任意 `DrawContext` 绘制回调：
+
+- **迷你折线图** — 使用 `fillPolygon`、`strokeLine`、`fillCircle` 自绘
+- **迷你柱状图** — 多色柱使用 `fillRect` 渲染
+- **动画进度条** — `Loop::repeat(50ms)` 驱动渐变色动画
+- **与 LabelSpec 混合布局** — Canvas 叶子节点与文本标签共存于同一 LayoutNode 树
+
+```bash
+php examples/canvas-demo.php
+```
+
+核心 API：
+```php
+use Yangweijie\Ui2\Rendering\WidgetRenderer\CanvasSpec;
+
+$canvas = new CanvasSpec(
+    function (DrawContext $ctx, float $w, float $h): void {
+        $ctx->fillRect(0, 0, $w, $h, Brush::rgb(0x1E293B));
+        // 任意 DrawContext 绘制...
+    },
+    background: 0x1E293B,
+);
+
+$layout = LayoutNode::column()
+    ->child(LayoutNode::leaf('header', new LabelSpec('标题'), height: 30.0))
+    ->child(LayoutNode::leaf('chart', $canvas, height: 200.0));
+
+$surface = new Surface($layout);
+```
 
 ## renderer-button-demo.php
 
@@ -66,17 +96,17 @@ php examples/renderer-button-demo.php
 
 ## surface-demo.php
 
-演示 `Surface` 画布控件——一个基于单个 libui `Area` 构建的可组合自绘控件：
+演示 `Surface` 画布控件——基于单个 libui `Area` 的可组合自绘控件：
 
 ```bash
 php examples/surface-demo.php
 ```
 
-展示：Surface 控件配合 `FlexLayout` 定位多个 `WidgetRenderer` 子元素（按钮、滑块、复选框）、鼠标悬停/点击路由、命令批量渲染。
+展示：Surface 控件使用 `FlexLayout` 定位多个 `WidgetRenderer` 子控件（按钮、滑块、复选框），鼠标悬停/点击路由，以及命令批量渲染。
 
 ## surface-controls-demo.php
 
-演示基于 Surface 的完整控件集：
+演示完整的 Surface 控件集：
 
 ```bash
 php examples/surface-controls-demo.php
@@ -86,105 +116,61 @@ php examples/surface-controls-demo.php
 
 ## 测试文件
 
-`examples/` 中的其他测试脚本：
+`examples/` 目录下的其他测试脚本：
 
 | 脚本 | 功能 |
 |---|---|
-| `test-fields.php` | 字段控件测试 |
+| `test-fields.php` | 字段组件测试 |
 | `test-widgets.php` | 自定义控件测试 |
 | `test-pickers.php` | 选择器对话框测试 |
-| `test-circle-progress.php` | 环形进度条 |
+| `test-circle-progress.php` | 圆形进度条 |
 | `test-treeview.php` | TreeView 控件 |
 | `test-codeeditor.php` | CodeEditor 控件 |
 | `test-tray.php` | 系统托盘 |
-| `test-context-menu.php` | 上下文菜单 |
-| `test-global-hotkey.php` | 全局快捷键 |
-| `toast-test.php` | 通知测试 |
+| `test-context-menu.php` | 右键菜单（Area 和标准） |
+| `test-global-hotkey.php` | 全局快捷键注册 |
+| `toast-test.php` | Toast 通知 |
 | `test-system-info.php` | 系统信息 |
 | `test-log.php` | 日志查看器 |
 | `test-process-util.php` | 进程工具 |
 | `test-svg.php` | SVG 渲染 |
+| `chart-v2-demo.php` | ChartV2 交互式图表（柱状/折线/面积/饼图/散点 + 主题 + 配色） |
+| `canvas-demo.php` | CanvasSpec 在 Surface 布局中自定义绘制（折线图 + 柱状图 + 动画进度条） |
 | `test-debug-bridge.php` | 桥接调试 |
-| `test-set-icon.php` | 应用图标设置 |
-| `tetris.php` | 完整俄罗斯方块游戏 — Area 自绘、键盘输入、重力定时器、阴影方块、计分系统 |
 
-## 打包为独立二进制程序
+## 打包为独立二进制文件
 
-将您的 ui2 应用打包为独立的可执行文件（目标机器无需安装 PHP）：
+将你的 ui2 应用打包为独立可执行文件（目标机器无需安装 PHP）：
 
 ### 前置条件
 
-**macOS / Linux：**
+**macOS / Linux:**
 ```bash
-# 1. 安装 static-php-cli 并构建 micro.sfx
 composer install:spc
-
-# 2. 确认 micro.sfx 已构建
-ls ~/.spc/micro.sfx
 ```
 
-**Windows：**
+**Windows:**
 ```batch
-:: 安装 static-php-cli 并构建 micro.sfx
 scripts\install-spc.bat
-
-:: 确认
-dir %USERPROFILE%\.spc\micro.sfx
 ```
-
-> 下载 `static-php-cli` 并构建一个静态 PHP 解释器（`micro.sfx`），包含 FFI、PHAR、mbstring、tokenizer 和 filter 扩展。一次性设置，编译 PHP 源码约需 10-30 分钟。
->
-> **Windows 注意事项**：编译 PHP 源码需要 Visual Studio 2022（工作负载："使用 C++ 的桌面开发"）。需要 Windows 10 Build 17063+（内置 `curl.exe`）。
 
 ### 构建
 
 ```bash
-# 构建 PHAR 归档（适用于任何项目）
+# 构建 PHAR 归档
 composer build:phar -- examples/tetris.php --output=tetris.phar
 
-# 构建独立二进制程序（需要 micro.sfx）
+# 构建独立二进制文件（需要 micro.sfx）
 composer build:binary -- examples/tetris.php --name=Tetris --icon=icon.png
 
-# 运行二进制程序
+# 运行
 ./dist/Tetris
 ```
-
-构建流程：
-1. **PHAR** — 打包应用代码、vendor 依赖和原生 `libui` 共享库
-2. **二进制** — 将 `micro.sfx` + PHAR 拼接为单一可执行文件
-3. **图标** — macOS：生成含 `AppIcon.icns` 的 `.app` 包；Linux：`.desktop` + PNG；Windows：通过 `rcedit` 注入 `.ico`
-
-### 在依赖项目中使用
-
-```bash
-# 在依赖 yangweijie/ui2 的项目中：
-php vendor/yangweijie/ui2/scripts/build-phar.php my-app.php --output=my-app.phar
-php vendor/yangweijie/ui2/scripts/build-binary.php --phar=my-app.phar --name=MyApp
-```
-
-> **工作原理**：PHAR stub 在启动时将 `libui-ng` 共享库解压到临时目录（FFI 的 `dlopen()` 需要真实文件系统路径）。超过 7 天的旧解压文件会被自动清理。
-
-### 原生库解压机制
-
-运行时，打包后的二进制程序会：
-1. 将 `libui` 共享库（`.dylib`/`.so`/`.dll`）解压到 `sys_get_temp_dir()`
-2. 设置 `LIBUI_LIB` 环境变量，让 `Ffi::get()` 能定位到
-3. 运行应用 — FFI 从真实文件系统加载原生库
-4. 自动清理 7 天前的旧解压文件
 
 ### Composer 命令
 
 | 命令 | 说明 |
-|------|------|
-| `composer build:phar -- <入口文件> [选项]` | 从 PHP 入口文件构建 PHAR |
-| `composer build:binary -- <入口文件> [选项]` | 构建独立二进制程序 |
+|---------|-------------|
+| `composer build:phar -- <entry> [options]` | 从 PHP 入口文件构建 PHAR |
+| `composer build:binary -- <entry> [options]` | 构建独立二进制文件 |
 | `composer install:spc` | 安装 static-php-cli 并构建 micro.sfx |
-
-### 脚本参考
-
-| 脚本 | 说明 |
-|------|------|
-| `scripts/build-phar.php` | PHAR 归档构建器（打包应用 + vendor + 原生库） |
-| `scripts/build-binary.php` | 二进制编排器（PHAR → micro.sfx → 图标 → .app/.exe） |
-| `scripts/install-spc.sh` | static-php-cli 安装器 + micro.sfx 构建器 (macOS/Linux) |
-| `scripts/install-spc.bat` | static-php-cli 安装器 + micro.sfx 构建器 (Windows) |

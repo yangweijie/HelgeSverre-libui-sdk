@@ -118,6 +118,7 @@ final class RendererRegistry
         $registry->register(new SpanRenderer());
         $registry->register(new ReactionsRenderer());
         $registry->register(new ChartRenderer());
+        $registry->register(new CanvasRenderer());
 
         return $registry;
     }
