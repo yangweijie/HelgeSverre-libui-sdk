@@ -20,10 +20,10 @@ final class AlertRenderer implements WidgetRenderer
         assert($spec instanceof AlertSpec);
 
         [$accentColor, $bgColor] = match ($spec->variant) {
-            'success' => [new Color(0.2, 0.8, 0.4, 1.0), new Color(0.2, 0.8, 0.4, 0.08)],
-            'warning' => [new Color(1.0, 0.8, 0.2, 1.0), new Color(1.0, 0.8, 0.2, 0.08)],
-            'error' => [new Color(1.0, 0.3, 0.3, 1.0), new Color(1.0, 0.3, 0.3, 0.08)],
-            default => [new Color(0.2, 0.5, 1.0, 1.0), new Color(0.2, 0.5, 1.0, 0.08)],
+            'success' => [Color::rgba(0.2, 0.8, 0.4), Color::rgba(0.2, 0.8, 0.4, 0.08)],
+            'warning' => [Color::rgba(1.0, 0.8, 0.2), Color::rgba(1.0, 0.8, 0.2, 0.08)],
+            'error' => [Color::rgba(1.0, 0.3, 0.3), Color::rgba(1.0, 0.3, 0.3, 0.08)],
+            default => [Color::rgba(0.2, 0.5, 1.0), Color::rgba(0.2, 0.5, 1.0, 0.08)],
         };
 
         return [
