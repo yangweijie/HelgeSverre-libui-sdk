@@ -40,6 +40,8 @@ use Yangweijie\Ui2\Rendering\WidgetRenderer\TextAreaSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\TextFieldSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\ScrollViewSpec;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\WidgetSpec;
+use Yangweijie\Ui2\WebView;
+use Yangweijie\Ui2\Rendering\WidgetRenderer\WebViewSpec;
 use Yangweijie\Ui2\Semantics\SemanticProvider;
 use Yangweijie\Ui2\Semantics\SemanticsNode;
 
@@ -132,8 +134,41 @@ class Surface extends Composite implements SemanticProvider
     /** @var array<string, callable():void> drag-end handlers keyed by node id */
     private array $dragEndHandlers = [];
 
+    /** @var list<callable(float,float):void> area-resize handlers (areaWidth, areaHeight) */
+    private array $resizeHandlers = [];
+
     /** Optional anchor rect [x,y,w,h] for an edge/popover overlay (null = center). */
     private ?array $overlayAnchor = null;
+
+    /**
+     * Live WebView child windows keyed by LayoutNode id, one per visible
+     * {@see WebViewSpec} leaf. Like the IME overlay, each is a real native
+     * subview of the Area's view, glued to its node's on-screen rect every
+     * frame by {@see syncWebViewOverlays()}.
+     *
+     * @var array<string, WebView>
+     */
+    private array $webviewOverlays = [];
+
+    /**
+     * Content signature (url/html + debug) per overlay id, used to detect
+     * spec changes that require re-navigating / re-setting HTML.
+     *
+     * @var array<string, string>
+     */
+    private array $webviewSig = [];
+
+    /**
+     * Node ids awaiting WebView creation. Creation is deferred to a timer tick
+     * (outside the Area draw callback) so we never allocate a Cocoa WKWebView
+     * mid-draw; {@see flushWebViewPending()} performs it.
+     *
+     * @var array<string, WebViewSpec>
+     */
+    private array $webviewPending = [];
+
+    /** Whether a one-shot timer to flush $webviewPending is already scheduled. */
+    private bool $webviewTimerScheduled = false;
 
     /** Last known draw/event area size, for overlay positioning math. */
     private float $lastAreaW = 800.0;
@@ -366,6 +401,26 @@ class Surface extends Composite implements SemanticProvider
     }
 
     /**
+     * Register a callback fired when the Area's on-screen size changes (and on
+     * the first draw, so the caller learns the real area size instead of the
+     * default placeholder). Receives (areaWidth, areaHeight) in pixels.
+     */
+    public function onResize(callable $fn): static
+    {
+        $this->resizeHandlers[] = $fn;
+
+        return $this;
+    }
+
+    /** @internal Fired by SurfaceDelegate::draw on the first paint + on every resize. */
+    public function fireResize(float $width, float $height): void
+    {
+        foreach ($this->resizeHandlers as $fn) {
+            $fn($width, $height);
+        }
+    }
+
+    /**
      * Register a caret-navigation handler for the node with the given id. While
      * that node is focused, Arrow keys are forwarded here as one of 'left',
      * 'right', 'up', 'down'. Used by the self-drawn textarea.
@@ -423,6 +478,22 @@ class Surface extends Composite implements SemanticProvider
     public function redraw(): void
     {
         $this->delegate->redraw();
+    }
+
+    /**
+     * Best-effort teardown of any embedded WebView overlays. The live browser
+     * views are native subviews of the Area and are not tracked by libui, so we
+     * must free them explicitly. Prefer calling
+     * {@see destroyWebViewOverlays()} before the Window closes; this only runs
+     * if the Surface is garbage-collected first.
+     */
+    public function __destruct()
+    {
+        try {
+            $this->destroyWebViewOverlays();
+        } catch (\Throwable) {
+            // The native view/parent may already be gone during shutdown.
+        }
     }
 
     /**
@@ -773,6 +844,205 @@ class Surface extends Composite implements SemanticProvider
         $this->repositionImeOverlay();
     }
 
+    // ────── Embedded WebView overlays (WebViewSpec) ──────
+
+    /**
+     * Keep one live WebView child window glued to each visible
+     * {@see WebViewSpec} leaf, creating / loading / destroying as the tree
+     * changes. Called every frame from {@see SurfaceDelegate::draw} after the
+     * layout is established, so rects are always current.
+     *
+     * Creation of the native WebView is deferred to a timer tick (see
+     * {@see flushWebViewPending()}) to avoid allocating a Cocoa WKWebView
+     * inside the Area's draw callback.
+     */
+    public function syncWebViewOverlays(): void
+    {
+        try {
+            $seen = [];
+
+            $this->collectWebViewNodes($this->activeRoot(), $seen);
+
+            // Drop overlays whose node disappeared from the tree.
+            foreach (array_keys($this->webviewOverlays) as $id) {
+                if (!isset($seen[$id])) {
+                    $this->destroyWebView($id);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Never let an overlay bookkeeping error escape into the Area draw
+            // trampoline — that would crash the process with no message.
+            \fwrite(\STDERR, "[Surface] syncWebViewOverlays error (ignored): {$e->getMessage()}\n");
+        }
+    }
+
+    /**
+     * Walk the tree; for each WebViewSpec leaf, reposition its existing overlay
+     * (and reload on content change) or queue it for deferred creation.
+     */
+    private function collectWebViewNodes(LayoutNode $node, array &$seen): void
+    {
+        if ($node->spec instanceof WebViewSpec && $node->id !== null) {
+            $id = $node->id;
+            $seen[$id] = true;
+
+            $rect = $this->screenRectOf($id);
+            if ($rect === null) {
+                return;
+            }
+            [$x, $y, $w, $h] = $rect;
+            $sig = $this->webviewSigOf($node->spec);
+
+            if (isset($this->webviewOverlays[$id])) {
+                $this->webviewOverlays[$id]->reposition(
+                    (int) $x,
+                    (int) $y,
+                    \max(1, (int) $w),
+                    \max(1, (int) $h),
+                );
+                if (($this->webviewSig[$id] ?? null) !== $sig) {
+                    $this->applyWebViewContent($this->webviewOverlays[$id], $node->spec);
+                    $this->webviewSig[$id] = $sig;
+                }
+            } else {
+                $this->webviewPending[$id] = $node->spec;
+                $this->scheduleWebViewFlush();
+            }
+
+            return; // a webview leaf has no paintable children
+        }
+
+        foreach ($node->children as $child) {
+            $this->collectWebViewNodes($child, $seen);
+        }
+    }
+
+    /**
+     * Create the queued WebView overlays outside the draw callback. Runs on a
+     * libui timer tick (main thread, no active DrawContext), so allocating the
+     * native browser view is safe.
+     */
+    private function flushWebViewPending(): void
+    {
+        if ($this->webviewPending === []) {
+            return;
+        }
+
+        try {
+            $areaHandle = $this->areaHandle();
+        } catch (\Throwable $e) {
+            \fwrite(\STDERR, "[Surface] Cannot resolve Area handle for WebView overlays: {$e->getMessage()}\n");
+            return;
+        }
+
+        foreach (array_keys($this->webviewPending) as $id) {
+            $spec = $this->webviewPending[$id];
+            unset($this->webviewPending[$id]);
+
+            $rect = $this->screenRectOf($id);
+            if ($rect === null) {
+                continue;
+            }
+            [$x, $y, $w, $h] = $rect;
+
+            try {
+                $wv = WebView::createOnHandle(
+                    $areaHandle,
+                    (int) $x,
+                    (int) $y,
+                    \max(1, (int) $w),
+                    \max(1, (int) $h),
+                    $spec->debug,
+                );
+                $this->applyWebViewContent($wv, $spec);
+                $this->webviewOverlays[$id] = $wv;
+                $this->webviewSig[$id] = $this->webviewSigOf($spec);
+            } catch (\Throwable $e) {
+                \fwrite(\STDERR, "[Surface] WebView overlay '{$id}' creation failed: {$e->getMessage()}\n");
+            }
+        }
+    }
+
+    /**
+     * Schedule a one-shot timer to flush {@see $webviewPending}, unless one is
+     * already queued.
+     */
+    private function scheduleWebViewFlush(): void
+    {
+        if ($this->webviewTimerScheduled) {
+            return;
+        }
+        $this->webviewTimerScheduled = true;
+
+        $surface = $this;
+        \Libui\Ffi::timer(16, function () use ($surface): bool {
+            $surface->flushWebViewPending();
+            $surface->webviewTimerScheduled = false;
+
+            return false; // one-shot: stop after flushing
+        });
+    }
+
+    /** Navigate / set HTML / bind JS functions on a freshly created overlay. */
+    private function applyWebViewContent(WebView $wv, WebViewSpec $spec): void
+    {
+        if ($spec->url !== null) {
+            $wv->navigate($spec->url);
+        } elseif ($spec->html !== null) {
+            $wv->setHtml($spec->html);
+        }
+
+        foreach ($spec->binds as $name => $handler) {
+            $wv->bind($name, $handler);
+        }
+    }
+
+    /** Stable signature of a spec's content (detects navigation changes). */
+    private function webviewSigOf(WebViewSpec $spec): string
+    {
+        return ($spec->url !== null ? 'u:' . $spec->url : 'h:' . ($spec->html ?? ''))
+            . '|' . ($spec->debug ? '1' : '0');
+    }
+
+    /** Native handle of the Area's view — the parent for WebView overlays. */
+    private function areaHandle(): int
+    {
+        return \Libui\Ffi::get()->uiControlHandle(\Libui\Ffi::control($this->area->handle()));
+    }
+
+    /**
+     * Return the live {@see WebView} overlay for a node id, or null when the
+     * node isn't a WebViewSpec or its overlay hasn't been created yet. Use this
+     * to drive advanced behaviour (eval / return / extra binds).
+     */
+    public function webviewOf(string $id): ?WebView
+    {
+        return $this->webviewOverlays[$id] ?? null;
+    }
+
+    /** Destroy a single WebView overlay (idempotent). */
+    private function destroyWebView(string $id): void
+    {
+        try {
+            $this->webviewOverlays[$id]?->destroy();
+        } catch (\Throwable) {
+            // best-effort — the native view may already be gone
+        }
+        unset($this->webviewOverlays[$id], $this->webviewSig[$id], $this->webviewPending[$id]);
+    }
+
+    /**
+     * Destroy every embedded WebView overlay. Call this before the parent
+     * Window / FFI is torn down to free the native browser views deterministically.
+     */
+    public function destroyWebViewOverlays(): void
+    {
+        foreach (array_keys($this->webviewOverlays) as $id) {
+            $this->destroyWebView($id);
+        }
+        $this->webviewPending = [];
+    }
+
     /**
      * Resolve the platform-specific IME bridge library path.
      *
@@ -828,6 +1098,12 @@ final class SurfaceDelegate extends AreaDelegate
         // (non-scrolling) Area; lay the whole tree out within it.
         $w = $params->areaWidth;
         $h = $params->areaHeight;
+        // Fire onResize on the first draw and on every size change so the host
+        // can rebuild content sized to the real area (libui's Area is the source
+        // of truth — initial size guesses are off by the OS window margin).
+        if ($w !== $this->surface->lastAreaWidth() || $h !== $this->surface->lastAreaHeight()) {
+            $this->surface->fireResize($w, $h);
+        }
         $this->surface->setLastAreaSize($w, $h);
         FlexLayout::layout($root, 0, 0, $w, $h);
         $this->paint($ctx, $root);
@@ -853,6 +1129,11 @@ final class SurfaceDelegate extends AreaDelegate
         // (the rect wasn't ready when focus fired) and tracks the field through
         // any scroll/redraw without an explicit scroll handler.
         $this->surface->repositionImeOverlay();
+
+        // Same job for any embedded WebViewSpec leaves: glue a real WebView
+        // child window to each node's on-screen rect (creating/loading it as
+        // needed). Mirrors the IME overlay lifecycle.
+        $this->surface->syncWebViewOverlays();
     }
 
     /** Dim the whole area behind a modal overlay. */

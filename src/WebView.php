@@ -100,24 +100,30 @@ class WebView
     /**
      * Create an embedded webview inside a libui Window.
      *
-     * @param Window $window The parent libui Window. Must be shown first
-     *                       if you want this to appear immediately.
-     * @param int    $x      X offset from the left of the window's content area.
-     * @param int    $y      Y offset from the top of the window's content area.
-     * @param int    $width  Width of the webview area in points/pixels.
-     * @param int    $height Height of the webview area in points/pixels.
-     * @param bool   $debug  Enable Web Inspector / DevTools (default: false).
+     * @param Window|null $window       The parent libui Window. May be null when
+     *                                  $parentHandle is supplied directly (e.g. to
+     *                                  embed the webview inside a Surface's Area
+     *                                  view instead of a Window's content view).
+     * @param int         $x            X offset from the left of the parent area.
+     * @param int         $y            Y offset from the top of the parent area.
+     * @param int         $width        Width of the webview area in points/pixels.
+     * @param int         $height       Height of the webview area in points/pixels.
+     * @param bool        $debug        Enable Web Inspector / DevTools (default: false).
+     * @param int|null    $parentHandle Raw native parent handle (NSView / GtkWidget
+     *                                  / HWND). When set, $window is ignored and the
+     *                                  webview is attached to this handle directly.
      *
      * @throws \RuntimeException If the bridge or PebView library cannot be loaded,
      *                           or if wvb_create() returns null.
      */
     public function __construct(
-        Window $window,
-        int    $x = 0,
-        int    $y = 0,
-        int    $width = 800,
-        int    $height = 600,
-        bool   $debug = false,
+        ?Window $window = null,
+        int     $x = 0,
+        int     $y = 0,
+        int     $width = 800,
+        int     $height = 600,
+        bool    $debug = false,
+        ?int    $parentHandle = null,
     ) {
         $this->x = $x;
         $this->y = $y;
@@ -127,7 +133,7 @@ class WebView
         $this->resolveLibraryPaths();
         $this->loadPebView();
         $this->loadBridge();
-        $this->parentHandle = $this->resolveParentHandle($window);
+        $this->parentHandle = $parentHandle ?? $this->resolveParentHandle($window);
 
         $this->handle = $this->bridge->wvb_create(
             $debug ? 1 : 0,
@@ -144,6 +150,41 @@ class WebView
                 . 'Ensure the bridge library is compiled for this platform.',
             );
         }
+    }
+
+    /**
+     * Create a webview attached to an arbitrary native parent handle (NSView /
+     * GtkWidget / HWND) instead of a libui Window's content view.
+     *
+     * This is the entry point used by {@see \Yangweijie\Ui2\Widgets\Surface} to
+     * embed a live browser inside a self-drawn canvas: the parent handle is the
+     * Area's native view, and x/y are the node's on-screen rect (viewport
+     * coordinates), exactly like a Surface overlay.
+     *
+     * @param int  $parentHandle Raw native parent handle (see {@see __construct}).
+     * @param int  $x            X offset from the left of the parent area.
+     * @param int  $y            Y offset from the top of the parent area.
+     * @param int  $width        Width of the webview area.
+     * @param int  $height       Height of the webview area.
+     * @param bool $debug        Enable Web Inspector / DevTools.
+     */
+    public static function createOnHandle(
+        int  $parentHandle,
+        int  $x,
+        int  $y,
+        int  $width,
+        int  $height,
+        bool $debug = false,
+    ): self {
+        return new self(
+            window: null,
+            x: $x,
+            y: $y,
+            width: $width,
+            height: $height,
+            debug: $debug,
+            parentHandle: $parentHandle,
+        );
     }
 
     /**

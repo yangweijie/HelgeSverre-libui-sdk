@@ -385,3 +385,28 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 - Pest `toBe()` 检查对象引用（`===`），不是值相等
 - CounterModelTest 的 `expect($m1)->toBe($app->model())` 在两次 dispatch 后，`$m1` 是第一次的返回值（count=1），`$app->model()` 是当前状态（count=2），引用不同
 - 修复：改为每次 dispatch 后立即断言
+
+---
+
+## 2026-07-15 — Surface + WebView 示例修复关键发现
+
+### uiNewMenu 原生崩溃
+- `new Menu('App')`（底层 `uiNewMenu`）在你 php85 + macOS 环境运行时原生崩溃（`EXC_BAD_ACCESS`/`SIGSEGV`），不是 PHP 层错误
+- `uiNewMenu` 的 FFI 声明在 `libui.gen.h:391`（`uiMenu *uiNewMenu(const char *name)`）正确存在
+- 声明正常但运行时崩，说明是 libui-ng 的 macOS 菜单创建在特定 PHP FFI 环境下的问题
+- 影响所有用菜单的示例（`webview.php`、`surface-webview.php`、`all-components.php` 等）
+- 对应用的影响：绕过方式为使用窗口关闭回调退出（`$win->onClosing(fn → Ffi::quit())` + `Loop::run()`）
+
+### Ffi::get() vs Ffi:: 静态方法调用陷阱
+- `Ffi::get()` 返回 `\FFI` 实例（C 函数句柄），**不是 PHP 的 Ffi 类**
+- `Ffi::get()->timer(...)` 试图调 C 函数 `timer`（不存在）→ 抛 `undefined C function 'timer'`
+- 正确用法：PHP 静态方法 `\Libui\Ffi::timer(ms, fn)`（保留闭包 + 调 `uiTimer`）
+- **`Ffi::timer()` 是重复定时器**：回调返回 `true` 继续、`false` 停止；一次性使用需显式 `return false`
+
+### cleanupOnClose 危险模式
+- `WebView::cleanupOnClose($win)` 在 `onClosing` 里直接 `destroy()` WKWebView
+- 文档明确警告：run loop 仍活跃时 WKWebView 的 autoreleased ObjC 对象还在池里 → `EXC_BAD_ACCESS`
+- 安全模式：`$win->onClosing(fn → Ffi::quit())` → `Loop::run()` → `$wv->destroy()`
+
+### Surface 命名空间
+- `Surface` 类 namespace 是 `Yangweijie\Ui2\Widgets`（文件在 `src/Widgets/Surface.php`），不是 `Yangweijie\Ui2\Surface`

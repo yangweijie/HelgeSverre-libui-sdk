@@ -123,6 +123,16 @@ void ime_create_textview(void* area_ns_view, double x, double y, double w, doubl
     [textView setEditable:YES];
     [textView setAllowsUndo:NO];
 
+    // Disable macOS "smart" text substitutions. NSTextView enables them by
+    // default (System Settings → Keyboard → Text), which silently rewrites a
+    // typed straight quote `"` into a typographic full-width quote `"` (and
+    // ditto for dashes), corrupting code-oriented input like JSON, URLs and
+    // shell commands. These are fields, not prose — turn ALL of them off.
+    [textView setAutomaticQuoteSubstitutionEnabled:NO];
+    [textView setAutomaticDashSubstitutionEnabled:NO];
+    [textView setAutomaticTextReplacementEnabled:NO];
+    [textView setAutomaticSpellingCorrectionEnabled:NO];
+
     // Single-line fields render their (centered) text, but NSTextView draws
     // from the top of its frame. Without an inset the IME text appears shifted
     // up / clipped. Center it vertically by pushing the text container down.

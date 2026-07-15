@@ -172,3 +172,22 @@ $surface = new Surface($layout);
 - **`\Closure` 而非 `callable`**：PHP 8.5 不允许 `callable` 作为 readonly 属性类型
 - **回调接收 `(DrawContext, width, height)`**：坐标系已由 Surface 的 `withSave()` + `transform()` 平移到节点位置
 - **与 LabelSpec 等混合布局**：CanvasSpec 作为 LayoutNode 叶子，与任何其他 Spec 共存
+
+---
+
+## WebView/Surface 示例修复（2026-07-15）
+
+> 场景：`examples/surface-webview.php` 和 `examples/webview.php` 运行即静默退出
+
+| Issue | 根因 | 修复 |
+|-------|------|------|
+| 两个示例静默崩溃 | `new Menu('App')` → `uiNewMenu` 在 php85+macOS 原生崩 | 去掉菜单，改用 `$win->onClosing→Ffi::quit()` 退出 |
+| surface-webview: Class not found | `use` 写成了 `Yangweijie\Ui2\Surface`，实际 namespace 是 `Widgets\Surface` | 修正 use 声明 |
+| surface-webview: undefined C function timer | `Ffi::get()->timer()` 调了 C 函数 `timer`（不存在），应调 PHP `Ffi::timer()` | 改 `Ffi::timer()` + `return false` 一次性 |
+| webview: Click Me 按钮无反应 | 未绑定 `onClicked` 回调 | 添加回调 + `$entry` 变量顺序调整 |
+| webview: cleanupOnClose 危险模式 | `cleanupOnClose` 在 onClosing 里 destroy WKWebView（run loop 活跃）| 改为安全模式：onClosing→Ffi::quit → Loop::run → $wv->destroy |
+
+### 当前进度
+- [x] `webview.php` — 正常运行（窗口 + 侧边栏 + WebView + 按钮回调）
+- [x] `surface-webview.php` — 正常运行（窗口 + Surface 嵌入 WebView）
+- [ ] 菜单底层 `uiNewMenu` 在你的 php85 环境仍损坏，需单独调查

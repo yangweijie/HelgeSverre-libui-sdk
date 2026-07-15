@@ -119,6 +119,7 @@ final class RendererRegistry
         $registry->register(new ReactionsRenderer());
         $registry->register(new ChartRenderer());
         $registry->register(new CanvasRenderer());
+        $registry->register(new WebViewRenderer());
 
         return $registry;
     }

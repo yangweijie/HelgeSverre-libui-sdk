@@ -31,7 +31,6 @@ use Libui\Box;
 use Libui\Button;
 use Libui\Entry;
 use Libui\Label;
-use Libui\Menu;
 use Yangweijie\Ui2\WebView;
 
 // ==========================================================================
@@ -39,9 +38,8 @@ use Yangweijie\Ui2\WebView;
 // ==========================================================================
 Ffi::init();
 
-// Menus must be created before the first Window.
-$appMenu = new Menu('App');
-$appMenu->appendQuitItem(); // Cmd+Q
+// NOTE: libui's menu creation (uiNewMenu) crashes natively under this PHP/FFI
+// build, so we skip the App menu and quit via the window's close button.
 
 // ==========================================================================
 // 2. Create window with layout
@@ -63,10 +61,15 @@ $sidebar = new Box();
 $sidebar->setPadded(true);
 
 $sidebar->append(new Label('Native Controls'), false);
-$sidebar->append(new Button('Click Me'), false);
 
 $entry = new Entry();
 $entry->setText('Type PHP text here...');
+
+$clickBtn = new Button('Click Me');
+$clickBtn->onClicked(function () use ($entry): void {
+    $entry->setText('Clicked at ' . \date('H:i:s'));
+});
+$sidebar->append($clickBtn, false);
 $sidebar->append($entry, false);
 
 $sidebar->append(new Label(''), true); // spacer
@@ -213,9 +216,15 @@ $wv->bind('ping', function (string $id, string $req) use ($wv) {
 $wv->autoResize($win, $sidebarWidth + $sidebarMargin, 0);
 
 // ==========================================================================
-// 8. Handle close — destroy webview before libui tears down
+// 8. Handle close — quit the loop on close; destroy the webview AFTER the
+//    loop exits. (WebView::cleanupOnClose destroys inside onClosing, which can
+//    EXC_BAD_ACCESS because WKWebView is still in the run loop's autorelease
+//    pool. See WebView docs for the safe pattern.)
 // ==========================================================================
-$wv->cleanupOnClose($win);
+$win->onClosing(function () {
+    Ffi::quit();
+    return true;
+});
 
 // ==========================================================================
 // 9. App-level quit handler
@@ -229,5 +238,9 @@ Ffi::onShouldQuit(fn() => true);
 
 // Use App::run() instead of Window::run() since we manage lifecycle manually
 \Libui\Loop::run();
+
+// Safe to destroy now — the NSApplication run loop has exited, so WKWebView's
+// autoreleased Objective-C objects are already drained.
+$wv->destroy();
 
 \fwrite(\STDERR, "[demo] Done.\n");

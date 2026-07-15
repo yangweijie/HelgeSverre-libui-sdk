@@ -888,3 +888,52 @@ $surface->onClick('inc', static function () use ($app, $countLeaf, $surface): vo
 - `examples/automation-server.php`（stateChangedHandler 幂等保护 + 此前 inc/dec 加 redraw）
 - `tests/McpTest.php`（SSE 测试改为重试/联合循环，消除固有竞态）
 - `examples/mcp-client.php`、`docs/zh/design/observability-automation.md`（上一轮）
+
+---
+
+## 2026-07-15 — Surface + WebView 示例修复（菜单崩溃 / 命名空间 / timer / 按钮回调）
+
+### 问题
+`examples/surface-webview.php` 和 `examples/webview.php` 运行即静默退出（无错误输出），而 `examples/test-treeview.php` 正常运行。
+
+### 诊断链条
+1. **stderr 日志定位**：绕过 Collision 错误处理器后确认进程在 `Ffi::init()` → `new Menu('App')` 之间死亡
+2. **对比法**：`test-treeview.php`（能跑）不用菜单，两个崩的都用菜单 → 锁定 `uiNewMenu` 原生崩
+3. **验证**：`uiNewMenu` 的 FFI 声明存在且正确（`libui.gen.h:391`），是运行时原生崩溃（`EXC_BAD_ACCESS`/`SIGSEGV`），非 PHP 层错误
+
+### 修复内容
+
+#### 1. 菜单崩溃根因（两个示例）
+- 代码：`new Menu('App')` + `appendQuitItem()` 在你的 php85 + macOS 环境导致 `uiNewMenu` 原生崩溃
+- 修复：去掉菜单，改用窗口关闭回调退出 `$win->onClosing(fn () => Ffi::quit())`，对齐 `test-treeview` 已验证的成功模式
+- 文件：`examples/surface-webview.php`、`examples/webview.php`
+
+#### 2. Surface 命名空间错误
+- 代码：`use Yangweijie\Ui2\Surface` 但实际 namespace 是 `Yangweijie\Ui2\Widgets\Surface`
+- 修复：修正 use 声明
+- 文件：`examples/surface-webview.php`
+
+#### 3. Surface timer 调用错误
+- 代码：`\Libui\Ffi::get()->timer(16, fn)` 调用了 FFI 句柄上的 C 函数 `timer`（不存在），应调 PHP 静态方法 `\Libui\Ffi::timer(16, fn)`
+- 修复：改为 `\Libui\Ffi::timer()` + 回调返回 `false` 停止重复定时器（`Ffi::timer` 是重复定时器，需一次性）
+- 文件：`src/Widgets/Surface.php:978`
+
+#### 4. WebView 清理模式升级
+- 旧：`$wv->cleanupOnClose($win)` — 在 `onClosing` 里直接 `destroy()` WKWebView，文档明确警告会 `EXC_BAD_ACCESS`
+- 新：`$win->onClosing(fn → Ffi::quit())` → `Loop::run()` → `$wv->destroy()`（安全退出 + run loop 退出后销毁）
+- 文件：`examples/webview.php`
+
+#### 5. Click Me 按钮无回调
+- 代码：`new Button('Click Me')` 原无 `onClicked` 绑定，点了无反应
+- 修复：添加回调在输入框显示点击时间 + 变量定义顺序调整（避免 `undefined variable $entry`）
+- 文件：`examples/webview.php`
+
+### 当前状态
+- [x] `examples/webview.php` — 正常运行（窗口 + 侧边栏 + WebView + 按钮回调）
+- [x] `examples/surface-webview.php` — 正常运行（窗口 + Surface 嵌入 WebView）
+- [ ] 菜单底层 `uiNewMenu` 在 php85 环境仍损坏（单独调查需另开）
+
+### 文件变更
+- `examples/surface-webview.php` — 去掉菜单 + 修正命名空间 + 全局异常处理器
+- `examples/webview.php` — 去掉菜单 + 安全退出模式 + 按钮回调
+- `src/Widgets/Surface.php` — `Ffi::get()->timer` → `Ffi::timer` 修复
