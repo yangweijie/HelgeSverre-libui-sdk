@@ -21,6 +21,7 @@ final class TabSpec extends WidgetSpec
         public readonly bool $enabled = true,
         public readonly bool $hovered = false,
         public readonly float $radius = 6.0,
+        public readonly bool $closable = false,
     ) {
     }
 

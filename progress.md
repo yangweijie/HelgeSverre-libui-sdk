@@ -937,3 +937,34 @@ $surface->onClick('inc', static function () use ($app, $countLeaf, $surface): vo
 - `examples/surface-webview.php` — 去掉菜单 + 修正命名空间 + 全局异常处理器
 - `examples/webview.php` — 去掉菜单 + 安全退出模式 + 按钮回调
 - `src/Widgets/Surface.php` — `Ffi::get()->timer` → `Ffi::timer` 修复
+
+---
+
+## 2026-07-15 — WebView 自绘组件 + 自绘控件增强（未 commit）
+
+### commit `16063a3`: WebViewComponent + WebViewRenderer + WebViewSpec
+- **问题**：WebView 原本不是自绘控件（创建 borderless 子窗口），无法放入 Surface LayoutNode 树
+- **方案**：新增 `WebViewSpec`（`type()='webview'`）+ `WebViewRenderer`（绘制占位背景 + 标签）+ `WebViewComponent`（Composite，持 WebView 子窗口 + LayoutNode 根节点，`Surface` 在 `paint()` 后额外 collect WebView 子窗口做 reposition/destroy/hide）
+- **核心改动**：
+  - `src/Rendering/WidgetRenderer/WebViewSpec.php`（63 行）— url/html/width/height/debug 参数
+  - `src/Rendering/WidgetRenderer/WebViewRenderer.php`（56 行）— 绘制 WebView 占位背景（surface 色 + primary 边框）+ 标签
+  - `src/Widgets/WebViewComponent.php`（73 行）— Composite，持真正 WebView，`root()` 返回 LayoutNode 叶子
+  - `src/Widgets/Surface.php`（+281 行）— `collectWebViewNodes()` 递归收集树中 WebViewSpec 叶子 → 创建/复用/隐藏/销毁底层 WebView
+  - `src/WebView.php`— 修复 cleanupOnClose，取消 destroy 后多余通知
+- **测试**：`tests/WebViewSpecTest.php`（46 行）— 验证 WebViewSpec 值对象 + RendererRegistry 注册
+- **示例修复**：`examples/surface-webview.php`（surface 内嵌 WebViewComponent 演示）+ `examples/webview.php`（重建完整 WebView demo，WebViewComponent 改名适配）
+- **文档**：findings.md（WebView overlay hide 避免 segfault）+ task_plan.md/webview.php 修复记录
+
+### Uncommitted — 自绘控件增强（9 文件变更）
+
+| 文件 | 改动 |
+|------|------|
+| `TabControl.php` | 大重构：可关闭标签（×按钮 `closable`）+ 可添加标签（+按钮 `addable`），`onCloseTab`/`onAddTab` 回调，`addTab()`/`removeTab()` 编程接口，`buildBar()` 独立方法 |
+| `TabRenderer.php` | `closable && (hovered \|\| active)` 时渲染 × 关闭按钮 |
+| `TabSpec.php` | 新增 `closable: bool` 属性 |
+| `ButtonRenderer.php` | 新增 `card` variant（白色 surface 背景 + 灰色 hairline + onSurface 文字 + 多行居中布局） |
+| `Surface.php` | `lastClickX/Y` 公开字段（供位置感知处理器用）；`findNodeAnyTree()` 支持在 overlay 树中查找 IME 字段；WebView 溢出改为 `reposition(-10000,-10000)` 隐藏而非 destroy（避免 segfault）；TabSpec closable 转发 |
+| `ComboboxControl.php` | `readonly` 模式（点击 field 切换 dropdown，禁文字输入）；`rawValue` 跟踪（与字段截断显示分离）；`minPanelWidth` 面板宽覆盖；根节点显式宽高 |
+| `DropdownMenuControl.php` | 根节点添加显式 `height` |
+| `ScrollViewControl.php` | 新增 `setContentHeight(float)` 更新内容高度 + 同步 spec 到 viewport 节点 |
+| `AutomationServer.php` | 修复 `driveHandler` payload 提取（`$payload['payload']` 而非整个 `$payload`） |

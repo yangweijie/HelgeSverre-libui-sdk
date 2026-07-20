@@ -31,6 +31,8 @@ final class ComboboxControl
 {
     private LayoutNode $root;
 
+    private LayoutNode $bar;
+
     private LayoutNode $field;
 
     private LayoutNode $caret;
@@ -48,6 +50,12 @@ final class ComboboxControl
     /** @var callable(string):void|null */
     private $onChange = null;
 
+    /** Full (untruncated) value — the field spec may hold a truncated display string. */
+    private string $rawValue = '';
+
+    /** Minimum panel width (in pixels) — overrides width in buildPanel when set. */
+    private float $minPanelWidth = 0.0;
+
     /**
      * @param list<string> $options
      */
@@ -58,12 +66,15 @@ final class ComboboxControl
         private float $width = 220.0,
         private float $height = 34.0,
         private float $rowHeight = 32.0,
+
+        private readonly bool $readonly = false,
     ) {
         $this->options = array_values($options);
+        $this->rawValue = $value;
 
         $this->field = LayoutNode::leaf(
             "{$this->name}:input",
-            new TextFieldSpec(value: $value, placeholder: 'Select or type…'),
+            new TextFieldSpec(value: $this->truncateForField($value), placeholder: 'Select or type…', enabled: !$this->readonly),
             width: $this->width - 34,
             height: $this->height,
         );
@@ -74,11 +85,11 @@ final class ComboboxControl
             height: $this->height,
         );
 
-        $bar = LayoutNode::row(gap: 4, align: LayoutStyle::ALIGN_CENTER, id: "{$this->name}:bar", height: $this->height)
+        $this->bar = LayoutNode::row(gap: 4, align: LayoutStyle::ALIGN_CENTER, id: "{$this->name}:bar", height: $this->height)
             ->child($this->field)
             ->child($this->caret);
-        $this->root = LayoutNode::column(gap: 0, id: $this->name)
-            ->child($bar);
+        $this->root = LayoutNode::column(gap: 0, id: $this->name, width: $this->width, height: $this->height)
+            ->child($this->bar);
     }
 
     /** The control's root node — drop this into a Surface tree. */
@@ -94,7 +105,7 @@ final class ComboboxControl
 
     public function value(): string
     {
-        return $this->field->spec instanceof TextFieldSpec ? $this->field->spec->value : '';
+        return $this->rawValue;
     }
 
     /** Register input + caret handlers on a Surface. */
@@ -102,11 +113,16 @@ final class ComboboxControl
     {
         $this->surface = $surface;
 
-        $surface->onText($this->field->id, function (string $char, bool $backspace): void {
-            $cur = $this->value();
-            $next = $backspace ? mb_substr($cur, 0, -1) : $cur . $char;
-            $this->setValue($next, false);
-        });
+        if ($this->readonly) {
+            // Readonly: field click toggles dropdown, no text input
+            $surface->onClick($this->field->id, fn () => $this->toggle());
+        } else {
+            $surface->onText($this->field->id, function (string $char, bool $backspace): void {
+                $cur = $this->value();
+                $next = $backspace ? mb_substr($cur, 0, -1) : $cur . $char;
+                $this->setValue($next, false);
+            });
+        }
 
         $surface->onClick($this->caret->id, fn () => $this->toggle());
 
@@ -123,7 +139,7 @@ final class ComboboxControl
         $panel = LayoutNode::column(gap: 2, padding: 4, id: "{$this->name}:panel");
         $panel->spec = new PanelSpec(bordered: true, radius: 6.0, elevation: 0.8);
         $panel->style->absolute = true;
-        $panel->style->width = $this->width;
+        $panel->style->width = max($this->width, $this->minPanelWidth);
         $panel->style->height = $panelH;
 
         $this->optionRows = [];
@@ -197,11 +213,33 @@ final class ComboboxControl
         }
     }
 
+    /**
+     * Truncate text to fit the field width, appending "..." when needed.
+     *
+     * The field width is `$this->width - 34` (field + caret). TextLayout
+     * receives `$fieldW - 16` for padding. At 14px font ~7.5px/char, we
+     * estimate max chars that fit and truncate with ellipsis.
+     */
+    private function truncateForField(string $text): string
+    {
+        $fieldW = $this->width - 34;  // field node width
+        $avail  = $fieldW - 16;       // TextLayout width (minus padding)
+        $maxChars = (int) floor($avail / 7.5);
+        if ($maxChars < 4) {
+            $maxChars = 4;
+        }
+        if (mb_strlen($text) <= $maxChars) {
+            return $text;
+        }
+        return mb_substr($text, 0, $maxChars - 1) . '…';
+    }
+
     /** Replace the field value (and optionally fire onChange). */
     public function setValue(string $value, bool $fire = true): void
     {
+        $this->rawValue = $value;
         $this->field->spec = new TextFieldSpec(
-            value: $value,
+            value: $this->truncateForField($value),
             placeholder: $this->field->spec instanceof TextFieldSpec ? $this->field->spec->placeholder : '',
         );
         if ($fire && $this->onChange !== null) {
@@ -220,11 +258,40 @@ final class ComboboxControl
         $this->close();
     }
 
+    /**
+     * Replace the option list at runtime.
+     *
+     * If the current value is not in the new list it is reset to the first
+     * option. The dropdown panel is rebuilt lazily on next {@see open()}.
+     */
+    public function setOptions(array $options): void
+    {
+        $this->options = array_values($options);
+        $cur = $this->value();
+
+        if ($cur !== '' && ! in_array($cur, $this->options, true)) {
+            $this->setValue($this->options[0] ?? '', true);
+        }
+        $this->optionRows = []; // force rebuild on next open()
+    }
+
     /** @param callable(string):void $fn */
     public function onChange(callable $fn): static
     {
         $this->onChange = $fn;
 
+        return $this;
+    }
+
+    /** Set the minimum panel width so long options display fully.
+     *
+     *  Only affects the dropdown panel width — the field itself stays at
+     *  its original width (sibling buttons in a fixed-width parent won't
+     *  be covered or squeezed).
+     */
+    public function setMinPanelWidth(float $width): static
+    {
+        $this->minPanelWidth = $width;
         return $this;
     }
 }

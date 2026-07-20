@@ -25,6 +25,8 @@ use Yangweijie\Ui2\Rendering\StrokeRoundedRect;
  *  - filled  : solid primary background, surface (light) text
  *  - soft    : track-coloured background, primary text + primary hairline
  *  - outline : no fill, primary hairline + primary text
+ *  - card    : white (surface) background, thin default-grey hairline,
+ *              onSurface text — ideal for icon+label grid cards
  *  - disabled: track background, muted onSurface text, no border
  *
  * A pressed state darkens the primary-derived colours by 15% for feedback.
@@ -59,7 +61,8 @@ final class ButtonRenderer implements WidgetRenderer
 
         $border = $this->border($spec, $tokens);
         if ($border !== null) {
-            $inset = 0.75;
+            $inset = 0.5;
+            $thickness = $spec->variant === 'card' ? 0.8 : 1.5;
             $commands[] = new StrokeRoundedRect(
                 $inset,
                 $inset,
@@ -67,7 +70,7 @@ final class ButtonRenderer implements WidgetRenderer
                 $height - 2 * $inset,
                 $spec->radius,
                 $border,
-                StrokeParams::solid(1.5),
+                StrokeParams::solid($thickness),
             );
         }
 
@@ -96,7 +99,10 @@ final class ButtonRenderer implements WidgetRenderer
             $str = new AttributedString();
             $str->append($label, Attribute::fromColor($this->textColor($spec, $tokens)), Attribute::size($fontSize));
 
-            $layout = new TextLayout($str, $font, $width, DrawTextAlign::Left);
+            // 'card' labels are multi-line (icon\nname); align center lets
+            // libui handle the line-break positioning itself.
+            $align = $spec->variant === 'card' ? DrawTextAlign::Center : DrawTextAlign::Center;
+            $layout = new TextLayout($str, $font, $width, $align);
             [$tw, $th] = $layout->extents();
             $commands[] = new DrawText($layout, ($width - $tw) / 2, ($height - $th) / 2);
         }
@@ -113,6 +119,7 @@ final class ButtonRenderer implements WidgetRenderer
         return match ($spec->variant) {
             'soft'    => $tokens->color('color.track'),
             'outline' => null,
+            'card'    => $tokens->color('color.surface'),
             default   => $this->darken($tokens->color('color.primary'), $spec->pressed),
         };
     }
@@ -126,6 +133,7 @@ final class ButtonRenderer implements WidgetRenderer
         return match ($spec->variant) {
             'soft'    => $tokens->color('color.primary'),
             'outline' => $this->darken($tokens->color('color.primary'), $spec->pressed),
+            'card'    => $tokens->color('color.default'),
             default   => null,
         };
     }
@@ -142,6 +150,7 @@ final class ButtonRenderer implements WidgetRenderer
             'filled'  => $tokens->color('color.surface'),
             'soft'    => $tokens->color('color.primary'),
             'outline' => $tokens->color('color.primary'),
+            'card'    => $tokens->color('color.onSurface'),
             default   => $tokens->color('color.surface'),
         };
     }

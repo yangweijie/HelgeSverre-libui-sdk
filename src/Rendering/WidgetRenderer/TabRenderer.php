@@ -76,6 +76,21 @@ final class TabRenderer implements WidgetRenderer
         [$tw, $th] = $layout->extents();
         $commands[] = new DrawText($layout, ($width - $tw) / 2, ($height - $th) / 2);
 
+        // Close button × when closable and either hovered or active
+        if ($spec->closable && ($spec->hovered || $spec->active)) {
+            $closeSize = min(12.0, $height * 0.35);
+            $closeRight = 6.0;
+            $closeX = $width - $closeRight - 14.0;
+            $closeColor = $spec->hovered
+                ? $onSurface
+                : Color::rgba($onSurface->r, $onSurface->g, $onSurface->b, 0.4);
+            $closeStr = new AttributedString();
+            $closeStr->append("×", Attribute::fromColor($closeColor), Attribute::size($closeSize));
+            $closeLayout = new TextLayout($closeStr, $tokens->font($closeSize), 20.0, DrawTextAlign::Center);
+            [$cw, $ch] = $closeLayout->extents();
+            $commands[] = new DrawText($closeLayout, $closeX, ($height - $ch) / 2);
+        }
+
         return new RenderCommandList($commands);
     }
 }

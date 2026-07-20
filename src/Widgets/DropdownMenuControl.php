@@ -64,7 +64,7 @@ final class DropdownMenuControl
             width: $this->width,
             height: $this->rowHeight,
         );
-        $this->root = LayoutNode::column(gap: 0, id: $this->name)->child($this->trigger);
+        $this->root = LayoutNode::column(gap: 0, id: $this->name, height: $this->rowHeight)->child($this->trigger);
     }
 
     /** The control's root node — drop this into a Surface tree. */

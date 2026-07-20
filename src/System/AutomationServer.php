@@ -252,7 +252,7 @@ final class AutomationServer
                 if (!\is_string($nodeId)) {
                     return $this->jsonResponse(400, ['error' => 'nodeId (string) required']);
                 }
-                $result = ($this->driveHandler)($nodeId, $payload);
+                $result = ($this->driveHandler)($nodeId, $payload['payload'] ?? []);
                 return $this->jsonResponse(200, $result);
             }
 

@@ -175,6 +175,10 @@ class Surface extends Composite implements SemanticProvider
 
     private float $lastAreaH = 600.0;
 
+    public float $lastClickX = 0.0;
+
+    public float $lastClickY = 0.0;
+
     public function __construct(
         LayoutNode $root,
         ?DesignTokens $tokens = null,
@@ -208,6 +212,20 @@ class Surface extends Composite implements SemanticProvider
     public function rootLayout(): LayoutNode
     {
         return $this->root;
+    }
+
+    /**
+     * Find a node by id in the root layout, falling back to the overlay tree.
+     * Used by handleImeFocus() so text fields inside modal overlays work.
+     */
+    private function findNodeAnyTree(string $id): ?LayoutNode
+    {
+        $found = LayoutNode::find($this->root, $id);
+        if ($found !== null) {
+            return $found;
+        }
+
+        return $this->overlay === null ? null : LayoutNode::find($this->overlay, $id);
     }
 
     /** The accessibility/automation tree for this self-drawn surface. */
@@ -278,6 +296,18 @@ class Surface extends Composite implements SemanticProvider
         return $this->lastAreaH;
     }
 
+    /** X-coordinate of the most recent mouse click (viewport space). */
+    public function lastClickX(): float
+    {
+        return $this->lastClickX;
+    }
+
+    /** Y-coordinate of the most recent mouse click (viewport space). */
+    public function lastClickY(): float
+    {
+        return $this->lastClickY;
+    }
+
     /**
      * Record the on-screen area size from a draw / pointer pass. Surfaces are
      * written from {@see SurfaceDelegate}, which is a separate class and so
@@ -300,6 +330,9 @@ class Surface extends Composite implements SemanticProvider
     public function screenRectOf(string $id): ?array
     {
         $path = LayoutNode::pathTo($this->rootLayout(), $id);
+        if ($path === null && $this->overlay !== null) {
+            $path = LayoutNode::pathTo($this->overlay, $id);
+        }
         if ($path === null) {
             return null;
         }
@@ -522,7 +555,7 @@ class Surface extends Composite implements SemanticProvider
 
         // If focus is leaving the current IME-capable field, detach the text view.
         if ($old !== null) {
-            $oldNode = LayoutNode::find($this->rootLayout(), $old);
+            $oldNode = $this->findNodeAnyTree($old);
             if ($oldNode !== null && $this->isImeCapableSpec($oldNode->spec)) {
                 $this->imeDbg("[Surface] handleImeFocus: detaching IME text view\n");
                 $this->detachImeTextview();
@@ -534,8 +567,9 @@ class Surface extends Composite implements SemanticProvider
         }
 
         // Check if the newly focused node is an IME-capable text field
-        // (TextArea / TextField / SearchField).
-        $node = LayoutNode::find($this->rootLayout(), $new);
+        // (TextArea / TextField / SearchField).  Search both the root layout
+        // AND the modal overlay so text fields inside overlay dialogs work.
+        $node = $this->findNodeAnyTree($new);
         if ($node === null || !$this->isImeCapableSpec($node->spec)) {
             $this->imeDbg("[Surface] handleImeFocus: not an IME-capable field\n");
             return;
@@ -783,7 +817,7 @@ class Surface extends Composite implements SemanticProvider
         if ($this->imeBridgeFfi->ime_has_textview() !== 1) {
             return;
         }
-        $node = LayoutNode::find($this->rootLayout(), $this->imeNodeId);
+        $node = $this->findNodeAnyTree($this->imeNodeId);
         if ($node === null) {
             return;
         }
@@ -863,10 +897,14 @@ class Surface extends Composite implements SemanticProvider
 
             $this->collectWebViewNodes($this->activeRoot(), $seen);
 
-            // Drop overlays whose node disappeared from the tree.
+            // Hide overlays whose node disappeared from the tree — don't destroy
+            // them. Creating and destroying native browser windows is crash-prone
+            // (segfaults in the FFI bridge under rapid create/destroy cycles).
+            // Hidden overlays are reused when the same id reappears (repositioned
+            // + content-updated by collectWebViewNodes).
             foreach (array_keys($this->webviewOverlays) as $id) {
                 if (!isset($seen[$id])) {
-                    $this->destroyWebView($id);
+                    $this->webviewOverlays[$id]->reposition(-10000, -10000, 1, 1);
                 }
             }
         } catch (\Throwable $e) {
@@ -1368,6 +1406,7 @@ final class SurfaceDelegate extends AreaDelegate
                 enabled: $spec->enabled,
                 hovered: $node->hovered,
                 radius: $spec->radius,
+                closable: $spec->closable,
             );
         }
 
@@ -1604,6 +1643,10 @@ final class SurfaceDelegate extends AreaDelegate
                 }
 
                 if ($clicked && $hit !== null) {
+                    // Store click position for position-aware handlers (e.g. tab close zone)
+                    $this->surface->lastClickX = $event->x;
+                    $this->surface->lastClickY = $event->y;
+
                     // Click-to-focus: keyboard events (typing, arrows) now target
                     // this node. Standard for text fields and native-feeling for all.
                     $this->surface->focus()->focus($hit);

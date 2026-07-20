@@ -211,6 +211,33 @@ class ScrollViewControl
         return $this->spec->contentHeight;
     }
 
+    /**
+     * Update the natural content height (e.g. after a child is added/removed)
+     * and keep the content column in sync. Scroll offset is preserved.
+     */
+    public function setContentHeight(float $h): static
+    {
+        $this->spec = new ScrollViewSpec(
+            enabled: $this->spec->enabled,
+            scrollX: $this->spec->scrollX,
+            scrollY: $this->spec->scrollY,
+            contentWidth: $this->spec->contentWidth,
+            contentHeight: $h,
+            viewportWidth: $this->spec->viewportWidth,
+            viewportHeight: $this->spec->viewportHeight,
+            radius: $this->spec->radius,
+            vertical: $this->spec->vertical,
+            horizontal: $this->spec->horizontal,
+        );
+        $this->content->style->height = $h;
+        // The renderer and Surface read the spec off the *viewport node*, not
+        // this control's stored copy, so the scrollbar chrome (track + thumb)
+        // never reflects a changed content height unless we sync it here.
+        $this->viewport->spec = $this->spec;
+
+        return $this;
+    }
+
     /** A live spec snapshot carrying the current scroll offset (for thumb math). */
     private function currentSpec(): ScrollViewSpec
     {
