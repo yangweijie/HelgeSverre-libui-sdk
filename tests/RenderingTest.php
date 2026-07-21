@@ -36,7 +36,7 @@ test('delegate emits a clean ring: track + progress arc', function () {
     expect($cmds[0]->cx)->toBe($cmds[1]->cx);
     expect($cmds[0]->cy)->toBe($cmds[1]->cy);
     expect($cmds[0]->radius)->toBe($cmds[1]->radius);
-});
+})->group('ffi');
 
 test('progress 0 emits only the track arc', function () {
     $d = new CircleProgressDelegate(0, 200);
@@ -45,7 +45,7 @@ test('progress 0 emits only the track arc', function () {
     expect($cmds)->toHaveCount(1);
     expect($cmds[0])->toBeInstanceOf(StrokeArc::class);
     expect($cmds[0]->sweep)->toEqualWithDelta(2 * M_PI, 0.001);
-});
+})->group('ffi');
 
 test('smaller viewport falls back to content size and re-centres the ring', function () {
     $d = new CircleProgressDelegate(50, 200);
@@ -59,7 +59,7 @@ test('smaller viewport falls back to content size and re-centres the ring', func
     $normal = $d->arcCommands(300, 200);
     expect($normal[0]->cx)->toBe(150.0);
     expect($normal[0]->cy)->toBe(100.0);
-});
+})->group('ffi');
 
 test('ring colours match the hard-coded token values (pixel fidelity)', function () {
     $d = new CircleProgressDelegate(65, 200);
@@ -74,14 +74,14 @@ test('ring colours match the hard-coded token values (pixel fidelity)', function
     expect($cmds[1]->color->r)->toEqualWithDelta(0.04, 0.001);
     expect($cmds[1]->color->g)->toEqualWithDelta(0.52, 0.001);
     expect($cmds[1]->color->b)->toEqualWithDelta(1.0, 0.001);
-});
+})->group('ffi');
 
 test('RenderCommandList::free is safe on an empty list', function () {
     $list = new RenderCommandList([]);
     $list->free(); // must not throw
 
     expect(true)->toBeTrue();
-});
+})->group('ffi');
 
 test('theme override changes the resolved progress arc colour', function () {
     $d = new CircleProgressDelegate(65, 200);
@@ -93,7 +93,7 @@ test('theme override changes the resolved progress arc colour', function () {
     expect($cmds[1]->color->g)->toEqualWithDelta(0.8, 0.001);
     // track is untouched
     expect($cmds[0]->color->r)->toEqualWithDelta(0.88, 0.001);
-});
+})->group('ffi');
 
 test('explicit setColor overrides the theme token', function () {
     $d = new CircleProgressDelegate(65, 200);
@@ -102,7 +102,7 @@ test('explicit setColor overrides the theme token', function () {
 
     expect($d->progressColor()->r)->toEqualWithDelta(1.0, 0.001);
     expect($d->progressColor()->g)->toEqualWithDelta(0.0, 0.001);
-});
+})->group('ffi');
 
 test('StrokeArc carries the stroke params needed for a round-cap ring', function () {
     $d = new CircleProgressDelegate(65, 200);
@@ -111,4 +111,4 @@ test('StrokeArc carries the stroke params needed for a round-cap ring', function
     expect($cmd)->toBeInstanceOf(StrokeArc::class);
     expect($cmd->stroke->thickness)->toBe(12.0);
     expect($cmd->stroke->cap)->toBe(\Libui\Generated\Enum\DrawLineCap::Round);
-});
+})->group('ffi');

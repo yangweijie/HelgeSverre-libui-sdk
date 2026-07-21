@@ -189,10 +189,10 @@
                                     },
                                     {
                                         "_cmd": "StrokeRoundedRect",
-                                        "x": 0.75,
-                                        "y": 0.75,
-                                        "width": 42.5,
-                                        "height": 42.5,
+                                        "x": 0.5,
+                                        "y": 0.5,
+                                        "width": 43,
+                                        "height": 43,
                                         "radius": 20,
                                         "color": {
                                             "r": 0.04,
@@ -274,10 +274,10 @@
                                 "commands": [
                                     {
                                         "_cmd": "StrokeRoundedRect",
-                                        "x": 0.75,
-                                        "y": 0.75,
-                                        "width": 78.5,
-                                        "height": 34.5,
+                                        "x": 0.5,
+                                        "y": 0.5,
+                                        "width": 79,
+                                        "height": 35,
                                         "radius": 8,
                                         "color": {
                                             "r": 0.04,

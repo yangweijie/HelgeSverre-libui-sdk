@@ -37,7 +37,7 @@ test('PointerEvent classifies raw mouse events', function (): void {
     $hover = PointerEvent::fromMouse(new AreaMouseEvent(10, 10, 200, 100, 0, 0, 1, 0, 0));
     expect($hover->type)->toBe(PointerEvent::HOVER);
     expect($hover->isHover())->toBeTrue();
-});
+})->group('ffi');
 
 test('PointerEvent exposes click count for double-clicks', function (): void {
     $dbl = PointerEvent::fromMouse(new AreaMouseEvent(10, 10, 200, 100, 0, 1, 2, 0, 0));
@@ -46,7 +46,7 @@ test('PointerEvent exposes click count for double-clicks', function (): void {
 
     $single = PointerEvent::fromMouse(new AreaMouseEvent(10, 10, 200, 100, 0, 1, 1, 0, 0));
     expect($single->isDoubleClick())->toBeFalse();
-});
+})->group('ffi');
 
 test('KeyboardEvent infers printable + extended intent', function (): void {
     // On this libui build, Enter/Space/Tab arrive via the ascii $key field.
@@ -63,7 +63,7 @@ test('KeyboardEvent infers printable + extended intent', function (): void {
     $rel = KeyboardEvent::fromKey(new AreaKeyEvent(13, 0, 0, 0, true));
     expect($rel->isEnter())->toBeTrue();
     expect($rel->isPressed())->toBeFalse();
-});
+})->group('ffi');
 
 test('KeyboardEvent detects Shift+Tab', function (): void {
     // Modifiers::Shift = 4
@@ -73,7 +73,7 @@ test('KeyboardEvent detects Shift+Tab', function (): void {
     expect($shiftTab->isShift())->toBeTrue();
 
     expect(KeyboardEvent::fromKey(new AreaKeyEvent(9, 0, 0, 0, false))->isShiftTab())->toBeFalse();
-});
+})->group('ffi');
 
 test('FocusManager walks tab order with wrap-around', function (): void {
     $fm = new FocusManager();
@@ -94,7 +94,7 @@ test('FocusManager walks tab order with wrap-around', function (): void {
 
     $fm->focusPrev();
     expect($fm->current())->toBe('b');
-});
+})->group('ffi');
 
 test('FocusManager ignores unknown ids and fires onChange only on change', function (): void {
     $fm = new FocusManager();
@@ -123,7 +123,7 @@ test('FocusManager ignores unknown ids and fires onChange only on change', funct
     $fm->focus('a');
     $fm->setTabOrder(['a', 'c']);
     expect($fm->current())->toBe('a'); // retained
-});
+})->group('ffi');
 
 test('LayoutNode::findAt returns the topmost leaf under a point', function (): void {
     $leaf = LayoutNode::leaf('btn', new ButtonSpec('Hi'), width: 100, height: 36);
@@ -136,7 +136,7 @@ test('LayoutNode::findAt returns the topmost leaf under a point', function (): v
     expect(LayoutNode::findAt($container, 50, 30))->toBe('btn'); // inside the leaf
     expect(LayoutNode::findAt($container, 5, 5))->toBe('row');    // empty container area
     expect(LayoutNode::findAt($container, 500, 500))->toBeNull(); // outside everything
-});
+})->group('ffi');
 
 test('LayoutNode::focusables collects leaf ids in paint order', function (): void {
     $a = LayoutNode::leaf('a', new ButtonSpec('A'), width: 50, height: 30);
@@ -148,4 +148,4 @@ test('LayoutNode::focusables collects leaf ids in paint order', function (): voi
         ->child(LayoutNode::leaf('c', new ButtonSpec('C'), width: 50, height: 30));
 
     expect(LayoutNode::focusables($container))->toBe(['a', 'b', 'c']);
-});
+})->group('ffi');

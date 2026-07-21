@@ -29,7 +29,7 @@ test('TextAreaRenderer draws a field box + border + hover wash', function () use
     expect(array_filter($idle, fn ($c) => $c instanceof FillRoundedRect))->toHaveCount(1);
     expect(array_filter($idle, fn ($c) => $c instanceof StrokeRoundedRect))->toHaveCount(1);
     expect(array_filter($hover, fn ($c) => $c instanceof FillRoundedRect))->toHaveCount(2);
-});
+})->group('ffi');
 
 test('TextAreaControl inserts, backspaces, and moves the caret', function (): void {
     $ta = new TextAreaControl('notes');
@@ -47,7 +47,7 @@ test('TextAreaControl inserts, backspaces, and moves the caret', function (): vo
     $ta->backspace();
     expect($ta->getValue())->toBe('abc');
     expect($ta->root()->spec->cursor)->toBe(2);
-});
+})->group('ffi');
 
 test('TextAreaControl turns Enter into a newline', function (): void {
     $ta = new TextAreaControl('n');
@@ -55,13 +55,13 @@ test('TextAreaControl turns Enter into a newline', function (): void {
     $ta->insertChar("\n");
     $ta->insertChar('2');
     expect($ta->getValue())->toBe("line\n2");
-});
+})->group('ffi');
 
 test('TextAreaControl setValue clamps the caret to the end', function (): void {
     $ta = new TextAreaControl('n');
     $ta->setValue('hello world');
     expect($ta->root()->spec->cursor)->toBe(11);
-});
+})->group('ffi');
 
 test('ScrollViewRenderer shows a thumb only when content overflows', function (): void {
     $r = new ScrollViewRenderer();
@@ -74,7 +74,7 @@ test('ScrollViewRenderer shows a thumb only when content overflows', function ()
     [$x, $y, $w, $h] = $thumb;
     expect($x)->toBeGreaterThan(180.0); // sits in the right-hand gutter
     expect($h)->toBeGreaterThanOrEqual(ScrollViewRenderer::MIN_THUMB);
-});
+})->group('ffi');
 
 test('ScrollViewRenderer maps a thumb centre back to a scroll offset', function (): void {
     $r = new ScrollViewRenderer();
@@ -84,7 +84,7 @@ test('ScrollViewRenderer maps a thumb centre back to a scroll offset', function 
     expect($r->scrollYForThumbCenter($spec, ScrollViewRenderer::TRACK_INSET + 4, 200))->toBe(0.0);
     $bottomCenter = 200 - ScrollViewRenderer::TRACK_INSET - 2;
     expect($r->scrollYForThumbCenter($spec, $bottomCenter, 200))->toBe(200.0);
-});
+})->group('ffi');
 
 test('ScrollViewControl builds a viewport + content and clamps scrolling', function (): void {
     $rows = [LayoutNode::leaf('r0', null, width: 300, height: 28)];
@@ -100,18 +100,18 @@ test('ScrollViewControl builds a viewport + content and clamps scrolling', funct
 
     $sv->scrollTo(-50);
     expect($sv->scrollY())->toBe(0.0);
-});
+})->group('ffi');
 
 test('registry default registers the scroll + textarea renderers', function (): void {
     $registry = RendererRegistry::default();
     expect($registry->get('scroll_view'))->toBeInstanceOf(ScrollViewRenderer::class);
     expect($registry->get('text_area'))->toBeInstanceOf(TextAreaRenderer::class);
-});
+})->group('ffi');
 
 test('semantics mapType covers scroll_view + text_area', function (): void {
     expect(SemanticsNode::mapType('scroll_view')->name)->toBe('Group');
     expect(SemanticsNode::mapType('text_area')->name)->toBe('TextBox');
-});
+})->group('ffi');
 
 test('LayoutNode::findAt is scroll-aware for children inside a ScrollView', function (): void {
     $spacer = LayoutNode::leaf(null, null, width: 300, height: 150);
@@ -132,7 +132,7 @@ test('LayoutNode::findAt is scroll-aware for children inside a ScrollView', func
     expect(LayoutNode::findAt($root, 20, 170))->not->toBe('item');
     // A point below the viewport is empty.
     expect(LayoutNode::findAt($root, 20, 250))->toBeNull();
-});
+})->group('ffi');
 
 test('ScrollView thumb drag routes through Surface and updates scrollY', function (): void {
     $rows = [];
@@ -156,7 +156,7 @@ test('ScrollView thumb drag routes through Surface and updates scrollY', functio
 
     // Release and stop dragging.
     $delegate->mouse(new AreaMouseEvent(314, 50, 320, 150, 0, 1, 1, 0, 0));
-});
+})->group('ffi');
 
 test('ScrollView thumb drag works when the viewport is inside a modal overlay', function (): void {
     $rows = [];
@@ -196,7 +196,7 @@ test('ScrollView thumb drag works when the viewport is inside a modal overlay', 
     expect($sv->scrollY())->toBeGreaterThan($startY);
 
     $delegate->mouse(new AreaMouseEvent($thumbX, $thumbY + 20, 400, 400, 0, 1, 1, 0, 0));
-});
+})->group('ffi');
 
 test('ScrollView drag still works when libui classifies the held-button move as HOVER (held bit clear)', function (): void {
     // Some libui backends report a move while a button is held with the
@@ -224,7 +224,7 @@ test('ScrollView drag still works when libui classifies the held-button move as 
 
     // Release and stop dragging.
     $delegate->mouse(new AreaMouseEvent(314, 50, 320, 150, 0, 1, 0, 0, 0));
-});
+})->group('ffi');
 
 test('ScrollView drag works when libui fires the PRESS frame with down=0, held=1', function (): void {
     // The user's macOS libui build reports the press frame with the down bit
@@ -253,7 +253,7 @@ test('ScrollView drag works when libui fires the PRESS frame with down=0, held=1
 
     // Release: held=0, up=0 (no explicit up bit either).
     $delegate->mouse(new AreaMouseEvent(314, 50, 320, 150, 0, 0, 0, 0, 0));
-});
+})->group('ffi');
 
 test('ScrollView content-body drag pans the viewport', function (): void {
     // Grabbing the content itself (not the 12px scrollbar gutter) and dragging
@@ -280,7 +280,7 @@ test('ScrollView content-body drag pans the viewport', function (): void {
 
     // Release.
     $delegate->mouse(new AreaMouseEvent(30, 10, 320, 150, 0, 1, 1, 0, 0));
-});
+})->group('ffi');
 
 test('a child with its own drag handler is not hijacked by body scroll', function (): void {
     // A widget that owns its own drag gesture (e.g. a Slider) must keep it even
@@ -304,7 +304,7 @@ test('a child with its own drag handler is not hijacked by body scroll', functio
 
     expect($called)->toBeGreaterThan(0);
     expect($sv->scrollY())->toBe(0.0);
-});
+})->group('ffi');
 
 test('ScrollView content-body drag works with press down=0,held=1 and move held=1', function (): void {
     // User's macOS libui fires the PRESS frame with down=0, held=1 (the #96
@@ -330,7 +330,7 @@ test('ScrollView content-body drag works with press down=0,held=1 and move held=
 
     // RELEASE: held=0.
     $delegate->mouse(new AreaMouseEvent(30, 10, 320, 150, 0, 0, 0, 0, 0));
-});
+})->group('ffi');
 
 test('ScrollView content-body drag works with press down=0,held=1 and move held=0', function (): void {
     // Worst case: the user's libui fires the PRESS frame with down=0, held=1
@@ -359,7 +359,7 @@ test('ScrollView content-body drag works with press down=0,held=1 and move held=
 
     // RELEASE: held=0.
     $delegate->mouse(new AreaMouseEvent(30, 10, 320, 150, 0, 0, 0, 0, 0));
-});
+})->group('ffi');
 
 test('ScrollView scrollbar thumb drags on the user build (press down=0,held=1; move held=0; release up=1)', function (): void {
     // Exact event sequence reported from the real macOS libui build: the press
@@ -388,7 +388,7 @@ test('ScrollView scrollbar thumb drags on the user build (press down=0,held=1; m
     // RELEASE: up=1, held=0.
     $delegate->mouse(new AreaMouseEvent(314, 70, 320, 150, 0, 1, 0, 0, 0));
     expect($sv->scrollY())->toBeGreaterThan($startY);
-});
+})->group('ffi');
 
 test('nested ScrollView drag works after an ancestor has scrolled', function (): void {
     // Outer catalogue scrolled to near the bottom; inner panel nested inside it.
@@ -429,4 +429,4 @@ test('nested ScrollView drag works after an ancestor has scrolled', function ():
     expect($inner->scrollY())->toBeGreaterThan($startY);
 
     $delegate->mouse(new AreaMouseEvent($gutterX, $gutterY + 40, 320, 820, 0, 1, 1, 0, 0));
-});
+})->group('ffi');

@@ -81,10 +81,10 @@
                 "commands": [
                     {
                         "_cmd": "StrokeRoundedRect",
-                        "x": 0.75,
-                        "y": 0.75,
-                        "width": 98.5,
-                        "height": 34.5,
+                        "x": 0.5,
+                        "y": 0.5,
+                        "width": 99,
+                        "height": 35,
                         "radius": 8,
                         "color": {
                             "r": 0.04,

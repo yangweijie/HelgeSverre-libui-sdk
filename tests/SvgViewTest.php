@@ -45,7 +45,7 @@ test('pathBounds extracts coordinates from M/L commands', function (): void {
     expect($b['minY'])->toBeLessThanOrEqual(18.0);   // 20 - pad 2
     expect($b['maxX'])->toBeGreaterThanOrEqual(102.0); // 100 + pad 2
     expect($b['maxY'])->toBeGreaterThanOrEqual(62.0);  // 60 + pad 2
-});
+})->group('ffi');
 
 test('pathBounds handles single point', function (): void {
     $d = createDelegate();
@@ -54,7 +54,7 @@ test('pathBounds handles single point', function (): void {
     expect($b['minY'])->toBeLessThanOrEqual(48.0);
     expect($b['maxX'])->toBeGreaterThanOrEqual(52.0);
     expect($b['maxY'])->toBeGreaterThanOrEqual(52.0);
-});
+})->group('ffi');
 
 test('pathBounds handles horizontal and vertical commands', function (): void {
     $d = createDelegate();
@@ -63,7 +63,7 @@ test('pathBounds handles horizontal and vertical commands', function (): void {
     expect($b['minY'])->toBeLessThanOrEqual(-2.0);
     expect($b['maxX'])->toBeGreaterThanOrEqual(102.0);
     expect($b['maxY'])->toBeGreaterThanOrEqual(102.0);
-});
+})->group('ffi');
 
 test('pathBounds returns zeroes for empty string', function (): void {
     $d = createDelegate();
@@ -72,7 +72,7 @@ test('pathBounds returns zeroes for empty string', function (): void {
     expect($b['minY'])->toBe(-2.0);
     expect($b['maxX'])->toBe(2.0);
     expect($b['maxY'])->toBe(2.0);
-});
+})->group('ffi');
 
 test('pathBounds handles decimal coordinates', function (): void {
     $d = createDelegate();
@@ -81,7 +81,7 @@ test('pathBounds handles decimal coordinates', function (): void {
     expect($b['minY'])->toBeLessThanOrEqual(18.7);
     expect($b['maxX'])->toBeGreaterThanOrEqual(32.2);
     expect($b['maxY'])->toBeGreaterThanOrEqual(42.9);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // setPaths() / elements structure
@@ -97,7 +97,7 @@ test('setPaths creates elements array with bounds', function (): void {
     expect($elements[0])->toHaveKey('fill');
     expect($elements[0])->toHaveKey('stroke');
     expect($elements[1]['bounds']['minX'])->toBeGreaterThanOrEqual(68.0);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // hitTest()
@@ -108,21 +108,21 @@ test('hitTest finds element at coordinate', function (): void {
     $d->setPaths(['M 10 10 L 50 10 L 30 40 Z']); // triangle roughly at x:10-50, y:10-40
     $index = invokePrivate($d, 'hitTest', 30.0, 25.0);
     expect($index)->toBe(0);
-});
+})->group('ffi');
 
 test('hitTest returns null for empty delegate', function (): void {
     $d = createDelegate();
     setPrivate($d, 'elements', []);
     $index = invokePrivate($d, 'hitTest', 10.0, 10.0);
     expect($index)->toBeNull();
-});
+})->group('ffi');
 
 test('hitTest returns null outside element bounds', function (): void {
     $d = createDelegate();
     $d->setPaths(['M 10 10 L 50 10 L 30 40 Z']);
     $index = invokePrivate($d, 'hitTest', 500.0, 500.0);
     expect($index)->toBeNull();
-});
+})->group('ffi');
 
 test('hitTest returns topmost element (last drawn)', function (): void {
     $d = createDelegate();
@@ -133,7 +133,7 @@ test('hitTest returns topmost element (last drawn)', function (): void {
     // Center of both squares → should hit element 1 (topmost)
     $index = invokePrivate($d, 'hitTest', 50.0, 50.0);
     expect($index)->toBe(1);
-});
+})->group('ffi');
 
 test('hitTest detects circle elements precisely', function (): void {
     $d = createDelegate();
@@ -147,7 +147,7 @@ test('hitTest detects circle elements precisely', function (): void {
     expect(invokePrivate($d, 'hitTest', 70, 50))->toBe(0);
     // Outside circle
     expect(invokePrivate($d, 'hitTest', 100, 50))->toBeNull();
-});
+})->group('ffi');
 
 test('hitTest detects ellipse elements precisely', function (): void {
     $d = createDelegate();
@@ -160,7 +160,7 @@ test('hitTest detects ellipse elements precisely', function (): void {
     expect(invokePrivate($d, 'hitTest', 70, 50))->toBe(0);
     // Outside ellipse (beyond ry vertically, within rx horizontally)
     expect(invokePrivate($d, 'hitTest', 50, 70))->toBeNull();
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // elementPayload()
@@ -175,7 +175,7 @@ test('elementPayload returns null fields for no hit', function (): void {
     expect($payload['index'])->toBeNull();
     expect($payload['element'])->toBeNull();
     expect($payload['type'])->toBeNull();
-});
+})->group('ffi');
 
 test('elementPayload returns element data for hit index', function (): void {
     $d = createDelegate();
@@ -186,7 +186,7 @@ test('elementPayload returns element data for hit index', function (): void {
     expect($payload['index'])->toBe(0);
     expect($payload['element'])->toBeArray();
     expect($payload['type'])->toBe('path');
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // mouse() — event emission
@@ -204,7 +204,7 @@ test('mouse emits mousemove on every call', function (): void {
     $d->mouse($ev);
     expect($moves)->toHaveCount(1);
     expect($moves[0]['x'])->toBe(30.0);
-});
+})->group('ffi');
 
 test('mouse emits click on left button down', function (): void {
     $d = createDelegate();
@@ -218,7 +218,7 @@ test('mouse emits click on left button down', function (): void {
     $d->mouse($ev);
     expect($clicks)->toHaveCount(1);
     expect($clicks[0]['index'])->toBe(0);
-});
+})->group('ffi');
 
 test('mouse emits contextmenu on right-click (down=2)', function (): void {
     $d = createDelegate();
@@ -232,7 +232,7 @@ test('mouse emits contextmenu on right-click (down=2)', function (): void {
         down: 2, up: 0, count: 1, modifiers: 0, held: 0);
     $d->mouse($ev);
     expect($cmds)->toHaveCount(1);
-});
+})->group('ffi');
 
 test('mouse emits contextmenu on Windows right-click (down=3)', function (): void {
     $d = createDelegate();
@@ -245,7 +245,7 @@ test('mouse emits contextmenu on Windows right-click (down=3)', function (): voi
         down: 3, up: 0, count: 1, modifiers: 0, held: 0);
     $d->mouse($ev);
     expect($cmds)->toHaveCount(1);
-});
+})->group('ffi');
 
 test('mouse emits dblclick on double-click', function (): void {
     $d = createDelegate();
@@ -259,7 +259,7 @@ test('mouse emits dblclick on double-click', function (): void {
         down: 1, up: 0, count: 2, modifiers: 0, held: 0);
     $d->mouse($ev);
     expect($dbl)->toHaveCount(1);
-});
+})->group('ffi');
 
 test('mouse emits hoverchange when hovered element changes', function (): void {
     $d = createDelegate();
@@ -283,7 +283,7 @@ test('mouse emits hoverchange when hovered element changes', function (): void {
         down: 0, up: 0, count: 1, modifiers: 0, held: 0);
     $d->mouse($ev1);
     expect($changes[1])->toBe(1);
-});
+})->group('ffi');
 
 test('mouse does not emit duplicate hoverchange', function (): void {
     $d = createDelegate();
@@ -302,7 +302,7 @@ test('mouse does not emit duplicate hoverchange', function (): void {
     $d->mouse($ev2);
     // Only one hoverchange (first entry), second move doesn't change hover
     expect($changes)->toHaveCount(1);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // mouseCrossed() — enter/leave
@@ -316,7 +316,7 @@ test('mouseCrossed emits mouseenter when entering', function (): void {
     });
     $d->mouseCrossed(false); // false = entered
     expect($enters)->toHaveCount(1);
-});
+})->group('ffi');
 
 test('mouseCrossed emits mouseleave and resets hover when leaving', function (): void {
     $d = createDelegate();
@@ -328,7 +328,7 @@ test('mouseCrossed emits mouseleave and resets hover when leaving', function ():
     $d->mouseCrossed(true); // true = left
     expect($leaves)->toHaveCount(1);
     expect($leaves[0]['index'])->toBeNull();
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // SVG parse() — simple element count
@@ -344,14 +344,14 @@ test('parse extracts elements from minimal SVG', function (): void {
     expect($elements)->toHaveCount(2);
     expect($d->width)->toBe(100);
     expect($d->height)->toBe(100);
-});
+})->group('ffi');
 
 test('parse handles empty SVG', function (): void {
     $d = createDelegate();
     $d->parse('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
     $elements = getPrivate($d, 'elements');
     expect($elements)->toHaveCount(0);
-});
+})->group('ffi');
 
 test('parse handles invalid XML gracefully', function (): void {
     $d = createDelegate();
@@ -359,7 +359,7 @@ test('parse handles invalid XML gracefully', function (): void {
     $d->parse('not xml');
     $elements = getPrivate($d, 'elements');
     expect($elements)->toHaveCount(0);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // Gradient references (url(#id))
@@ -387,7 +387,7 @@ test('parse collects linear gradient defs and stores url() paint', function (): 
     expect($gradients['grad']['stops'][0]['offset'])->toBe(0.0);
     expect($gradients['grad']['stops'][0]['color'])->toBe('#ff0000');
     expect($gradients['grad']['stops'][1]['offset'])->toBe(1.0);
-});
+})->group('ffi');
 
 test('parse collects radial gradient with stop-opacity', function (): void {
     $d = createDelegate();
@@ -403,7 +403,7 @@ test('parse collects radial gradient with stop-opacity', function (): void {
     expect($gradients['rg']['type'])->toBe('radial');
     expect($gradients['rg']['units'])->toBe('objectBoundingBox');
     expect($gradients['rg']['stops'][1]['opacity'])->toBe(0.5);
-});
+})->group('ffi');
 
 test('parse supports userSpaceOnUse gradient units', function (): void {
     $d = createDelegate();
@@ -418,7 +418,7 @@ test('parse supports userSpaceOnUse gradient units', function (): void {
     $gradients = getPrivate($d, 'gradients');
     expect($gradients['ug']['units'])->toBe('userSpaceOnUse');
     expect($gradients['ug']['coords']['x2'])->toBe(100.0);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // CSS <style> inheritance
@@ -431,7 +431,7 @@ test('CSS .class selector applies fill', function (): void {
         <rect class="red" x="0" y="0" width="10" height="10"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['fill'])->toBe('red');
-});
+})->group('ffi');
 
 test('CSS rule overrides presentation attribute (higher priority)', function (): void {
     $d = createDelegate();
@@ -440,7 +440,7 @@ test('CSS rule overrides presentation attribute (higher priority)', function ():
         <rect x="0" y="0" width="10" height="10" fill="red"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['fill'])->toBe('green');
-});
+})->group('ffi');
 
 test('inline style attribute beats CSS rule', function (): void {
     $d = createDelegate();
@@ -449,7 +449,7 @@ test('inline style attribute beats CSS rule', function (): void {
         <rect style="fill:blue" x="0" y="0" width="10" height="10"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['fill'])->toBe('blue');
-});
+})->group('ffi');
 
 test('CSS descendant selector matches nested element only', function (): void {
     $d = createDelegate();
@@ -461,7 +461,7 @@ test('CSS descendant selector matches nested element only', function (): void {
     $els = getPrivate($d, 'elements');
     expect($els[0]['stroke'])->toBe('blue');   // inside g.series
     expect($els[1]['stroke'])->toBeNull();      // outside
-});
+})->group('ffi');
 
 test('CSS id selector has higher specificity than class', function (): void {
     $d = createDelegate();
@@ -470,7 +470,7 @@ test('CSS id selector has higher specificity than class', function (): void {
         <rect id="special" class="box" x="0" y="0" width="10" height="10"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['fill'])->toBe('purple');
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // Dashed strokes (stroke-dasharray / stroke-dashoffset)
@@ -482,7 +482,7 @@ test('stroke-dasharray attribute parsed into dash list', function (): void {
         <path d="M0 0 L10 10" stroke="black" stroke-dasharray="5 3"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['dash'])->toBe([5.0, 3.0]);
-});
+})->group('ffi');
 
 test('odd-length dasharray is duplicated per SVG spec', function (): void {
     $d = createDelegate();
@@ -490,7 +490,7 @@ test('odd-length dasharray is duplicated per SVG spec', function (): void {
         <path d="M0 0 L10 10" stroke="black" stroke-dasharray="4 2 1"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['dash'])->toBe([4.0, 2.0, 1.0, 4.0, 2.0, 1.0]);
-});
+})->group('ffi');
 
 test('stroke-dashoffset parsed into dashPhase', function (): void {
     $d = createDelegate();
@@ -500,7 +500,7 @@ test('stroke-dashoffset parsed into dashPhase', function (): void {
     $el = getPrivate($d, 'elements')[0];
     expect($el['dash'])->toBe([5.0, 3.0]);
     expect($el['dashPhase'])->toBe(2.0);
-});
+})->group('ffi');
 
 test('CSS stroke-dasharray applies via stylesheet', function (): void {
     $d = createDelegate();
@@ -509,7 +509,7 @@ test('CSS stroke-dasharray applies via stylesheet', function (): void {
         <path class="dashed" d="M0 0 L10 10" stroke="black"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['dash'])->toBe([8.0, 4.0]);
-});
+})->group('ffi');
 
 test('stroke-dasharray none yields solid line', function (): void {
     $d = createDelegate();
@@ -517,7 +517,7 @@ test('stroke-dasharray none yields solid line', function (): void {
         <path d="M0 0 L10 10" stroke="black" stroke-dasharray="none"/>
     </svg>');
     expect(getPrivate($d, 'elements')[0]['dash'])->toBe([]);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // SvgView public event registration API
@@ -530,4 +530,4 @@ test('SvgView event registration methods exist and return string', function (): 
     foreach ($methods as $name) {
         expect($ref->hasMethod($name))->toBeTrue("SvgView::{$name}() should exist");
     }
-});
+})->group('ffi');

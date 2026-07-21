@@ -60,7 +60,7 @@ class MinimalComposite extends Composite
 test('root returns a Control instance', function (): void {
     $composite = new StubComposite();
     expect($composite->root())->toBeInstanceOf(Control::class);
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // value() / setValue()
@@ -69,31 +69,31 @@ test('root returns a Control instance', function (): void {
 test('value returns initial value', function (): void {
     $composite = new StubComposite('initial');
     expect($composite->value())->toBe('initial');
-});
+})->group('ffi');
 
 test('value returns null by default when not overridden', function (): void {
     $composite = new MinimalComposite();
     expect($composite->value())->toBeNull();
-});
+})->group('ffi');
 
 test('setValue returns static for chaining', function (): void {
     $composite = new StubComposite();
     $result = $composite->setValue('new');
     expect($result)->toBe($composite);
-});
+})->group('ffi');
 
 test('setValue propagates to value', function (): void {
     $composite = new StubComposite('old');
     $composite->setValue('new');
     expect($composite->value())->toBe('new');
-});
+})->group('ffi');
 
 test('setValue is a no-op by default when not overridden', function (): void {
     $composite = new MinimalComposite();
     $result = $composite->setValue('anything');
     expect($result)->toBe($composite);
     expect($composite->value())->toBeNull();
-});
+})->group('ffi');
 
 // ---------------------------------------------------------------------------
 // asControl()
@@ -104,4 +104,4 @@ test('asControl delegates to root', function (): void {
     // asControl() calls root()->asControl(), which needs FFI.
     // We just verify the method exists and is callable.
     expect(method_exists($composite, 'asControl'))->toBeTrue();
-});
+})->group('ffi');

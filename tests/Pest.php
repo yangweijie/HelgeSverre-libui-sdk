@@ -4,6 +4,18 @@ declare(strict_types=1);
 
 /*
 |--------------------------------------------------------------------------
+| Test groups
+|--------------------------------------------------------------------------
+|
+| Tests that construct native libui controls or otherwise depend on the FFI
+| binding / a display server are marked with ->group('ffi'). They are excluded
+| from the default `composer test` run (which uses --exclude-group ffi) so the
+| stable subset stays green in headless / CI environments where FFI or a display
+| is unavailable. Run them explicitly with `composer test:ffi`.
+*/
+
+/*
+|--------------------------------------------------------------------------
 | Test Case
 |--------------------------------------------------------------------------
 |

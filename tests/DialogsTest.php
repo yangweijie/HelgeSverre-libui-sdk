@@ -17,26 +17,26 @@ test('nullIfEmpty returns null for empty string', function (): void {
     $dialogs = createTestDialogs();
     $result = invokeNullIfEmpty($dialogs, '');
     expect($result)->toBeNull();
-});
+})->group('ffi');
 
 test('nullIfEmpty returns input for non-empty value', function (): void {
     $dialogs = createTestDialogs();
     $result = invokeNullIfEmpty($dialogs, '/home/user/file.txt');
     expect($result)->toBe('/home/user/file.txt');
-});
+})->group('ffi');
 
 test('nullIfEmpty returns input for single character', function (): void {
     $dialogs = createTestDialogs();
     $result = invokeNullIfEmpty($dialogs, '/');
     expect($result)->toBe('/');
-});
+})->group('ffi');
 
 test('nullIfEmpty preserves whitespace string', function (): void {
     // libui uses strict === '' so whitespace is preserved (documenting current behaviour).
     $dialogs = createTestDialogs();
     $result = invokeNullIfEmpty($dialogs, '   ');
     expect($result)->toBe('   ');
-});
+})->group('ffi');
 
 function createTestDialogs(): Dialogs
 {

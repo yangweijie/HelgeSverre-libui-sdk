@@ -56,7 +56,7 @@ test('card hit-test respects draw order (topmost wins overlap)', function () {
     expect($hit($rects, 70, 40))->toBe('C');
     // 点范围之外 -> 空
     expect($hit($rects, 200, 40))->toBeNull();
-});
+})->group('ffi');
 
 test('combo recognizes basic shapes', function () {
     expect(Combo::parse([C(5)])?->type)->toBe('single');
@@ -66,14 +66,14 @@ test('combo recognizes basic shapes', function () {
     expect($straight?->type)->toBe('straight');
     $plane = Combo::parse([C(3), C(3), C(3), C(4), C(4), C(4)]);
     expect($plane?->type)->toBe('plane');
-});
+})->group('ffi');
 
 test('combo recognizes bombs and rockets', function () {
     $bomb = Combo::parse([C(9, '♠'), C(9, '♥'), C(9, '♦'), C(9, '♣')]);
     expect($bomb?->isBomb)->toBeTrue();
     $rocket = Combo::parse([Card::smallJoker(), Card::bigJoker()]);
     expect($rocket?->isRocket)->toBeTrue();
-});
+})->group('ffi');
 
 test('combo beats hierarchy', function () {
     $bomb = Combo::parse([C(9, '♠'), C(9, '♥'), C(9, '♦'), C(9, '♣')]);
@@ -81,7 +81,7 @@ test('combo beats hierarchy', function () {
     expect(Combo::beats($bomb, Combo::parse([C(7)])))->toBeTrue();
     expect(Combo::beats($rocket, $bomb))->toBeTrue();
     expect(Combo::beats(Combo::parse([C(7)]), $bomb))->toBeFalse();
-});
+})->group('ffi');
 
 /* ============================ characters ============================ */
 
@@ -100,7 +100,7 @@ test('roster has 9 characters across 3 factions', function () {
     foreach ($all as $c) {
         expect($c->skill())->toBeInstanceOf(\Yangweijie\Ui2\Games\OnePieceDoudizhu\Skill::class);
     }
-});
+})->group('ffi');
 
 /* ============================ engine ============================ */
 
@@ -111,7 +111,7 @@ test('bidding decides a landlord', function () {
     expect($res)->toBe('started');
     expect($g->landlord)->toBe(0);
     expect($g->phase)->toBe('playing');
-});
+})->group('ffi');
 
 test('play advances turn and pass skips', function () {
     $g = opdMakeGame('garp', 'mihawk', 'shanks',
@@ -126,7 +126,7 @@ test('play advances turn and pass skips', function () {
     // 一圈过完，回到出牌方且 trick 清空
     expect($g->turn)->toBe(0);
     expect($g->lastPlay)->toBeNull();
-});
+})->group('ffi');
 
 test('emptying a hand ends the game with a winner', function () {
     $g = opdMakeGame('garp', 'mihawk', 'shanks',
@@ -137,7 +137,7 @@ test('emptying a hand ends the game with a winner', function () {
     expect($g->isOver())->toBeTrue();
     expect($g->winner)->toBe(0);
     expect($g->winnerSide)->toBe('landlord');
-});
+})->group('ffi');
 
 /* ============================ skills ============================ */
 
@@ -150,7 +150,7 @@ test('garp shock skips the next opponent', function () {
     $g->play(0, [C(5)]);
     expect($g->lastPlay)->not()->toBeNull();
     expect($g->turn)->toBe(2); // p1 被震飞跳过
-});
+})->group('ffi');
 
 test('shanks haki blocks non-bomb follow but not bombs', function () {
     $g = opdMakeGame('shanks', 'garp', 'mihawk',
@@ -181,7 +181,7 @@ test('shanks haki blocks non-bomb follow but not bombs', function () {
     $g2->turn = 1;
     $g2->play(1, [C(8, '♠'), C(8, '♥'), C(8, '♦'), C(8, '♣')]);
     expect($g2->lastPlay['combo']->isBomb)->toBeTrue();
-});
+})->group('ffi');
 
 test('akainu counter returns the bomb to its owner', function () {
     $g = opdMakeGame('akainu', 'shanks', 'garp',
@@ -206,7 +206,7 @@ test('akainu counter returns the bomb to its owner', function () {
     expect($g->lastPlay)->toBeNull();
     expect($g->turn)->toBe(0);
     expect($g->handCount(1))->toBe($before + 4);
-});
+})->group('ffi');
 
 test('aokiji freeze and bigmom steal modify hands', function () {
     $gf = opdMakeGame('aokiji', 'boa', 'kuma', [C(5), C(6)], [C(7), C(8)], [C(9), C(10)]);
@@ -222,7 +222,7 @@ test('aokiji freeze and bigmom steal modify hands', function () {
     $gm->armSkill(0, 1);
     expect($gm->handCount(0))->toBe($h0 + 1);
     expect($gm->handCount(1))->toBe($h1 - 1);
-});
+})->group('ffi');
 
 /* ============================ AI self-play ============================ */
 
@@ -305,7 +305,7 @@ test('100-game AI self-play always finishes', function () {
     expect($unfinished)->toBe(0); // 没有任何一局卡死
     expect($wins['landlord'] + $wins['peasant'])->toBe($games - $unfinished);
     expect($maxTurns)->toBeLessThan(4000);
-});
+})->group('ffi');
 
 /* ============================ sound ============================ */
 
@@ -318,7 +318,7 @@ test('sound resolves the audio directory and maps events', function () {
     // 事件绑定映射
     $s->trigger('bomb'); // 关闭状态下应为 no-op，不抛异常
     expect($s->isEnabled())->toBeFalse();
-});
+})->group('ffi');
 
 test('sound plays through the audio backend when enabled', function () {
     $s = Sound::instance();
@@ -338,7 +338,7 @@ test('sound plays through the audio backend when enabled', function () {
     $s->trigger(Sound::CLICK);
     $s->setEnabled(false);
     expect(true)->toBeTrue();
-});
+})->group('ffi');
 
 /* ============================ controller (headless) ============================ */
 
@@ -405,7 +405,7 @@ test('game controller drives a full match headlessly for every character', funct
         expect($ctrl->mode)->toBe('over');
         expect($ctrl->game->winnerSide)->toBeIn(['landlord', 'peasant']);
     }
-});
+})->group('ffi');
 
 /* ============================ auto-play (托管) ============================ */
 
@@ -419,7 +419,7 @@ test('auto-play toggle works', function () {
     expect($ctrl->autoPlay)->toBeFalse();
     $ctrl->newGame();
     expect($ctrl->autoPlay)->toBeFalse();
-});
+})->group('ffi');
 
 /* ============================ 拖拽选牌 ============================ */
 
@@ -478,7 +478,7 @@ test('drag-select adds cards, drag from selected removes them', function () {
     $ctrl->onClick(opdMouse(70, 645, down: 0, held: 1));   // 拖到 h2
     expect($ctrl->selected)->toBe(['h1']);                  // 只剩 h1
     $ctrl->onClick(opdMouse(70, 645, down: 0, up: 1, held: 0)); // 松开
-});
+})->group('ffi');
 
 test('single click still toggles one card (no drag)', function () {
     Sound::instance()->setEnabled(false);
@@ -506,4 +506,4 @@ test('single click still toggles one card (no drag)', function () {
     $ctrl->onClick(opdMouse(34, 645, down: 1, held: 1));
     $ctrl->onClick(opdMouse(34, 645, down: 0, up: 1, held: 0));
     expect($ctrl->selected)->toBe([]);
-});
+})->group('ffi');
