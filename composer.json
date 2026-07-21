@@ -59,6 +59,12 @@
         ],
         "install:spc": [
             "@php -r \"if (PHP_OS_FAMILY === 'Windows') { passthru(__DIR__ . '/scripts/install-spc.bat'); } else { passthru('bash ' . __DIR__ . '/scripts/install-spc.sh'); }\""
+        ],
+        "test": [
+            "@php vendor/bin/pest --exclude-group ffi --no-coverage"
+        ],
+        "test:ffi": [
+            "@php vendor/bin/pest --group ffi --no-coverage"
         ]
     },
   "bin": [

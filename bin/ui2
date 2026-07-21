@@ -346,20 +346,27 @@ require __DIR__ . '/vendor/autoload.php';
 use Libui\App;
 use Libui\Window;
 use Libui\Ffi;
-use Yangweijie\Ui2\Fields\TextField;
+use Libui\Entry;
+use Libui\Label;
+use Libui\Build;
 use Yangweijie\Ui2\Layout\TabContainer;
 use Yangweijie\Ui2\Widgets\CircleProgressBar;
 
-\$progress = new CircleProgressBar();
-\$progress->setProgress(65);
+\$progress = new CircleProgressBar(65);
 
 Ffi::init();
+
+\$nameEntry = new Entry();
+
+\$formPage = Build::vbox(new Label('Name:'), \$nameEntry);
+
+\$tabs = new TabContainer();
+\$tabs->addPage('Form', \$formPage, true);
+\$tabs->addPage('Status', \$progress, true);
+
 \$window = new Window('{$name}', 480, 360, true);
-\$window->setChild(new TabContainer([
-    'Form' => new TextField('Name:'),
-    'Status' => \$progress,
-]));
-\App::new()->run(\$window);
+\$window->setChild(\$tabs->root());
+\App::new()->window(\$window)->onShouldQuit(static fn(): bool => true)->run();
 PHP
     );
 
