@@ -85,7 +85,7 @@ final class ComboboxControl
             height: $this->height,
         );
 
-        $this->bar = LayoutNode::row(gap: 4, align: LayoutStyle::ALIGN_CENTER, id: "{$this->name}:bar", height: $this->height)
+        $this->bar = LayoutNode::row(gap: 4, align: LayoutStyle::ALIGN_CENTER, id: "{$this->name}:bar", width: $this->width, height: $this->height)
             ->child($this->field)
             ->child($this->caret);
         $this->root = LayoutNode::column(gap: 0, id: $this->name, width: $this->width, height: $this->height)
@@ -202,6 +202,7 @@ final class ComboboxControl
         $this->open = false;
         $this->surface->setOverlay(null);
         $this->surface->refreshFocusables();
+        $this->surface->redraw();
     }
 
     public function toggle(): void
