@@ -20,6 +20,7 @@ declare(strict_types=1);
  *   list           List available commands
  *   install:spc    Install static-php-cli + build micro.sfx
  *   install:opencode  Copy .opencode/ to project
+ *   inspect        Launch DevTools inspector demo (F12 for self-drawn UI)
  *
  * Examples:
  *   php bin/ui2 build:phar examples/tetris.php --output=tetris.phar
@@ -63,6 +64,7 @@ $commands = [
     'list'          => 'cmdList',
     'install:spc'   => 'cmdInstallSpc',
     'install:opencode' => 'cmdInstallOpencode',
+    'inspect'        => 'cmdInspect',
 ];
 
 if (!isset($commands[$command])) {
@@ -206,6 +208,31 @@ function cmdInstallOpencode(array $args): void
         exit(1);
     }
     passthruPhp($script, $args);
+}
+
+/**
+ * Launch the DevTools inspector demo window.
+ *
+ * Reuses examples/inspect-demo.php (also runnable standalone) so the wiring
+ * lives in exactly one place. Supports an optional --port=N override.
+ */
+function cmdInspect(array $args): void
+{
+    $port = 7711;
+    foreach ($args as $a) {
+        if (preg_match('/^--port=(\d+)$/', $a, $m)) {
+            $port = (int) $m[1];
+        }
+    }
+
+    $demo = __DIR__ . '/../examples/inspect-demo.php';
+    if (!is_file($demo)) {
+        fwrite(STDERR, "Error: examples/inspect-demo.php not found (expected at {$demo})\n");
+        exit(1);
+    }
+
+    require_once $demo;
+    runInspectDemo($port);
 }
 
 /**
@@ -458,6 +485,7 @@ function cmdList(array $args = []): void
     fwrite(STDOUT, "  init [name]                                 Scaffold new project\n");
     fwrite(STDOUT, "  info                                        Show version & environment\n");
     fwrite(STDOUT, "  list                                        Show this help\n");
+    fwrite(STDOUT, "  inspect [--port=N]                          Launch DevTools inspector demo\n");
 }
 
 // ======================================================================

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ui2 组件检查器 (DevTools)</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #e2e5ea;
+    --text: #1f2329;
+    --muted: #8a9099;
+    --accent: #2f6bff;
+    --accent-soft: #e8f0ff;
+    --danger: #e5484d;
+    --ok: #1f9d55;
+    --code: #5b6470;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 13px; color: var(--text); background: var(--bg);
+  }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  header .conn { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  header input {
+    width: 78px; padding: 4px 8px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px;
+  }
+  header button {
+    padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer;
+    background: var(--accent); color: #fff; font-size: 12px;
+  }
+  header button.ghost { background: var(--accent-soft); color: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--ok); }
+
+  main { flex: 1; display: flex; min-height: 0; }
+
+  /* left preview */
+  #preview-pane {
+    width: 38%; min-width: 280px; border-right: 1px solid var(--border);
+    background: var(--panel); display: flex; flex-direction: column;
+  }
+  .pane-title {
+    padding: 8px 12px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  #preview-stage {
+    flex: 1; overflow: auto; padding: 16px; display: flex;
+    align-items: flex-start; justify-content: center;
+  }
+  #preview-frame {
+    position: relative; background: #fbfcfe; border: 1px solid var(--border);
+    border-radius: 8px; transform-origin: top center; flex: none;
+  }
+  #preview-frame .node {
+    position: absolute; border: 1px solid transparent; border-radius: 3px;
+    cursor: pointer; overflow: hidden; font-size: 9px; color: transparent;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #preview-frame .node:hover { border-color: var(--accent); }
+  #preview-frame .node.sel { border-color: var(--accent); background: rgba(47,107,255,.10); }
+  #preview-frame .node .tag {
+    background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px;
+    opacity: 0; white-space: nowrap;
+  }
+  #preview-frame .node.sel .tag { opacity: 1; }
+
+  /* right inspector */
+  #inspect-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #tree-box {
+    height: 38%; overflow: auto; border-bottom: 1px solid var(--border);
+    padding: 6px 0; background: var(--panel);
+  }
+  .tree-node { user-select: none; }
+  .tree-row {
+    display: flex; align-items: center; gap: 4px; padding: 2px 8px;
+    cursor: pointer; white-space: nowrap;
+  }
+  .tree-row:hover { background: var(--accent-soft); }
+  .tree-row.sel { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tree-twisty { width: 12px; text-align: center; color: var(--muted); font-size: 10px; }
+  .tree-type { color: var(--accent); }
+  .tree-id { color: var(--muted); }
+
+  #detail { flex: 1; overflow: auto; padding: 14px; }
+  .section { margin-bottom: 18px; }
+  .section > h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); margin: 0 0 8px; display: flex; align-items: center; gap: 8px;
+  }
+  .section > h3 .actions { margin-left: auto; }
+  .sec-btn {
+    border: 1px solid var(--border); background: #fff; border-radius: 5px;
+    padding: 2px 8px; font-size: 11px; cursor: pointer; color: var(--text);
+  }
+  .sec-btn.danger { color: var(--danger); border-color: #f3c2c4; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; align-items: center; }
+  .kv label { color: var(--muted); font-size: 12px; }
+  .kv .val { display: flex; align-items: center; gap: 6px; }
+  .kv input, .kv select {
+    width: 100%; padding: 4px 7px; border: 1px solid var(--border);
+    border-radius: 5px; font-size: 12px; font-family: ui-monospace, monospace;
+  }
+  .kv input[type=checkbox] { width: auto; }
+  .kv .unit { width: 56px; flex: none; }
+  .kv .copy {
+    border: none; background: transparent; cursor: pointer; color: var(--muted);
+    font-size: 13px; padding: 0 2px;
+  }
+  .kv .copy:hover { color: var(--accent); }
+  .rect-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rect-grid div {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; text-align: center;
+  }
+  .rect-grid b { display: block; font-size: 14px; }
+  .rect-grid span { font-size: 10px; color: var(--muted); }
+
+  .add-row { display: flex; gap: 6px; margin-top: 8px; }
+  .add-row select, .add-row input { padding: 4px 7px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; }
+  .add-row button { padding: 4px 10px; border: none; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; }
+
+  #toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1f2329; color: #fff; padding: 8px 16px; border-radius: 8px;
+    font-size: 12px; opacity: 0; pointer-events: none; transition: .25s; z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .empty { color: var(--muted); padding: 20px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>ui2 组件检查器</h1>
+    <div class="conn">
+      <span class="dot" id="conn-dot"></span>
+      <input id="port" value="7711" title="InspectorServer 端口" />
+      <button class="ghost" id="connect">连接</button>
+      <button id="pickmode">拾取模式</button>
+      <button id="refresh">刷新</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="preview-pane">
+      <div class="pane-title">窗口预览（点击节点选中）</div>
+      <div id="preview-stage">
+        <div id="preview-frame"></div>
+      </div>
+    </section>
+
+    <section id="inspect-pane">
+      <div id="tree-box">
+        <div class="pane-title">组件树</div>
+        <div id="tree"></div>
+      </div>
+      <div id="detail">
+        <div class="empty">在左侧预览或组件树中选择一个节点。</div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+const state = { port: 7711, snapshot: null, selected: null, pickMode: false, scale: 1 };
+
+const $ = (s) => document.querySelector(s);
+const PORT = () => state.port;
+
+async function api(method, path, body) {
+  const res = await fetch(`http://127.0.0.1:${PORT()}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { return { _raw: text, _code: res.status }; }
+}
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 1400);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(String(text)); toast('已复制: ' + text); }
+  catch { toast('复制失败: ' + text); }
+}
+
+async function refresh() {
+  state.snapshot = await api('GET', '/snapshot');
+  $('#conn-dot').classList.toggle('live', !!state.snapshot && !state.snapshot.error);
+  if (state.snapshot && state.snapshot.selected) state.selected = state.snapshot.selected;
+  renderPreview();
+  renderTree();
+  if (state.selected) loadNode(state.selected);
+}
+async function selectNode(id) {
+  const r = await api('POST', '/pick', { id });
+  if (r.id) { state.selected = r.id; renderPreview(); renderTree(); loadNode(id); }
+  else toast('未找到节点');
+}
+async function loadNode(id) {
+  const node = await api('GET', '/node?id=' + encodeURIComponent(id));
+  if (node.error) { toast(node.error); return; }
+  renderDetail(node);
+}
+
+// ---- left preview (scaled thumbnail) ----
+function renderPreview() {
+  const s = state.snapshot; if (!s) return;
+  const frame = $('#preview-frame');
+  const vp = s.viewport || { w: 800, h: 600 };
+  const targetW = Math.min($('#preview-stage').clientWidth - 32, 520);
+  state.scale = targetW / vp.w;
+  frame.style.width = vp.w * state.scale + 'px';
+  frame.style.height = vp.h * state.scale + 'px';
+  frame.innerHTML = '';
+  flatten(s.root).forEach((n) => {
+    const d = document.createElement('div');
+    d.className = 'node' + (n.id === state.selected ? ' sel' : '');
+    const k = state.scale;
+    d.style.left = n.rect.x * k + 'px';
+    d.style.top = n.rect.y * k + 'px';
+    d.style.width = Math.max(2, n.rect.w * k) + 'px';
+    d.style.height = Math.max(2, n.rect.h * k) + 'px';
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = n.type;
+    d.appendChild(tag);
+    d.onclick = (e) => { e.stopPropagation(); selectNode(n.id); };
+    frame.appendChild(d);
+  });
+}
+function flatten(node, out = []) {
+  out.push(node);
+  (node.children || []).forEach((c) => flatten(c, out));
+  return out;
+}
+
+// ---- component tree (expand/collapse) ----
+function renderTree() {
+  const s = state.snapshot; if (!s) return;
+  const box = $('#tree');
+  box.innerHTML = '';
+  box.appendChild(treeRow(s.root));
+}
+function treeRow(node, depth = 0) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tree-node';
+  const hasKids = (node.children || []).length > 0;
+  const row = document.createElement('div');
+  row.className = 'tree-row' + (node.id === state.selected ? ' sel' : '');
+  row.style.paddingLeft = 8 + depth * 14 + 'px';
+  const tw = document.createElement('span');
+  tw.className = 'tree-twisty';
+  tw.textContent = hasKids ? '▾' : '';
+  const type = document.createElement('span');
+  type.className = 'tree-type';
+  type.textContent = node.type;
+  const id = document.createElement('span');
+  id.className = 'tree-id';
+  id.textContent = '#' + node.id;
+  row.append(tw, type, id);
+  row.onclick = () => selectNode(node.id);
+  wrap.appendChild(row);
+
+  if (hasKids) {
+    const kids = document.createElement('div');
+    node.children.forEach((c) => kids.appendChild(treeRow(c, depth + 1)));
+    wrap.appendChild(kids);
+    tw.onclick = (e) => { e.stopPropagation(); kids.style.display = kids.style.display === 'none' ? '' : 'none'; tw.textContent = kids.style.display === 'none' ? '▸' : '▾'; };
+  }
+  return wrap;
+}
+
+// ---- right detail panel ----
+function renderDetail(node) {
+  const d = $('#detail');
+  d.innerHTML = '';
+  d.appendChild(sectionTitle('尺寸 / 位置', `<button class="sec-btn danger" id="del-node">删除节点</button>`));
+  const rect = document.createElement('div');
+  rect.className = 'rect-grid';
+  rect.innerHTML = `
+    <div><b>${Math.round(node.rect.x)}</b><span>X</span></div>
+    <div><b>${Math.round(node.rect.y)}</b><span>Y</span></div>
+    <div><b>${Math.round(node.rect.w)}</b><span>宽 W</span></div>
+    <div><b>${Math.round(node.rect.h)}</b><span>高 H</span></div>`;
+  d.appendChild(rect);
+
+  // style editor
+  d.appendChild(sectionTitle('样式 (LayoutStyle)'));
+  const styleWrap = document.createElement('div');
+  styleWrap.className = 'kv';
+  Object.entries(node.style || {}).forEach(([k, v]) => styleWrap.appendChild(styleField(node.id, k, v)));
+  d.appendChild(styleWrap);
+
+  // props / attributes
+  d.appendChild(sectionTitle('属性 (WidgetSpec / 节点)', ''));
+  const propWrap = document.createElement('div');
+  propWrap.className = 'kv';
+  (node.props || []).forEach((p) => propWrap.appendChild(propField(node.id, p)));
+  d.appendChild(propWrap);
+
+  // structure editor
+  d.appendChild(sectionTitle('结构', `<select id="add-type">
+      <option value="button">button</option><option value="label">label</option>
+      <option value="card">card</option><option value="checkbox">checkbox</option>
+      <option value="input">input</option><option value="progress">progress</option>
+      <option value="badge">badge</option><option value="button_group">button_group</option>
+    </select><button class="sec-btn" id="add-child">+ 添加子节点</button>`));
+  const kids = document.createElement('div');
+  kids.className = 'kv';
+  (node.children || []).forEach((c) => {
+    const label = document.createElement('label');
+    label.textContent = '子节点';
+    const val = document.createElement('div');
+    val.className = 'val';
+    const btn = document.createElement('button');
+    btn.className = 'sec-btn';
+    btn.textContent = c.type + ' #' + c.id;
+    btn.onclick = () => selectNode(c.id);
+    val.appendChild(btn);
+    kids.append(label, val);
+  });
+  d.appendChild(kids);
+
+  $('#add-child').onclick = async () => {
+    const type = $('#add-type').value;
+    const r = await api('POST', '/structure', { action: 'add', id: node.id, type });
+    if (r.ok) { toast('已添加 ' + type); refresh(); } else toast('添加失败');
+  };
+  const delBtn = $('#del-node');
+  if (delBtn) delBtn.onclick = async () => {
+    if (!confirm('确认删除节点 #' + node.id + ' ?')) return;
+    const r = await api('POST', '/structure', { action: 'delete', id: node.id });
+    if (r.ok) { state.selected = null; toast('已删除'); refresh(); } else toast('删除失败');
+  };
+}
+
+function sectionTitle(title, actionsHtml = '') {
+  const h = document.createElement('h3');
+  h.innerHTML = `<span>${title}</span>` + (actionsHtml ? `<span class="actions">${actionsHtml}</span>` : '');
+  const sec = document.createElement('div');
+  sec.className = 'section';
+  sec.appendChild(h);
+  return sec;
+}
+
+// numeric + unit input for style; color/text for others
+function styleField(id, key, value) {
+  const label = document.createElement('label');
+  label.textContent = key;
+  const val = document.createElement('div');
+  val.className = 'val';
+  const isNum = (typeof value === 'number') || value === null;
+  if (isNum) {
+    const num = document.createElement('input');
+    num.type = 'number'; num.step = 'any'; num.value = value ?? '';
+    const unit = document.createElement('select');
+    unit.className = 'unit';
+    unit.innerHTML = '<option>px</option><option>%</option><option>auto</option>';
+    const commit = async () => {
+      let v = num.value === '' ? null : parseFloat(num.value);
+      if (unit.value === 'auto') v = null;
+      const r = await api('POST', '/style', { id, prop: key, value: v });
+      if (r.ok) { toast(`${key} = ${v ?? 'auto'}`); refresh(); } else toast('设置失败');
+    };
+    num.onchange = commit; unit.onchange = commit;
+    val.append(num, unit);
+  } else if (typeof value === 'string' && /^#?[0-9a-fA-F]{3,8}$/.test(value)) {
+    const col = document.createElement('input');
+    col.type = 'color'; col.value = value.startsWith('#') ? value : '#cccccc';
+    col.onchange = async () => {
+      const r = await api('POST', '/style', { id, prop: key, value: col.value });
+      if (r.ok) { toast(`${key} = ${col.value}`); refresh(); } else toast('设置失败');
+    };
+    val.appendChild(col);
+  } else {
+    const txt = document.createElement('input');
+    txt.type = 'text'; txt.value = value ?? '';
+    txt.onchange = async () => {
+      const r = await api('POST', '/style', { id, prop: key, value: txt.value });
+      if (r.ok) { toast(`${key} = ${txt.value}`); refresh(); } else toast('设置失败');
+    };
+    val.appendChild(txt);
+  }
+  const copy = document.createElement('button');
+  copy.className = 'copy'; copy.textContent = '⧉'; copy.title = '复制值';
+  copy.onclick = () => copyText(value);
+  val.appendChild(copy);
+  const row = document.createElement('div');
+  row.style.display = 'contents';
+  row.append(label, val);
+  return row;
+}
+
+function propField(id, p) {
+  const label = document.createElement('label');
+  label.textContent = p.name;
+  const val = document.createElement('div');
+  val.className = 'val';
+
+  if (p.name === 'id') {
+    const span = document.createElement('span');
+    span.style.fontFamily = 'ui-monospace, monospace';
+    span.textContent = '#' + p.value;
+    val.appendChild(span);
+  } else if (typeof p.value === 'boolean') {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = p.value; cb.disabled = !p.editable;
+    cb.onchange = async () => {
+      const r = await api('POST', '/attr', { id, name: p.name, value: cb.checked });
+      if (r.ok) { toast(`${p.name} = ${cb.checked}`); refresh(); } else toast('设置失败');
+    };
+    val.appendChild(cb);
+  } else if (typeof p.value === 'number') {
+    const num = document.createElement('input');
+    num.type = 'number'; num.step = 'any'; num.value = p.value; num.disabled = !p.editable;
+    num.onchange = async () => {
+      const r = await api('POST', '/attr', { id, name: p.name, value: parseFloat(num.value) });
+      if (r.ok) { toast(`${p.name} = ${num.value}`); refresh(); } else toast('设置失败');
+    };
+    val.appendChild(num);
+  } else {
+    const txt = document.createElement('input');
+    txt.type = 'text'; txt.value = p.value ?? ''; txt.disabled = !p.editable;
+    txt.onchange = async () => {
+      const r = await api('POST', '/attr', { id, name: p.name, value: txt.value });
+      if (r.ok) { toast(`${p.name} = ${txt.value}`); refresh(); } else toast('设置失败');
+    };
+    val.appendChild(txt);
+  }
+
+  const copy = document.createElement('button');
+  copy.className = 'copy'; copy.textContent = '⧉'; copy.title = '复制值';
+  copy.onclick = () => copyText(p.value);
+  val.appendChild(copy);
+
+  if (p.editable && p.name !== 'id') {
+    const del = document.createElement('button');
+    del.className = 'copy'; del.textContent = '🗑'; del.title = '重置为默认值';
+    del.onclick = async () => {
+      const r = await api('POST', '/deleteattr', { id, name: p.name });
+      if (r.ok) { toast(`${p.name} 已重置`); refresh(); } else toast('重置失败');
+    };
+    val.appendChild(del);
+  }
+  const row = document.createElement('div');
+  row.style.display = 'contents';
+  row.append(label, val);
+  return row;
+}
+
+// ---- header wiring ----
+$('#connect').onclick = () => { state.port = parseInt($('#port').value, 10) || 7711; refresh(); };
+$('#refresh').onclick = () => refresh();
+$('#pickmode').onclick = async () => {
+  state.pickMode = !state.pickMode;
+  const r = await api('POST', '/pickmode', { on: state.pickMode });
+  $('#pickmode').style.background = state.pickMode ? 'var(--ok)' : '';
+  $('#pickmode').style.color = state.pickMode ? '#fff' : '';
+  toast(state.pickMode ? '拾取模式: 开（在应用窗口点击选中）' : '拾取模式: 关');
+};
+window.addEventListener('resize', renderPreview);
+
+// Auto-poll the current selection so an in-window click (pick mode) is
+// reflected in the panel without a manual refresh.
+setInterval(async () => {
+  try {
+    const r = await api('GET', '/selected');
+    if (r && r.selected && r.selected !== state.selected) {
+      state.selected = r.selected;
+      renderPreview();
+      renderTree();
+      loadNode(state.selected);
+    }
+  } catch { /* server not ready */ }
+}, 1500);
+
+refresh();
+</script>
+</body>
+</html>

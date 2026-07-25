@@ -19,9 +19,11 @@ final class BadgeRenderer implements WidgetRenderer
 
     public function shapeCommands(WidgetSpec $spec, DesignTokens $tokens, float $width, float $height): array
     {
-        assert($spec instanceof BadgeSpec);
+        if (! $spec instanceof BadgeSpec) {
+            return [];
+        }
 
-        $alpha = match ($spec.variant) {
+        $alpha = match ($spec->variant) {
             'subtle'  => 0.12,
             'outline' => 0.0,
             default   => 1.0,
@@ -30,7 +32,7 @@ final class BadgeRenderer implements WidgetRenderer
         $commands = [];
         if ($alpha > 0.0) {
             $base = $tokens->color("color.{$spec->color}");
-            $bg = new Color($base->r, $base->g, $base->b, $alpha);
+            $bg = Color::rgba($base->r, $base->g, $base->b, $alpha);
             $commands[] = new FillRoundedRect(
                 x: 0.0,
                 y: 0.0,

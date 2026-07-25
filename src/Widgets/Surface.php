@@ -44,6 +44,7 @@ use Yangweijie\Ui2\WebView;
 use Yangweijie\Ui2\Rendering\WidgetRenderer\WebViewSpec;
 use Yangweijie\Ui2\Semantics\SemanticProvider;
 use Yangweijie\Ui2\Semantics\SemanticsNode;
+use Yangweijie\Ui2\System\ComponentInspector;
 
 /**
  * A self-drawn canvas that lays out and renders a {@see LayoutNode} tree itself,
@@ -179,6 +180,18 @@ class Surface extends Composite implements SemanticProvider
 
     public float $lastClickY = 0.0;
 
+    /**
+     * DevTools inspector state. {@see ComponentInspector} drives these via the
+     * callbacks wired in {@see ComponentInspector::forSurface()}; they gate the
+     * on-screen highlight overlay and the in-window click-to-pick interception.
+     */
+    private ?string $inspectorHighlightId = null;
+
+    private bool $inspectorPickMode = false;
+
+    /** @var (callable(float,float):void)|null */
+    private $inspectorPickHandler = null;
+
     public function __construct(
         LayoutNode $root,
         ?DesignTokens $tokens = null,
@@ -212,6 +225,65 @@ class Surface extends Composite implements SemanticProvider
     public function rootLayout(): LayoutNode
     {
         return $this->root;
+    }
+
+    // --- DevTools inspector hooks -------------------------------------------
+
+    /**
+     * Set (or clear, with null) the node the inspector should outline on the
+     * next paint. Triggers a redraw so the highlight appears immediately.
+     */
+    public function setInspectorHighlight(?string $id): void
+    {
+        $this->inspectorHighlightId = $id;
+        $this->redraw();
+    }
+
+    /** Enable/disable in-window click-to-pick (the inspector "拾取模式"). */
+    public function setInspectorMode(bool $on): void
+    {
+        $this->inspectorPickMode = $on;
+        $this->redraw();
+    }
+
+    /**
+     * Register the callback invoked when the user clicks the window while pick
+     * mode is on. {@see ComponentInspector::forSurface()} wires this to
+     * {@see ComponentInspector::pickAt()}.
+     *
+     * @param callable(float,float):void $cb
+     */
+    public function setInspectorPickHandler(callable $cb): void
+    {
+        $this->inspectorPickHandler = $cb;
+    }
+
+    public function inspectorHighlightId(): ?string
+    {
+        return $this->inspectorHighlightId;
+    }
+
+    public function isInspectorPickMode(): bool
+    {
+        return $this->inspectorPickMode;
+    }
+
+    /** Forward an in-window pick to the registered handler (no-op if unset). */
+    public function dispatchInspectorPick(float $x, float $y): void
+    {
+        if ($this->inspectorPickHandler !== null) {
+            ($this->inspectorPickHandler)($x, $y);
+        }
+    }
+
+    /**
+     * Convenience: build a {@see ComponentInspector} bound to this surface and
+     * register its pick handler. The returned inspector is ready to be wrapped
+     * in an {@see \Yangweijie\Ui2\System\InspectorServer}.
+     */
+    public function enableInspector(float $width = 800.0, float $height = 600.0): ComponentInspector
+    {
+        return ComponentInspector::forSurface($this, $width, $height);
     }
 
     /**
@@ -1172,6 +1244,37 @@ final class SurfaceDelegate extends AreaDelegate
         // child window to each node's on-screen rect (creating/loading it as
         // needed). Mirrors the IME overlay lifecycle.
         $this->surface->syncWebViewOverlays();
+
+        // DevTools highlight overlay: outline the node currently selected in the
+        // external inspector panel, drawn last so it sits above everything.
+        $this->paintInspectorHighlight($ctx);
+    }
+
+    /**
+     * Outline the node the inspector has selected, using its viewport-space rect
+     * (scroll-adjusted) so the ring tracks the pointer's view of the widget.
+     */
+    private function paintInspectorHighlight(DrawContext $ctx): void
+    {
+        $id = $this->surface->inspectorHighlightId();
+        if ($id === null) {
+            return;
+        }
+        $rect = $this->surface->screenRectOf($id);
+        if ($rect === null) {
+            return;
+        }
+        [$x, $y, $w, $h] = $rect;
+        $pad = 2.0;
+        $ctx->strokeRoundedRect(
+            $x - $pad,
+            $y - $pad,
+            $w + $pad * 2,
+            $h + $pad * 2,
+            6.0,
+            $this->surface->tokens->focusRing(),
+            StrokeParams::solid(max(2.0, $this->surface->tokens->focusRingWidth() + 1.0)),
+        );
     }
 
     /** Dim the whole area behind a modal overlay. */
@@ -1643,6 +1746,16 @@ final class SurfaceDelegate extends AreaDelegate
                 }
 
                 if ($clicked && $hit !== null) {
+                    // DevTools pick mode: a click selects + highlights the node
+                    // under the cursor in the external inspector instead of
+                    // focusing / activating it. The drag state was already reset
+                    // above, so we just forward the coordinates and return.
+                    if ($this->surface->isInspectorPickMode()) {
+                        $this->surface->dispatchInspectorPick($event->x, $event->y);
+
+                        return;
+                    }
+
                     // Store click position for position-aware handlers (e.g. tab close zone)
                     $this->surface->lastClickX = $event->x;
                     $this->surface->lastClickY = $event->y;
