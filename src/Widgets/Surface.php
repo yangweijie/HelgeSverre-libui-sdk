@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\Widgets;
 
+use Kingbes\Phpc\Library;
 use Libui\Area;
 use Libui\AreaDelegate;
 use Libui\Color;
@@ -608,6 +609,10 @@ class Surface extends Composite implements SemanticProvider
         // the C header on every focus change (the old behaviour) was a measurable
         // source of focus latency.
         if ($this->imeBridgeCdef === null) {
+            if (!Library::isPermitted('ime_bridge')) {
+                Library::permit('ime_bridge');
+            }
+
             $this->imeBridgeCdef = \FFI::cdef('
                 void ime_create_textview(void* area_ns_view, double x, double y, double w, double h, int vcenter, double font_size, const char* initial_text);
                 void ime_destroy_textview(void);

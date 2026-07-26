@@ -285,17 +285,22 @@ abstract class Control implements SemanticProvider
             return;
         }
 
+        // Only Window objects should be auto-destroyed at GC time.
+        // Menu/MenuItem/Table/Image are NOT uiControl subtypes in C and
+        // calling uiControlDestroy() on them would crash.
+        if (!$this instanceof Window) {
+            return;
+        }
+
         // Window was already marked as externally closed — the destroy loop
         // in App::run() will call uiControlDestroy() on it. Skip to avoid
         // double-free.
-        if ($this instanceof Window && $this->isExternallyClosed()) {
+        if ($this->isExternallyClosed()) {
             return;
         }
 
         try {
-            if ($this->toplevel()) {
-                $this->destroy();
-            }
+            $this->destroy();
         } catch (\Throwable) {
             // Silently ignore — control may already be destroyed.
         }

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\System;
 
+use Kingbes\Phpc\Library;
+use Kingbes\Phpc\Memory;
+use Kingbes\Phpc\Pointer;
+use Kingbes\Phpc\TypeCast;
 use Libui\Window;
 use Libui\Ffi;
 
@@ -91,15 +95,15 @@ class Tray
         $ffi = self::ffi();
 
         $hwnd = Ffi::get()->uiControlHandle($this->window->asControl());
-        $winHandle = \FFI::cast('void*', $hwnd);
+        $winHandle = Ffi::get()->cast('void*', $hwnd);
 
         // Allocate and copy icon path as a C string
         $iconNative = $ffi->new('char[' . (\strlen($this->iconPath) + 1) . ']');
-        \FFI::memcpy($iconNative, $this->iconPath, \strlen($this->iconPath));
+        Memory::copy($iconNative, $this->iconPath, \strlen($this->iconPath));
 
         // Allocate and copy tooltip as a C string
         $tipNative = $ffi->new('char[' . (\strlen($this->tooltip) + 1) . ']');
-        \FFI::memcpy($tipNative, $this->tooltip, \strlen($this->tooltip));
+        Memory::copy($tipNative, $this->tooltip, \strlen($this->tooltip));
 
         $this->trayHandle = $ffi->window_tray(
             $winHandle,
@@ -107,7 +111,7 @@ class Tray
             $tipNative,
         );
 
-        if (\FFI::isNull($this->trayHandle)) {
+        if (Pointer::isNull($this->trayHandle)) {
             throw new \RuntimeException(
                 'Failed to create tray icon. Check that the icon file exists: ' . $this->iconPath,
             );
@@ -178,9 +182,9 @@ class Tray
         // Text: allocate a C string
         $textLen = \strlen($text);
         $textBuf = $ffi->new("char[{$textLen} + 1]");
-        \FFI::memcpy($textBuf, $text, $textLen);
+        Memory::copy($textBuf, $text, $textLen);
         $textBuf[$textLen] = "\0";
-        $menu->text = $ffi->cast('char*', \FFI::addr($textBuf));
+        $menu->text = TypeCast::castIn($ffi, Memory::addr($textBuf), 'char*');
 
         $menu->disabled = $disabled ? 1 : 0;
         $menu->checked = $checked ? 1 : 0;
@@ -198,7 +202,7 @@ class Tray
         }
 
         // Add the menu via FFI
-        $ffi->window_tray_add_menu($this->trayHandle, \FFI::addr($menu));
+        $ffi->window_tray_add_menu($this->trayHandle, Memory::addr($menu));
 
         // Retain structs and callables so FFI trampolines stay alive
         $this->menuStructs[] = $menu;
@@ -222,7 +226,7 @@ class Tray
     {
         $ffi = self::ffi();
         $hwnd = Ffi::get()->uiControlHandle($this->window->asControl());
-        $ffi->window_show(\FFI::cast('void*', $hwnd));
+        $ffi->window_show(Ffi::get()->cast('void*', $hwnd));
     }
 
     /**
@@ -268,6 +272,10 @@ class Tray
 
         if (!\file_exists($libPath)) {
             throw new \RuntimeException("PebView library not found at: {$libPath}");
+        }
+
+        if (!Library::isPermitted('pebview')) {
+            Library::permit('pebview');
         }
 
         self::$ffi = \FFI::cdef(

@@ -25,7 +25,7 @@ $statusLabel = new Label('Click a button to open a picker dialog →');
 
 // Color picker
 $btnColor = new \Libui\Button('Pick Color');
-$btnColor->onClick(function () use ($window, $statusLabel): void {
+$btnColor->onClicked(function () use ($window, $statusLabel): void {
     $color = ColorPickerDialog::pick($window);
     if ($color !== null) {
         $statusLabel->setText(\sprintf(
@@ -40,13 +40,13 @@ $btnColor->onClick(function () use ($window, $statusLabel): void {
 
 // Font picker
 $btnFont = new \Libui\Button('Pick Font');
-$btnFont->onClick(function () use ($window, $statusLabel): void {
+$btnFont->onClicked(function () use ($window, $statusLabel): void {
     $font = FontPickerDialog::pick($window);
     if ($font !== null) {
         $statusLabel->setText(\sprintf(
             'Font: %s, size=%.1f, weight=%d, italic=%s',
-            $font->family, $font->size, $font->weight,
-            $font->italic ? 'yes' : 'no',
+            $font->family(), $font->size(), $font->weight()->value,
+            $font->italic() ? 'yes' : 'no',
         ));
     } else {
         $statusLabel->setText('Font picker cancelled');
@@ -55,7 +55,7 @@ $btnFont->onClick(function () use ($window, $statusLabel): void {
 
 // Date picker
 $btnDate = new \Libui\Button('Pick Date');
-$btnDate->onClick(function () use ($window, $statusLabel): void {
+$btnDate->onClicked(function () use ($window, $statusLabel): void {
     $date = DatePickerDialog::pick($window);
     if ($date !== null) {
         $statusLabel->setText('Date: ' . $date->format('Y-m-d'));
@@ -66,7 +66,7 @@ $btnDate->onClick(function () use ($window, $statusLabel): void {
 
 // Time picker
 $btnTime = new \Libui\Button('Pick Time');
-$btnTime->onClick(function () use ($window, $statusLabel): void {
+$btnTime->onClicked(function () use ($window, $statusLabel): void {
     $time = TimePickerDialog::pick($window);
     if ($time !== null) {
         $statusLabel->setText('Time: ' . $time->format('H:i:s'));

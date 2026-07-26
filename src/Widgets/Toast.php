@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\Widgets;
 
+use Kingbes\Phpc\Library;
 use RuntimeException;
 
 /**
@@ -73,6 +74,10 @@ class Toast
 
         if (!file_exists($libPath)) {
             throw new RuntimeException("Toast library not found at: {$libPath}");
+        }
+
+        if (!Library::isPermitted('toast')) {
+            Library::permit('toast');
         }
 
         self::$ffi = \FFI::cdef(

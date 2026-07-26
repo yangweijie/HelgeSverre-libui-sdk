@@ -7,6 +7,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use Libui\App;
 use Libui\Area;
 use Libui\Build;
+use Libui\Color;
 use Libui\Label;
 use Libui\Window;
 use Libui\Draw\Brush;
@@ -26,52 +27,54 @@ use Yangweijie\Ui2\Widgets\ToggleSwitch;
  * Run: php85 examples/test-widgets.php
  */
 
-$window = new Window('Custom Widgets Demo', 500, 400, true);
+$window = new Window('Custom Widgets Demo', 500, 550, true);
 
 $statusLabel = new Label('Interact with the custom widgets below →');
 
 // --- ToggleSwitch ---
-$toggle = new ToggleSwitch('Enable feature', true);
-$toggle->onChange(function (bool $on) use ($statusLabel): void {
+$toggle = new ToggleSwitch(true);
+$toggle->on('change', function (bool $on) use ($statusLabel): void {
     $statusLabel->setText('Toggle: ' . ($on ? 'ON' : 'OFF'));
 });
 
 // --- StatusIndicator ---
-$indicator = new StatusIndicator('green', 'System running');
+$indicator = new StatusIndicator(Color::rgb(0x22c55e));
 
 // --- CircleProgressBar ---
-$progress = new CircleProgressBar(0, 100);
-$progress->setValue(65);
+$progress = new CircleProgressBar(65, 120);
 
 // --- Toast area ---
 $showToastBtn = new \Libui\Button('Show Toast');
-$showToastBtn->onClick(function () use ($window): void {
-    Toast::show($window, 'Action completed!', 3000);
+$showToastBtn->onClicked(function () use ($window): void {
+    Toast::show('Action', 'Action completed!');
 });
 
 $btnToggleState = new \Libui\Button('Toggle Indicator');
-$btnToggleState->onClick(function () use ($indicator, $statusLabel): void {
-    $states = ['green', 'yellow', 'red'];
-    $current = $indicator->getState();
-    $next = $states[(\array_search($current, $states, true) + 1) % 3] ?: 'green';
-    $indicator->setState($next);
-    $indicator->setLabel('Status: ' . $next);
-    $statusLabel->setText('Indicator changed to: ' . $next);
+$btnToggleState->onClicked(function () use ($indicator, $statusLabel): void {
+    $colors = [
+        Color::rgb(0x22c55e),
+        Color::rgb(0xeab308),
+        Color::rgb(0xef4444),
+    ];
+    static $idx = 0;
+    $idx = ($idx + 1) % 3;
+    $indicator->setColor($colors[$idx]);
+    $statusLabel->setText('Indicator changed');
 });
 
 $btnProgress = new \Libui\Button('+10%');
-$btnProgress->onClick(function () use ($progress, $statusLabel): void {
-    $val = $progress->getValue() + 10;
+$btnProgress->onClicked(function () use ($progress, $statusLabel): void {
+    $val = $progress->getProgress() + 10;
     if ($val > 100) $val = 0;
-    $progress->setValue($val);
+    $progress->setProgress($val);
     $statusLabel->setText('Progress: ' . $val . '%');
 });
 
 $window->setChild(Build::vbox(
     $statusLabel,
-    $toggle,
-    $indicator,
-    Build::hbox(new Label('Progress:'), $progress),
+    $toggle->root(),
+    $indicator->root(),
+    Build::hbox(new Label('Progress:'), $progress->root()),
     Build::hbox($showToastBtn, $btnToggleState, $btnProgress),
 ));
 

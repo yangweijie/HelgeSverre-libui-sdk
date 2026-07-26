@@ -410,3 +410,43 @@ NSTextView 接收输入正常（中文在覆盖层显示），但 `TextAreaRende
 
 ### Surface 命名空间
 - `Surface` 类 namespace 是 `Yangweijie\Ui2\Widgets`（文件在 `src/Widgets/Surface.php`），不是 `Yangweijie\Ui2\Surface`
+
+---
+
+## kingbes/phpc 安全 FFI 迁移关键发现（2026-07-26）
+
+### FFI 数组元素访问陷阱
+- `$ffi->new('int[2]')` 创建数组，但 `$array[0]` 返回 PHP int 值，不是 `FFI\CData`
+- `Memory::addr($array[0])` 会报 "string given" 或 "int given" 错误
+- **正确做法**：分配独立变量 `$wOut = $ffi->new('int')` + `$hOut = $ffi->new('int')`
+- 或用 `Memory::addr($array)` + `$ffi->cast('type*', ...)` 转换数组指针
+
+### 数组指针类型不匹配
+- `Memory::addr($array)` 返回 `char(*)[N]`（数组指针），但结构体字段期望 `char*`（元素指针）
+- **必须**：`$ffi->cast('char*', Memory::addr($array))` 显式转换
+- 同样适用于 `uiDrawBrushGradientStop*`、`double*`、`int*` 等场景
+
+### 整数到指针转换
+- `Pointer::intToPtr()` 用 union `{ int i; void* p; }` 在 64 位系统上截断指针
+- `intptr_t` 不被 PHP FFI 直接识别
+- **正确做法**：`$ffi->cast('void*', $intValue)` 直接转换（FFI 原生支持）
+
+### uiControlHandle 返回类型
+- `Ffi::get()->uiControlHandle()` 返回 PHP 整数，不是 `FFI\CData`
+- `TypeCast::castIn()` 要求 `FFI\CData` 参数 → 报错
+- **正确做法**：`$ffi->cast('void*', $intValue)`
+
+### Menu/MenuItem 不是 uiControl
+- libui C 层：`uiMenu` 和 `uiMenuItem` 不继承 `uiControl`
+- PHP 层：`Menu extends Control`（包装关系，非继承）
+- `uiControlToplevel()` 对 `uiMenu*` 会崩溃
+- **正确做法**：`Control::__destruct()` 仅自动 destroy Window
+
+### Library::load() 不支持自定义路径
+- `Library::load($name, $header)` 内部调 `resolveLib($name)` 只处理 libc
+- 自定义路径库（libui/pebview/bridge）需用 `Library::permit($name)` + 直接 `\FFI::cdef($header, $libPath)`
+
+### FFI bridge rpath 问题
+- `composer build:bridge` 的 `-Wl,-rpath` 在某些 shell 环境下未正确展开
+- 需手动编译：`clang -shared ... -Wl,-rpath,$(pwd)/vendor/.../PebView.dylib ...`
+- 验证：`otool -L bridge/webview_bridge.dylib` + `otool -l bridge/webview_bridge.dylib | grep LC_RPATH`

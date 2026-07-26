@@ -968,3 +968,70 @@ $surface->onClick('inc', static function () use ($app, $countLeaf, $surface): vo
 | `DropdownMenuControl.php` | 根节点添加显式 `height` |
 | `ScrollViewControl.php` | 新增 `setContentHeight(float)` 更新内容高度 + 同步 spec 到 viewport 节点 |
 | `AutomationServer.php` | 修复 `driveHandler` payload 提取（`$payload['payload']` 而非整个 `$payload`） |
+
+---
+
+## 2026-07-26 — kingbes/phpc 安全 FFI 迁移
+
+### 目标
+将项目中所有原生 `\FFI::` 调用迁移到 `kingbes/phpc` 安全封装库，消除 FFI 内存管理 bug 类别：double-free、use-after-free、dangling GC closures、buffer overflows。
+
+### 完成内容
+
+#### 1. 核心 Ffi.php 迁移 (`patches/helgesverre/libui/src/Ffi.php`)
+- 添加 `use Kingbes\Phpc\{Library, Memory, TypeCast}`
+- `Library::permit('libui')` 白名单验证
+- `\FFI::sizeof()` → `Memory::sizeof()`
+- `\FFI::addr()` → `Memory::addr()`
+- `\FFI::string()` → `TypeCast::fromString()`
+- `\FFI::cast()` → `TypeCast::castIn()`
+
+#### 2. 16 个 vendor 文件 patch
+| 文件 | 改动 |
+|------|------|
+| `Ffi.php` | Library::permit, Memory, TypeCast |
+| `Window.php` | Memory::addr, TypeCast::castIn |
+| `DateTimePicker.php` | Memory::addr |
+| `TableModel.php` | Memory::addr |
+| `Area.php` | Memory::addr |
+| `Draw/Brush.php` | Memory::addr + cast |
+| `Draw/Matrix.php` | Memory::addr |
+| `Draw/StrokeParams.php` | Memory::addr + cast |
+| `FontButton.php` | Memory::addr |
+| `Image.php` | Memory::copy, Pointer::isNull |
+| `Table.php` | Memory::addr |
+| `Text/FontDescriptor.php` | Memory::addr/copy, TypeCast::fromString |
+| `Text/OpenTypeFeatures.php` | Memory::addr |
+| `Text/TextLayout.php` | Memory::addr |
+| `Generated/ColorButton.php` | Memory::addr |
+| `Generated/Window.php` | Memory::addr |
+
+#### 3. 8 个 src/ 文件 Library::permit
+WebView.php, Surface.php, Tray.php, Audio.php, Toast.php, GlobalHotkey.php, ContextMenu.php, 以及 Window.php patch。
+
+#### 4. 修复的关键 bug
+| 问题 | 根因 | 修复 |
+|------|------|------|
+| `Memory::addr()` 参数类型错误 | FFI 数组元素 `$out[0]` 返回 int 不是 CData | 改用独立 int 变量 |
+| `zend_mm_heap corrupted` | vendor DateTimePicker.php 未 patch | 创建 patch |
+| 数组指针类型不匹配 | `Memory::addr($array)` 返回 `char(*)[N]` | 加 `$ffi->cast()` 转换 |
+| Objective-C unknown class | `Pointer::intToPtr()` 用 int 截断 64 位指针 | 改用 `$ffi->cast('void*', $int)` |
+| `TypeCast::castIn()` int 参数 | `uiControlHandle()` 返回整数 | 改用 `$ffi->cast()` |
+| Control::__destruct 段错误 | Menu/MenuItem 非 uiControl 被 destroy | 仅 Window 自动 destroy |
+| webview_bridge.dylib 加载失败 | rpath 未正确设置 | 手动重编译 bridge |
+
+#### 5. 示例修复
+- `test-pickers.php`: `Button::onClick()` → `onClicked()`, FontDescriptor 方法调用, `TextWeight->value`
+- `test-widgets.php`: 完整 API 修正（ToggleSwitch/StatusIndicator/CircleProgressBar/Toast）
+
+### 最终验证
+- **430 tests passed** (267 non-FFI + 163 FFI)
+- **0 remaining raw `\FFI::` calls** (除 `FFI::cdef` 桥接加载器)
+- `menu.php`, `control-gallery.php`, `test-pickers.php`, `test-widgets.php`, `test-set-icon.php` 全部正常运行
+
+### 关键发现
+1. `Memory::addr()` 和 `FFI::addr()` 行为一致，但 `$ffi->array[0]` 在 PHP 中返回值不是 CData
+2. `Pointer::intToPtr()` 的 union 方式不适合 64 位指针，直接用 `$ffi->cast()` 更可靠
+3. `uiMenu`/`uiMenuItem` 不是 `uiControl` 子类型，不能调用 `uiControlToplevel()`
+4. `Library::load()` 不支持自定义路径，需用 `Library::permit()` + 直接 `\FFI::cdef()`
+5. FFI bridge 编译时 `-Wl,-rpath` 在某些 shell 环境下未正确展开

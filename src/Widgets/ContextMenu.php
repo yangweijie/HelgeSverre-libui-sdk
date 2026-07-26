@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\Widgets;
 
+use Kingbes\Phpc\Library;
+
 /**
  * Native right-click context menu — cross-platform (macOS/Linux/Windows).
  *
@@ -169,6 +171,10 @@ class ContextMenu
                 'Context menu bridge not found at: ' . $libPath . \PHP_EOL
                 . self::compileInstructions(),
             );
+        }
+
+        if (!Library::isPermitted('context_menu')) {
+            Library::permit('context_menu');
         }
 
         self::$ffi = \FFI::cdef(

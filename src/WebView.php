@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2;
 
+use Kingbes\Phpc\Library;
+use Kingbes\Phpc\Memory;
 use Libui\Ffi;
 use Libui\Window;
 
@@ -398,7 +400,7 @@ class WebView
         $resizeCb = function ($w) use ($xOffset, $yOffset, $hMargin, $vMargin) {
             $wOut = Ffi::get()->new('int');
             $hOut = Ffi::get()->new('int');
-            Ffi::get()->uiWindowContentSize($w, \FFI::addr($wOut), \FFI::addr($hOut));
+            Ffi::get()->uiWindowContentSize($w, Memory::addr($wOut), Memory::addr($hOut));
             $newW = (int) $wOut->cdata;
             $newH = (int) $hOut->cdata;
 
@@ -582,6 +584,10 @@ class WebView
      */
     private function loadBridge(): void
     {
+        if (!Library::isPermitted('webview_bridge')) {
+            Library::permit('webview_bridge');
+        }
+
         $this->bridge = \FFI::cdef(
             'void* wvb_create(int debug, uintptr_t parent_handle, int x, int y, int w, int h);'
             . 'void  wvb_move(void* wv, uintptr_t parent_handle, int x, int y, int w, int h);'
@@ -602,6 +608,10 @@ class WebView
                 'PebView header not found at ' . $headerPath . '. '
                 . 'Run `composer install` first.',
             );
+        }
+
+        if (!Library::isPermitted('pebview')) {
+            Library::permit('pebview');
         }
 
         $this->pv = \FFI::cdef(

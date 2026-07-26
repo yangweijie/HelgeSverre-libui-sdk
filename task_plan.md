@@ -67,6 +67,27 @@
 - 暂无明确待办；等待用户运行 `php85 examples/onepiece-doudizhu.php` 截图验证
 - 潜在：卡牌花色符号在某些字体的渲染对齐、更多武将技能平衡
 
+## kingbes/phpc 安全 FFI 迁移
+
+> 目标：将所有原生 `\FFI::` 调用迁移到 kingbes/phpc 安全封装，消除内存管理 bug 类别
+
+| Phase | 内容 | 状态 | 备注 |
+|-------|------|------|------|
+| U1 | 核心 Ffi.php 迁移 — Library::permit + Memory/TypeCast | ✅ complete | patches/helgesverre/libui/src/Ffi.php |
+| U2 | 8 个 src/ 桥接加载器 — Library::permit | ✅ complete | WebView/Surface/Tray/Audio/Toast/GlobalHotkey/ContextMenu |
+| U3 | Tray.php 内存操作 — Memory::copy/Pointer::isNull/TypeCast | ✅ complete | |
+| U4 | Surface.php/WebView.php 类型转换 — Memory::addr/castIn | ✅ complete | |
+| U5 | 16 个 vendor 文件 patch — 全部原生 FFI 调用替换 | ✅ complete | DateTimePicker/TableModel/Area/Draw/FontButton/Image/Table/Text/Generated |
+| U6 | 修复 Control::__destruct — 仅 Window 自动 destroy | ✅ complete | Menu/MenuItem 非 uiControl |
+| U7 | 修复 Pointer::intToPtr — 64 位指针截断 | ✅ complete | 改用 $ffi->cast() |
+| U8 | 示例修复 — API 使用错误 | ✅ complete | test-pickers/test-widgets |
+
+### 最终验证
+- 430 tests passed (267 non-FFI + 163 FFI)
+- 0 remaining raw `\FFI::` calls (除 FFI::cdef 桥接加载器)
+- 13 个 Library::permit() 白名单
+- 20+ 个 phpc 导入
+
 ## Errors Encountered (历史修复记录)
 | 现象 | 根因 | 解决 |
 |------|------|------|

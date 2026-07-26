@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\System;
 
+use Kingbes\Phpc\Library;
 use Libui\Ffi;
 use Libui\Loop;
 
@@ -224,6 +225,10 @@ class GlobalHotkey
                 . ' $(pkg-config --cflags --libs x11) -o libhotkey.so' . \PHP_EOL
                 . '  Windows: cd bridge && cl /LD hotkey_win.c /Fe:hotkey.dll user32.lib'
             );
+        }
+
+        if (!Library::isPermitted('hotkey')) {
+            Library::permit('hotkey');
         }
 
         self::$ffi = \FFI::cdef(

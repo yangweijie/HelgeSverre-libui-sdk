@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "056d6c430a6da2ea3d4b1a251cdf403c",
+    "content-hash": "d3e990d7c038c03aba2928ebc960a438",
     "packages": [
         {
             "name": "carbonphp/carbon-doctrine-types",
@@ -697,6 +697,51 @@
                 "source": "https://github.com/KingBes/pebview/tree/v0.1.1"
             },
             "time": "2026-05-25T06:39:02+00:00"
+        },
+        {
+            "name": "kingbes/phpc",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/KingBes/phpc.git",
+                "reference": "251c9fd8d58926b916205bcac288eec818b7927b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/KingBes/phpc/zipball/251c9fd8d58926b916205bcac288eec818b7927b",
+                "reference": "251c9fd8d58926b916205bcac288eec818b7927b",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": ">=8.2"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Kingbes\\Phpc\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "kingbes",
+                    "email": "1164601554@qq.com"
+                }
+            ],
+            "description": "写更安全的ffi应用",
+            "keywords": [
+                "ffi"
+            ],
+            "support": {
+                "issues": "https://github.com/KingBes/phpc/issues",
+                "source": "https://github.com/KingBes/phpc/tree/main"
+            },
+            "time": "2026-07-25T05:40:35+00:00"
         },
         {
             "name": "monolog/monolog",
@@ -4113,11 +4158,12 @@
     "stability-flags": {
         "helgesverre/libui": 20,
         "jolicode/jolinotif": 20,
+        "kingbes/phpc": 20,
         "nunomaduro/collision": 20
     },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {},
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

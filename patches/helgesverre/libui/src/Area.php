@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Libui;
 
+use Kingbes\Phpc\Memory;
 use Libui\Draw\DrawContext;
 use Libui\Draw\Params\AreaDrawParams;
 use Libui\Draw\Params\AreaKeyEvent;
@@ -33,8 +34,8 @@ final class Area extends Control
         $this->handler = $this->makeHandler($delegate);
 
         $this->handle = $scrollWidth !== null
-            ? $ffi->uiNewScrollingArea(\FFI::addr($this->handler), $scrollWidth, $scrollHeight ?? 0)
-            : $ffi->uiNewArea(\FFI::addr($this->handler));
+            ? $ffi->uiNewScrollingArea(Memory::addr($this->handler), $scrollWidth, $scrollHeight ?? 0)
+            : $ffi->uiNewArea(Memory::addr($this->handler));
 
         $delegate->bindArea($this); // let the delegate call $this->redraw()
 

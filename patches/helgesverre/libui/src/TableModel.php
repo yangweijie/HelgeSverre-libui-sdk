@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Libui;
 
+use Kingbes\Phpc\Memory;
 use Libui\Generated\Enum\TableValueType;
 
 /**
@@ -47,7 +48,7 @@ final class TableModel
     ) {
         $ffi = Ffi::get();
         $this->handler = $this->makeHandler();
-        $this->model = $ffi->uiNewTableModel(\FFI::addr($this->handler));
+        $this->model = $ffi->uiNewTableModel(Memory::addr($this->handler));
         Lifecycle::registerModel($this);
     }
 

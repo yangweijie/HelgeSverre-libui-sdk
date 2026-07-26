@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Libui;
 
+use Kingbes\Phpc\Library;
+use Kingbes\Phpc\Memory;
+use Kingbes\Phpc\TypeCast;
 use Libui\Draw\DrawContext;
 use Libui\Draw\StrokeParams;
 
@@ -17,6 +20,8 @@ use Libui\Draw\StrokeParams;
  * GC'd before libui's leak checker fires. Without this, closures kept in
  * $retained prevent GC, __destruct() runs after uiUninit(), and libui
  * reports leaked C widgets at shutdown.
+ *
+ * MIGRATED: uses kingbes/phpc for safety wrappers (Memory, TypeCast, Library).
  *
  * @see https://github.com/HelgeSverre/libui
  */
@@ -209,6 +214,11 @@ class Ffi
         $libPath = self::libPath();
         error_clear_last();
 
+        // Whitelist libui via phpc before loading
+        if (!Library::isPermitted('libui')) {
+            Library::permit('libui');
+        }
+
         if ($debug) {
             self::debugInit($header, $libPath);
         } else {
@@ -219,11 +229,11 @@ class Ffi
         $ffi = self::get();
 
         $opts = $ffi->new('uiInitOptions');
-        $opts->Size = \FFI::sizeof($opts);
+        $opts->Size = Memory::sizeof($opts);
 
-        $err = $ffi->uiInit(\FFI::addr($opts));
+        $err = $ffi->uiInit(Memory::addr($opts));
         if ($err !== null) {
-            $msg = \FFI::string($err);
+            $msg = TypeCast::fromString($err);
             $ffi->uiFreeInitError($err);
             throw new \RuntimeException("uiInit failed: {$msg}");
         }
@@ -277,7 +287,7 @@ class Ffi
      */
     public static function control(\FFI\CData $handle): \FFI\CData
     {
-        return self::get()->cast('uiControl *', $handle);
+        return TypeCast::castIn(self::get(), $handle, 'uiControl *');
     }
 
     /**
@@ -303,7 +313,7 @@ class Ffi
         if ($ptr === null) {
             return '';
         }
-        $value = \FFI::string($ptr);
+        $value = TypeCast::fromString($ptr);
         self::get()->uiFreeText($ptr);
         return $value;
     }
@@ -316,7 +326,7 @@ class Ffi
      */
     public static function borrowedString(?\FFI\CData $ptr): string
     {
-        return $ptr === null ? '' : \FFI::string($ptr);
+        return $ptr === null ? '' : TypeCast::fromString($ptr);
     }
 
     /**

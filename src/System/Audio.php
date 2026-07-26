@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Yangweijie\Ui2\System;
 
+use Kingbes\Phpc\Library;
 use Libui\Ffi;
 use Libui\Loop;
 
@@ -252,6 +253,10 @@ final class Audio
                 . '  Linux:   cd bridge && gcc -shared -fPIC -DMINIAUDIO_IMPLEMENTATION audio.c -lasound -lpthread -o libaudio.so' . \PHP_EOL
                 . '  Windows: cd bridge && cl /LD /DMINIAUDIO_IMPLEMENTATION audio.c /Fe:audio.dll'
             );
+        }
+
+        if (!Library::isPermitted('audio_bridge')) {
+            Library::permit('audio_bridge');
         }
 
         self::$ffi = \FFI::cdef(

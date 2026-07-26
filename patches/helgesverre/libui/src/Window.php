@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Libui;
 
+use Kingbes\Phpc\Library;
+use Kingbes\Phpc\Memory;
+use Kingbes\Phpc\TypeCast;
+
 /**
  * Top-level window. Adds lifecycle sugar on top of the generated API: sensible
  * constructor defaults, an onClose() cleanup hook, and a one-call run().
@@ -130,12 +134,13 @@ public function isExternallyClosed(): bool
      */
     public function getContentSize(): array
     {
-        $out = Ffi::get()->new('int[2]');
-        Ffi::get()->uiWindowContentSize($this->handle, \FFI::addr($out[0]), \FFI::addr($out[1]));
+        $wOut = Ffi::get()->new('int');
+        $hOut = Ffi::get()->new('int');
+        Ffi::get()->uiWindowContentSize($this->handle, Memory::addr($wOut), Memory::addr($hOut));
 
         return [
-            $out[0] > 0 ? $out[0] : $this->width,
-            $out[1] > 0 ? $out[1] : $this->height,
+            $wOut->cdata > 0 ? $wOut->cdata : $this->width,
+            $hOut->cdata > 0 ? $hOut->cdata : $this->height,
         ];
     }
 
@@ -148,10 +153,11 @@ public function isExternallyClosed(): bool
      */
     public function getPosition(): array
     {
-        $out = Ffi::get()->new('int[2]');
-        Ffi::get()->uiWindowPosition($this->handle, \FFI::addr($out[0]), \FFI::addr($out[1]));
+        $xOut = Ffi::get()->new('int');
+        $yOut = Ffi::get()->new('int');
+        Ffi::get()->uiWindowPosition($this->handle, Memory::addr($xOut), Memory::addr($yOut));
 
-        return [$out[0], $out[1]];
+        return [$xOut->cdata, $yOut->cdata];
     }
 
     /**
@@ -189,6 +195,10 @@ public function isExternallyClosed(): bool
     private static function screenSizeDarwin(): ?array
     {
         try {
+            if (!Library::isPermitted('CoreGraphics')) {
+                Library::permit('CoreGraphics');
+            }
+
             $cg = \FFI::cdef(
                 'typedef uint32_t CGDirectDisplayID;'
                 . 'typedef struct { double x; double y; } CGPoint;'
@@ -240,6 +250,10 @@ public function isExternallyClosed(): bool
     {
         // 1. Win32 API via FFI (fastest, no subprocess)
         try {
+            if (!Library::isPermitted('user32')) {
+                Library::permit('user32');
+            }
+
             $ffi = \FFI::cdef(
                 'typedef unsigned long DWORD;'
                 . 'typedef struct { long left; long top; long right; long bottom; } RECT;'
@@ -402,6 +416,10 @@ public function isExternallyClosed(): bool
             if (!\file_exists($bridgePath)) {
                 throw new \RuntimeException("Bridge dylib not found at {$bridgePath}");
             }
+            if (!Library::isPermitted('webview_bridge_dock')) {
+                Library::permit('webview_bridge_dock');
+            }
+
             $ffi = \FFI::cdef(
                 'void wvb_set_dock_icon(const char *iconFilePath);',
                 $bridgePath,
@@ -424,13 +442,17 @@ public function isExternallyClosed(): bool
             if (!$lib || !\file_exists($lib)) {
                 throw new \RuntimeException("PebView library not found at {$lib}");
             }
+            if (!Library::isPermitted('pebview_icon')) {
+                Library::permit('pebview_icon');
+            }
+
             $ffi = \FFI::cdef(
                 'int set_icon(const void *ptr, const char *iconFilePath);',
                 $lib,
             );
         }
         $hwnd = Ffi::get()->uiControlHandle($this->asControl());
-        $handle = \FFI::cast('void*', $hwnd);
+        $handle = TypeCast::castIn(Ffi::get(), $hwnd, 'void*');
         $code = $ffi->set_icon($handle, $iconPath);
         if ($code !== 0) {
             throw new \RuntimeException(

@@ -9,7 +9,8 @@
     "utopia-php/system": "*",
     "illuminate/process": "*",
     "monolog/monolog": "^3.0",
-    "kaareln/php-svg-path-data": "^1.0"
+    "kaareln/php-svg-path-data": "^1.0",
+    "kingbes/phpc": "dev-main"
   },
   "require-dev": {
     "pestphp/pest": "*",
